@@ -2,16 +2,16 @@ using UnityEngine;
 
 namespace VepMod.VepFramework.Structures.FSM;
 
-public partial class FiniteStateMachine<TFSM, TKey>
+public partial class StateMachineBase<TMachine, TStateId>
 {
     /// <summary>
     ///     Most basic State, inherit from this to start implementing your fsm
     /// </summary>
-    public class State
+    public class StateBase
     {
-        public TFSM FSM { get; set; }
-        public virtual void OnStateEnter(TKey previous) { }
-        public virtual void OnStateExit(TKey next) { }
+        public TMachine Machine { get; set; }
+        public virtual void OnStateEnter(TStateId previous) { }
+        public virtual void OnStateExit(TStateId next) { }
         public virtual void OnStateUpdate() { }
     }
 
@@ -20,11 +20,11 @@ public partial class FiniteStateMachine<TFSM, TKey>
     /// <summary>
     ///     State with a duration mechanic, inherit this to save the trouble of handling a timer yourself
     /// </summary>
-    public class StateTimed : State
+    public class StateBaseTimed : StateBase
     {
         public float TimeElapsed { get; protected set; }
 
-        public override void OnStateEnter(TKey previous)
+        public override void OnStateEnter(TStateId previous)
         {
             base.OnStateEnter(previous);
             TimeElapsed = 0;
@@ -40,23 +40,23 @@ public partial class FiniteStateMachine<TFSM, TKey>
     /// <summary>
     ///     A timed state where you change states at the end of a duration
     /// </summary>
-    public class StateTransition : StateTimed
+    public class StateBaseTransition : StateBaseTimed
     {
         public float Duration;
-        public TKey NextState;
+        public TStateId NextState;
 
-        public StateTransition(float duration, TKey nextState)
+        public StateBaseTransition(float duration, TStateId nextState)
         {
             Duration = duration;
             NextState = nextState;
         }
 
-        public override void OnStateEnter(TKey previous)
+        public override void OnStateEnter(TStateId previous)
         {
             base.OnStateEnter(previous);
             if (Duration <= 0)
             {
-                FSM.NextStateKey = NextState;
+                Machine.NextStateStateId = NextState;
             }
         }
 
@@ -65,7 +65,7 @@ public partial class FiniteStateMachine<TFSM, TKey>
             base.OnStateUpdate();
             if (TimeElapsed >= Duration)
             {
-                FSM.NextStateKey = NextState;
+                Machine.NextStateStateId = NextState;
             }
         }
     }

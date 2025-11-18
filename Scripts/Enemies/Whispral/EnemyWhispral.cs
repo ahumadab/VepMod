@@ -1,11 +1,12 @@
 ﻿using Photon.Pun;
 using UnityEngine;
 using UnityEngine.AI;
+using VepMod.VepFramework.Structures.FSM;
 using Random = UnityEngine.Random;
 
 namespace VepMod.Scripts.Enemies.Whispral;
 
-public class EnemyWhispral : MonoBehaviour
+public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.State>
 {
     public enum State
     {
@@ -13,21 +14,19 @@ public class EnemyWhispral : MonoBehaviour
         Idle = 1,
         Roam = 2,
         Investigate = 3,
-        PlayerNotice = 4,
-        PlayerGoTo = 5,
-        AttachPrepare = 6, // proche du PlayerPickup
-        Attached = 7, // collé au joueur, pas d’attaque
-        Detach = 8, // petite phase de détachage
-        DetachWait = 9, // buffer avant de repartir
+        NoticePlayer = 4,
+        GoToPlayer = 5,
+        PrepareAttach = 6,
+        Attached = 7,
+        Detach = 8,
+        DetachWait = 9,
         Leave = 10,
         Stun = 11,
         StunEnd = 12,
         Despawn = 13
     }
 
-    [Space] public State currentState;
-
-    [Space] public Enemy enemy;
+    [Header("Core refs")] public Enemy enemy;
 
     public EnemyWhispralAnim enemyWhispralAnim;
 
@@ -36,103 +35,65 @@ public class EnemyWhispral : MonoBehaviour
 
     [Space] public SpringQuaternion rotationSpring;
 
-    private Vector3 agentDestination;
+    // Contexte partagé entre états
+    [HideInInspector] public Vector3 agentDestination;
+    [HideInInspector] public PlayerAvatar playerTarget;
+    [HideInInspector] public Transform attachAnchor;
+    [HideInInspector] public float attachedTimer;
 
-    private bool agentSet;
-    private Transform attachAnchor;
-
-    private float attachedTimer;
-    private float grabAggroTimer; // comme EnemyHidden
+    [SerializeField] private State currentStateDebug;
+    private float grabAggroTimer;
 
     private PhotonView photonView;
-    private PlayerAvatar playerTarget;
     private Quaternion rotationTarget;
 
-    /// <summary>
-    ///     Flag “première frame dans cet état”
-    /// </summary>
-    private bool stateImpulse;
+    protected override State DefaultState => State.Spawn;
 
-    /// <summary>
-    ///     Compte à rebours associé à l’état courant - "combien de temps il me reste avant de faire quelque chose d’autre dans
-    ///     cet état"
-    /// </summary>
-    private float stateTimer;
+    public State CurrentState => fsm.CurrentStateStateId;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake();
         photonView = GetComponent<PhotonView>();
+        VepMod.Logger.LogDebug("EnemyWhispralNew Awake called.");
+        Debug.Log("EnemyWhispralNew Awake called.");
+
+        // Enregistrement des états
+        fsm.AddState(State.Spawn, new SpawnState());
+        fsm.AddState(State.Idle, new IdleState());
+        fsm.AddState(State.Roam, new RoamState());
+        fsm.AddState(State.Investigate, new InvestigateState());
+        fsm.AddState(State.NoticePlayer, new PlayerNoticeState());
+        fsm.AddState(State.GoToPlayer, new PlayerGoToState());
+        fsm.AddState(State.PrepareAttach, new AttachPrepareState());
+        fsm.AddState(State.Attached, new AttachedState());
+        fsm.AddState(State.Detach, new DetachState());
+        fsm.AddState(State.DetachWait, new DetachWaitState());
+        fsm.AddState(State.Leave, new LeaveState());
+        fsm.AddState(State.Stun, new StunState());
+        fsm.AddState(State.StunEnd, new StunEndState());
+        fsm.AddState(State.Despawn, new DespawnState());
+
+        VepMod.Logger.LogDebug("EnemyWhispralNew Awake End.");
+        Debug.Log("EnemyWhispralNew Awake End.");
     }
 
-    private void Update()
+    protected override void Update()
     {
-        if (!SemiFunc.IsMasterClientOrSingleplayer())
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) // Only the master handle the enemy logic
         {
             return;
         }
 
-        if (grabAggroTimer > 0f)
-        {
-            grabAggroTimer -= Time.deltaTime;
-        }
+        UpdateGrabAggroTimer();
 
+        // Transitions forcées par le système Enemy
+        CheckForStunState();
+        CheckForDespawnState();
         RotationLogic();
+        base.Update(); // fsm.Update() 
 
-        if (enemy.IsStunned())
-        {
-            UpdateState(State.Stun);
-        }
-
-        if (enemy.CurrentState == EnemyState.Despawn && !enemy.IsStunned())
-        {
-            UpdateState(State.Despawn);
-        }
-
-        switch (currentState)
-        {
-            case State.Spawn:
-                StateSpawn();
-                break;
-            case State.Idle:
-                StateIdle();
-                break;
-            case State.Roam:
-                StateRoam();
-                break;
-            case State.Investigate:
-                StateInvestigate();
-                break;
-            case State.PlayerNotice:
-                StatePlayerNotice();
-                break;
-            case State.PlayerGoTo:
-                StatePlayerGoTo();
-                break;
-            case State.AttachPrepare:
-                StateAttachPrepare();
-                break;
-            case State.Attached:
-                StateAttached();
-                break;
-            case State.Detach:
-                StateDetach();
-                break;
-            case State.DetachWait:
-                StateDetachWait();
-                break;
-            case State.Leave:
-                StateLeave();
-                break;
-            case State.Stun:
-                StateStun();
-                break;
-            case State.StunEnd:
-                StateStunEnd();
-                break;
-            case State.Despawn:
-                StateDespawn();
-                break;
-        }
+        currentStateDebug = CurrentState; // For debug display
     }
 
     private void FixedUpdate()
@@ -145,392 +106,65 @@ public class EnemyWhispral : MonoBehaviour
         AttachFollowLogic();
     }
 
-    #region États de base (copiés de EnemyHidden)
-
-    private void StateSpawn()
+    private void CheckForDespawnState()
     {
-        if (stateImpulse)
+        var canDespawn = enemy.CurrentState == EnemyState.Despawn && !enemy.IsStunned();
+        if (canDespawn)
         {
-            stateImpulse = false;
-            stateTimer = 1f;
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (stateTimer <= 0f)
-        {
-            UpdateState(State.Idle);
+            fsm.NextStateStateId = State.Despawn;
         }
     }
 
-    private void StateIdle()
+    private void CheckForStunState()
     {
-        if (stateImpulse)
+        if (enemy.IsStunned())
         {
-            stateImpulse = false;
-            stateTimer = Random.Range(2f, 5f);
-            enemy.NavMeshAgent.Warp(enemy.Rigidbody.transform.position);
-            enemy.NavMeshAgent.ResetPath();
-        }
-
-        if (!SemiFunc.EnemySpawnIdlePause())
-        {
-            stateTimer -= Time.deltaTime;
-            if (stateTimer <= 0f)
-            {
-                UpdateState(State.Roam);
-            }
-
-            if (SemiFunc.EnemyForceLeave(enemy))
-            {
-                UpdateState(State.Leave);
-            }
+            fsm.NextStateStateId = State.Stun;
         }
     }
 
-    private void StateRoam()
+    private void UpdateGrabAggroTimer()
     {
-        if (stateImpulse)
+        // While positive, decrement the grab aggro timer each frame so the enemy won't immediately react after being grabbed.
+        // The timer is set in OnGrabbed (e.g. 60f). Checking <0f avoids decrementing when already zero and prevents
+        // negative values.
+        if (grabAggroTimer > 0f)
         {
-            stateImpulse = false;
-            stateTimer = 5f;
-            var found = false;
-            var levelPoint = SemiFunc.LevelPointGet(transform.position, 10f, 25f);
-            if (!levelPoint)
-            {
-                levelPoint = SemiFunc.LevelPointGet(transform.position, 0f, 999f);
-            }
-
-            if (levelPoint &&
-                NavMesh.SamplePosition(levelPoint.transform.position + Random.insideUnitSphere * 3f, out var hit,
-                    5f, -1) &&
-                Physics.Raycast(hit.position, Vector3.down, 5f, LayerMask.GetMask("Default")))
-            {
-                enemy.NavMeshAgent.SetDestination(hit.position);
-                found = true;
-            }
-
-            if (!found)
-            {
-                return;
-            }
-
-            enemy.Rigidbody.notMovingTimer = 0f;
-        }
-        else
-        {
-            SemiFunc.EnemyCartJump(enemy);
-            if (enemy.Rigidbody.notMovingTimer > 2f)
-            {
-                stateTimer -= Time.deltaTime;
-            }
-
-            if (stateTimer <= 0f || !enemy.NavMeshAgent.HasPath())
-            {
-                SemiFunc.EnemyCartJumpReset(enemy);
-                UpdateState(State.Idle);
-            }
-        }
-
-        if (SemiFunc.EnemyForceLeave(enemy))
-        {
-            UpdateState(State.Leave);
+            grabAggroTimer -= Time.deltaTime;
+            if (grabAggroTimer < 0f) grabAggroTimer = 0f;
         }
     }
 
-    private void StateInvestigate()
+    #region RPC
+
+    [PunRPC]
+    private void UpdatePlayerTargetRPC(int _photonViewID, PhotonMessageInfo _info = default)
     {
-        if (stateImpulse)
+        if (!SemiFunc.MasterOnlyRPC(_info))
         {
-            stateTimer = 5f;
-            enemy.Rigidbody.notMovingTimer = 0f;
-            stateImpulse = false;
-        }
-        else
-        {
-            enemy.NavMeshAgent.SetDestination(agentDestination);
-            SemiFunc.EnemyCartJump(enemy);
-            if (enemy.Rigidbody.notMovingTimer > 2f)
-            {
-                stateTimer -= Time.deltaTime;
-            }
-
-            if (stateTimer <= 0f || !enemy.NavMeshAgent.HasPath())
-            {
-                SemiFunc.EnemyCartJumpReset(enemy);
-                UpdateState(State.Idle);
-            }
-        }
-
-        if (SemiFunc.EnemyForceLeave(enemy))
-        {
-            UpdateState(State.Leave);
-        }
-    }
-
-    private void StatePlayerNotice()
-    {
-        if (stateImpulse)
-        {
-            enemy.NavMeshAgent.Warp(enemy.Rigidbody.transform.position);
-            enemy.NavMeshAgent.ResetPath();
-            stateImpulse = false;
-            stateTimer = 2f;
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (stateTimer <= 0f)
-        {
-            UpdateState(State.PlayerGoTo);
-        }
-    }
-
-    private void StatePlayerGoTo()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            stateTimer = 2f;
-            agentSet = true;
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (!playerTarget || playerTarget.isDisabled || stateTimer <= 0f)
-        {
-            UpdateState(State.Leave);
             return;
         }
 
-        SemiFunc.EnemyCartJump(enemy);
-        if (enemy.Jump.jumping)
+        foreach (var item in SemiFunc.PlayerGetList())
         {
-            enemy.NavMeshAgent.Disable(0.5f);
-            transform.position = Vector3.MoveTowards(transform.position, playerTarget.transform.position,
-                5f * Time.deltaTime);
-            agentSet = true;
-        }
-        else if (!enemy.NavMeshAgent.IsDisabled())
-        {
-            if (!agentSet && enemy.NavMeshAgent.HasPath() &&
-                Vector3.Distance(enemy.Rigidbody.transform.position + Vector3.down * 0.75f,
-                    enemy.NavMeshAgent.GetDestination()) < 0.25f)
+            if (item.photonView.ViewID == _photonViewID)
             {
-                enemy.Jump.StuckTrigger(enemy.Rigidbody.transform.position - playerTarget.transform.position);
+                playerTarget = item;
+                attachAnchor = SemiFunc.PlayerGetFaceEyeTransform(item);
+                break;
             }
-
-            enemy.NavMeshAgent.SetDestination(playerTarget.transform.position);
-            enemy.NavMeshAgent.OverrideAgent(5f, 10f, 0.25f);
-            agentSet = false;
-        }
-
-        if (Vector3.Distance(enemy.Rigidbody.transform.position, playerTarget.transform.position) < 1.5f)
-        {
-            SemiFunc.EnemyCartJumpReset(enemy);
-            UpdateState(State.AttachPrepare);
         }
     }
 
     #endregion
 
-    #region Nouveaux états d’attache
-
-    /// <summary>
-    ///     Petite phase avant de se coller au joueur (ancien PlayerPickup).
-    /// </summary>
-    private void StateAttachPrepare()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            stateTimer = 1f;
-            // On s'assure que l’agent navmesh est “figé” au bon endroit
-            enemy.NavMeshAgent.Warp(enemy.Rigidbody.transform.position);
-            enemy.NavMeshAgent.ResetPath();
-        }
-
-        if (!playerTarget || playerTarget.isDisabled)
-        {
-            UpdateState(State.Leave);
-            return;
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (stateTimer <= 0f)
-        {
-            UpdateState(State.Attached);
-        }
-    }
-
-    /// <summary>
-    ///     Ennemi collé au joueur : il ne le porte pas, il le “suit” simplement.
-    ///     Pas d’attaque dans cet état.
-    /// </summary>
-    private void StateAttached()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            attachedTimer = attachedDuration;
-
-            // On prend comme “anchor” le visage/yeux du player (comme SlowMouth)
-            attachAnchor = playerTarget
-                ? SemiFunc.PlayerGetFaceEyeTransform(playerTarget)
-                : null;
-
-            // TODO : ici tu peux déclencher le début des hallucinations
-            // ex: si playerTarget.isLocal => activer tes effets visu/son sur ce client
-            // OnAttachedToPlayer();
-        }
-
-        if (!playerTarget || playerTarget.isDisabled)
-        {
-            UpdateState(State.Leave);
-            return;
-        }
-
-        attachedTimer -= Time.deltaTime;
-        if (attachedTimer <= 0f)
-        {
-            UpdateState(State.Detach);
-        }
-    }
-
-    /// <summary>
-    ///     Phase de détache : petite transition avant de repartir.
-    /// </summary>
-    private void StateDetach()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            stateTimer = 0.5f;
-
-            // On arrête de “coller” strictement le joueur, l’ennemi reste à sa position actuelle
-            enemy.NavMeshAgent.Warp(enemy.Rigidbody.transform.position);
-            enemy.NavMeshAgent.ResetPath();
-
-            // TODO : ici tu peux désactiver tes hallucinations
-            // OnDetachedFromPlayer();
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (stateTimer <= 0f)
-        {
-            attachAnchor = null;
-            UpdateState(State.DetachWait);
-        }
-    }
-
-    /// <summary>
-    ///     Petit délai après le détache pour éviter de ré-aggro instant.
-    /// </summary>
-    private void StateDetachWait()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            stateTimer = 2f;
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (stateTimer <= 0f)
-        {
-            UpdateState(State.Leave);
-        }
-    }
-
-    #endregion
-
-    #region Leave / stun / despawn (copiés de EnemyHidden)
-
-    private void StateLeave()
-    {
-        if (stateImpulse)
-        {
-            stateTimer = 5f;
-            var found = false;
-            var levelPoint = SemiFunc.LevelPointGetPlayerDistance(transform.position, 30f, 50f);
-            if (!levelPoint)
-            {
-                levelPoint = SemiFunc.LevelPointGetFurthestFromPlayer(transform.position, 5f);
-            }
-
-            if (levelPoint &&
-                NavMesh.SamplePosition(levelPoint.transform.position + Random.insideUnitSphere * 3f, out var hit,
-                    5f, -1) &&
-                Physics.Raycast(hit.position, Vector3.down, 5f, LayerMask.GetMask("Default")))
-            {
-                agentDestination = hit.position;
-                found = true;
-            }
-
-            SemiFunc.EnemyLeaveStart(enemy);
-            if (!found)
-            {
-                return;
-            }
-
-            stateImpulse = false;
-            enemy.EnemyParent.SpawnedTimerSet(1f);
-        }
-
-        if (enemy.Rigidbody.notMovingTimer > 2f)
-        {
-            stateTimer -= Time.deltaTime;
-        }
-
-        enemy.NavMeshAgent.SetDestination(agentDestination);
-        enemy.NavMeshAgent.OverrideAgent(5f, 10f, 0.25f);
-        SemiFunc.EnemyCartJump(enemy);
-
-        if (Vector3.Distance(transform.position, agentDestination) < 1f || stateTimer <= 0f)
-        {
-            SemiFunc.EnemyCartJumpReset(enemy);
-            UpdateState(State.Idle);
-        }
-    }
-
-    private void StateStun()
-    {
-        if (!enemy.IsStunned())
-        {
-            UpdateState(State.StunEnd);
-        }
-    }
-
-    private void StateStunEnd()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            stateTimer = 1f;
-        }
-
-        stateTimer -= Time.deltaTime;
-        if (stateTimer <= 0f)
-        {
-            UpdateState(State.Leave);
-        }
-    }
-
-    private void StateDespawn()
-    {
-        if (stateImpulse)
-        {
-            stateImpulse = false;
-            enemy.EnemyParent.Despawn();
-            UpdateState(State.Spawn);
-        }
-    }
-
-    #endregion
-
-    #region API publique (hooks du système Enemy)
+    #region Hooks Enemy (API publique)
 
     public void OnSpawn()
     {
         if (SemiFunc.IsMasterClientOrSingleplayer() && SemiFunc.EnemySpawn(enemy))
         {
-            UpdateState(State.Spawn);
+            fsm.NextStateStateId = State.Spawn;
         }
     }
 
@@ -550,11 +184,11 @@ public class EnemyWhispral : MonoBehaviour
 
     public void OnInvestigate()
     {
-        if (SemiFunc.IsMasterClientOrSingleplayer() &&
-            (currentState == State.Idle || currentState == State.Roam || currentState == State.Investigate))
+        var canInvestigate = CurrentState is State.Idle or State.Roam or State.Investigate;
+        if (SemiFunc.IsMasterClientOrSingleplayer() && canInvestigate)
         {
             agentDestination = enemy.StateInvestigate.onInvestigateTriggeredPosition;
-            UpdateState(State.Investigate);
+            fsm.NextStateStateId = State.Investigate;
         }
     }
 
@@ -565,27 +199,30 @@ public class EnemyWhispral : MonoBehaviour
             return;
         }
 
-        if (currentState == State.Idle || currentState == State.Roam ||
-            currentState == State.Investigate || currentState == State.Leave)
+        var canNoticePlayer = CurrentState is State.Idle or State.Roam or State.Investigate or State.Leave;
+        if (canNoticePlayer)
         {
             playerTarget = enemy.Vision.onVisionTriggeredPlayer;
+
             if (SemiFunc.IsMultiplayer())
             {
                 photonView.RPC("UpdatePlayerTargetRPC", RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
-            UpdateState(State.PlayerNotice);
+            fsm.NextStateStateId = State.NoticePlayer;
         }
-        else if (currentState == State.PlayerGoTo)
+        else if (CurrentState == State.GoToPlayer)
         {
-            stateTimer = 2f;
+            // refresh du timer dans PlayerGoTo
+            fsm.GetStateTyped<PlayerGoToState>(State.GoToPlayer)?.RefreshTimer();
         }
     }
 
     public void OnGrabbed()
     {
-        if (SemiFunc.IsMasterClientOrSingleplayer() &&
-            !(grabAggroTimer > 0f) && currentState == State.Leave)
+        // When Enemy is grabbed
+        var canAggroPlayer = !(grabAggroTimer > 0f);
+        if (SemiFunc.IsMasterClientOrSingleplayer() && canAggroPlayer && CurrentState == State.Leave)
         {
             grabAggroTimer = 60f;
             playerTarget = enemy.Rigidbody.onGrabbedPlayerAvatar;
@@ -594,131 +231,572 @@ public class EnemyWhispral : MonoBehaviour
                 photonView.RPC("UpdatePlayerTargetRPC", RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
-            UpdateState(State.PlayerNotice);
+            fsm.NextStateStateId = State.NoticePlayer;
         }
     }
 
     /// <summary>
-    ///     Si tu veux forcer le détache depuis un autre script (ex : quand le joueur passe en forme objet),
-    ///     tu peux appeler cette méthode.
+    ///     Forcer le détachage (ex : quand le joueur passe en forme objet).
     /// </summary>
     public void ForceDetach()
     {
-        if (currentState == State.AttachPrepare || currentState == State.Attached)
+        // TODO: Trouver un moyen de forcer le détachage
+        if (CurrentState == State.PrepareAttach || CurrentState == State.Attached)
         {
-            UpdateState(State.Detach);
+            fsm.NextStateStateId = State.Detach;
         }
     }
 
     #endregion
 
-    #region State machine helpers
-
-    private void UpdateState(State newState)
-    {
-        if (currentState == newState)
-        {
-            return;
-        }
-
-        enemy.Rigidbody.StuckReset();
-        currentState = newState;
-        stateImpulse = true;
-        stateTimer = 0f;
-
-        if (currentState == State.Leave)
-        {
-            SemiFunc.EnemyLeaveStart(enemy);
-        }
-
-        if (GameManager.Multiplayer())
-        {
-            photonView.RPC("UpdateStateRPC", RpcTarget.All, currentState);
-        }
-        else
-        {
-            UpdateStateRPC(currentState);
-        }
-    }
+    #region Rotation / Attach follow
 
     private void RotationLogic()
     {
-        if ((currentState == State.PlayerNotice || currentState == State.PlayerGoTo ||
-             currentState == State.AttachPrepare)
-            && playerTarget)
+        var hasPlayerTargetedState = CurrentState is State.NoticePlayer or State.GoToPlayer or State.PrepareAttach;
+        if (hasPlayerTargetedState && playerTarget)
         {
             if (Vector3.Distance(playerTarget.transform.position, transform.position) > 0.1f)
             {
-                rotationTarget = Quaternion.LookRotation(playerTarget.transform.position - transform.position);
-                rotationTarget.eulerAngles = new Vector3(0f, rotationTarget.eulerAngles.y, 0f);
+                var look = Quaternion.LookRotation(playerTarget.transform.position - transform.position);
+                look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
+                rotationTarget = look;
             }
         }
         else if (enemy.NavMeshAgent.AgentVelocity.normalized.magnitude > 0.1f)
         {
-            rotationTarget = Quaternion.LookRotation(enemy.NavMeshAgent.AgentVelocity.normalized);
-            rotationTarget.eulerAngles = new Vector3(0f, rotationTarget.eulerAngles.y, 0f);
+            var look = Quaternion.LookRotation(enemy.NavMeshAgent.AgentVelocity.normalized);
+            look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
+            rotationTarget = look;
         }
 
         transform.rotation = SemiFunc.SpringQuaternionGet(rotationSpring, rotationTarget);
     }
 
-    /// <summary>
-    ///     Ici on suit le joueur quand on est en Attached, mais on ne le déplace jamais.
-    /// </summary>
     private void AttachFollowLogic()
     {
-        if (currentState != State.Attached)
-        {
-            return;
-        }
+        // TODO: Faut comprendre qu'est-ce que fait cette méthode
+        // Elle sert à faire suivre l'ennemi au joueur quand il est attaché à lui (copilot a écrit ça)
+        if (CurrentState != State.Attached) return;
 
         if (!playerTarget || playerTarget.isDisabled || !attachAnchor)
         {
             return;
         }
 
-        // Position cible : un peu au-dessus et derrière la tête
-        var desiredPos = attachAnchor.position
-                         + attachAnchor.TransformDirection(new Vector3(0f, 0.3f, -0.3f));
-
-        enemy.Rigidbody.transform.position =
-            Vector3.Lerp(enemy.Rigidbody.transform.position, desiredPos, 10f * Time.fixedDeltaTime);
+        var desiredPos = attachAnchor.position + attachAnchor.TransformDirection(new Vector3(0f, 0.3f, -0.3f));
+        enemy.Rigidbody.transform.position = Vector3.Lerp(
+            enemy.Rigidbody.transform.position,
+            desiredPos,
+            10f * Time.fixedDeltaTime);
 
         var desiredRot = Quaternion.LookRotation(attachAnchor.forward, Vector3.up);
-        enemy.Rigidbody.transform.rotation =
-            Quaternion.Slerp(enemy.Rigidbody.transform.rotation, desiredRot, 10f * Time.fixedDeltaTime);
+        enemy.Rigidbody.transform.rotation = Quaternion.Slerp(
+            enemy.Rigidbody.transform.rotation,
+            desiredRot,
+            10f * Time.fixedDeltaTime);
     }
 
     #endregion
 
-    #region RPC
+    #region États internes
 
-    [PunRPC]
-    private void UpdateStateRPC(State _state, PhotonMessageInfo _info = default)
+    /// <summary>
+    ///     Base commune pour tous les états, avec accès direct au Worker / Enemy.
+    /// </summary>
+    private abstract class WhispralStateBase : StateMachineBase<StateMachine, State>.StateBase
     {
-        if (SemiFunc.MasterOnlyRPC(_info))
+        protected StateMachine Fsm => Machine;
+        protected EnemyWhispral Whispral => Fsm.Owner;
+        protected Enemy Enemy => Whispral.enemy;
+        protected EnemyWhispralAnim Anim => Whispral.enemyWhispralAnim;
+
+        public override void OnStateEnter(State previous)
         {
-            currentState = _state;
+            base.OnStateEnter(previous);
+            VepMod.Logger.LogDebug("Whispral entered state: " + Fsm.CurrentStateStateId);
+            Debug.Log("Whispral entered state: " + Fsm.CurrentStateStateId);
+            Enemy.Rigidbody.StuckReset();
         }
     }
 
-    [PunRPC]
-    private void UpdatePlayerTargetRPC(int _photonViewID, PhotonMessageInfo _info = default)
+    private class SpawnState : WhispralStateBase
     {
-        if (!SemiFunc.MasterOnlyRPC(_info))
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
         {
-            return;
+            base.OnStateEnter(previous);
+            _timer = 1f;
         }
 
-        foreach (var item in SemiFunc.PlayerGetList())
+        public override void OnStateUpdate()
         {
-            if (item.photonView.ViewID == _photonViewID)
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
             {
-                playerTarget = item;
-                // On récupère un point “face/yeux” pour l’attache, comme dans EnemySlowMouth
-                attachAnchor = SemiFunc.PlayerGetFaceEyeTransform(item);
-                break;
+                Fsm.NextStateStateId = State.Idle;
             }
+        }
+    }
+
+    private class IdleState : WhispralStateBase
+    {
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = Random.Range(2f, 5f);
+            Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
+            Enemy.NavMeshAgent.ResetPath();
+        }
+
+        public override void OnStateUpdate()
+        {
+            if (SemiFunc.EnemySpawnIdlePause())
+            {
+                return;
+            }
+
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
+            {
+                Fsm.NextStateStateId = State.Roam;
+            }
+
+            if (SemiFunc.EnemyForceLeave(Enemy))
+            {
+                Fsm.NextStateStateId = State.Leave;
+            }
+        }
+    }
+
+    private class RoamState : WhispralStateBase
+    {
+        private const float TimeToStopRoaming = 2f;
+        private const float TimeToRoam = 5f;
+        private bool _hasDestination;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = TimeToRoam;
+            _hasDestination = false;
+
+            var levelPoint = SemiFunc.LevelPointGet(Whispral.transform.position, 10f, 25f)
+                             ?? SemiFunc.LevelPointGet(Whispral.transform.position, 0f, 999f);
+
+            if (levelPoint && SamplePosition(levelPoint, out var hit) && Raycast(hit)) // if valid position found
+            {
+                Enemy.NavMeshAgent.SetDestination(hit.position);
+                Enemy.Rigidbody.notMovingTimer = 0f;
+                _hasDestination = true;
+            }
+        }
+
+
+        public override void OnStateUpdate()
+        {
+            if (SemiFunc.EnemyForceLeave(Enemy))
+            {
+                Fsm.NextStateStateId = State.Leave;
+                return;
+            }
+
+            if (!_hasDestination)
+            {
+                Fsm.NextStateStateId = State.Idle;
+                return;
+            }
+
+            SemiFunc.EnemyCartJump(Enemy);
+
+            var canRoam = Enemy.Rigidbody.notMovingTimer > TimeToStopRoaming;
+            if (canRoam)
+            {
+                _timer -= Time.deltaTime;
+            }
+
+            var shouldNotMove = _timer <= 0f || !Enemy.NavMeshAgent.HasPath();
+            if (shouldNotMove)
+            {
+                SemiFunc.EnemyCartJumpReset(Enemy);
+                Fsm.NextStateStateId = State.Idle;
+            }
+        }
+
+        private static bool Raycast(NavMeshHit hit)
+        {
+            return Physics.Raycast(hit.position, Vector3.down, 5f, LayerMask.GetMask("Default"));
+        }
+
+        private static bool SamplePosition(LevelPoint levelPoint, out NavMeshHit hit)
+        {
+            return NavMesh.SamplePosition(levelPoint.transform.position + Random.insideUnitSphere * 3f, out hit, 5f,
+                -1);
+        }
+    }
+
+    private class InvestigateState : WhispralStateBase
+    {
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = 5f;
+            Enemy.Rigidbody.notMovingTimer = 0f;
+        }
+
+        public override void OnStateUpdate()
+        {
+            if (SemiFunc.EnemyForceLeave(Enemy))
+            {
+                Fsm.NextStateStateId = State.Leave;
+                return;
+            }
+
+            Enemy.NavMeshAgent.SetDestination(Whispral.agentDestination);
+            SemiFunc.EnemyCartJump(Enemy);
+
+            if (Enemy.Rigidbody.notMovingTimer > 2f)
+            {
+                _timer -= Time.deltaTime;
+            }
+
+            if (_timer <= 0f || !Enemy.NavMeshAgent.HasPath())
+            {
+                SemiFunc.EnemyCartJumpReset(Enemy);
+                Fsm.NextStateStateId = State.Idle;
+            }
+        }
+    }
+
+    private class PlayerNoticeState : WhispralStateBase
+    {
+        private const float TimeToNoticePlayer = 2f;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
+            Enemy.NavMeshAgent.ResetPath();
+            _timer = TimeToNoticePlayer;
+        }
+
+        public override void OnStateUpdate()
+        {
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
+            {
+                Fsm.NextStateStateId = State.GoToPlayer;
+            }
+        }
+    }
+
+    private class PlayerGoToState : WhispralStateBase
+    {
+        private const float TimeToStopGoingToPlayer = 2f;
+        private const float AttachDistanceThreshold = 1.5f;
+        private bool _agentSet;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = TimeToStopGoingToPlayer;
+            _agentSet = true;
+        }
+
+        public void RefreshTimer()
+        {
+            _timer = TimeToStopGoingToPlayer;
+        }
+
+        public override void OnStateUpdate()
+        {
+            _timer -= Time.deltaTime;
+
+            var player = Whispral.playerTarget;
+            var hasToStop = !player || player.isDisabled || _timer <= 0f;
+            if (hasToStop)
+            {
+                Fsm.NextStateStateId = State.Leave;
+                return;
+            }
+
+            var playerPos = player.transform.position;
+            SemiFunc.EnemyCartJump(Enemy);
+
+            if (Enemy.Jump.jumping)
+            {
+                Enemy.NavMeshAgent.Disable(0.5f);
+                Whispral.transform.position = Vector3.MoveTowards(
+                    Whispral.transform.position,
+                    playerPos,
+                    5f * Time.deltaTime);
+                _agentSet = true;
+            }
+            else if (!Enemy.NavMeshAgent.IsDisabled())
+            {
+                var isStuck = !_agentSet &&
+                              Enemy.NavMeshAgent.HasPath() &&
+                              Vector3.Distance(Enemy.Rigidbody.transform.position + Vector3.down * 0.75f,
+                                  Enemy.NavMeshAgent.GetDestination()) < 0.25f;
+                if (isStuck)
+                {
+                    Enemy.Jump.StuckTrigger(Enemy.Rigidbody.transform.position - playerPos);
+                }
+
+                Enemy.NavMeshAgent.SetDestination(playerPos);
+                Enemy.NavMeshAgent.OverrideAgent(5f, 10f, 0.25f);
+                _agentSet = false;
+            }
+
+            if (Vector3.Distance(Enemy.Rigidbody.transform.position, playerPos) < AttachDistanceThreshold)
+            {
+                SemiFunc.EnemyCartJumpReset(Enemy);
+                Fsm.NextStateStateId = State.PrepareAttach;
+            }
+        }
+    }
+
+    private class AttachPrepareState : WhispralStateBase
+    {
+        private const float TimeToPrepareAttach = 1f;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = TimeToPrepareAttach;
+            Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
+            Enemy.NavMeshAgent.ResetPath();
+        }
+
+        public override void OnStateUpdate()
+        {
+            var player = Whispral.playerTarget;
+            if (!player || player.isDisabled)
+            {
+                Fsm.NextStateStateId = State.Leave;
+                return;
+            }
+
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
+            {
+                Fsm.NextStateStateId = State.Attached;
+            }
+        }
+    }
+
+    private class AttachedState : WhispralStateBase
+    {
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+
+            Whispral.attachedTimer = Whispral.attachedDuration;
+
+            var player = Whispral.playerTarget;
+            Whispral.attachAnchor = player
+                ? SemiFunc.PlayerGetFaceEyeTransform(player)
+                : null;
+
+            // TODO : démarrer les hallucinations côté client local
+            StartAttachEffects();
+        }
+
+        public override void OnStateUpdate()
+        {
+            if (CheckLeaveState()) return;
+            CheckDetachState();
+        }
+
+        private void StartAttachEffects()
+        {
+            VepMod.Logger.LogDebug("Whispral attached to player, starting attach effects.");
+            Debug.Log("Whispral attached to player, starting attach effects.");
+        }
+
+
+        private void CheckDetachState()
+        {
+            Whispral.attachedTimer -= Time.deltaTime;
+            var player = Whispral.playerTarget;
+            if (Whispral.attachedTimer <= 0f || !player || player.isDisabled || player.isCrawling)
+            {
+                Fsm.NextStateStateId = State.Detach;
+            }
+        }
+
+        private bool CheckLeaveState()
+        {
+            var player = Whispral.playerTarget;
+            if (!player || player.isDisabled)
+            {
+                Fsm.NextStateStateId = State.Leave;
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    private class DetachState : WhispralStateBase
+    {
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = 0.5f;
+
+            Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
+            Enemy.NavMeshAgent.ResetPath();
+
+            // TODO : couper les hallucinations ici si besoin
+            StopAttachEffects();
+        }
+
+        public override void OnStateUpdate()
+        {
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
+            {
+                Whispral.attachAnchor = null;
+                Fsm.NextStateStateId = State.DetachWait;
+            }
+        }
+
+        private void StopAttachEffects()
+        {
+            VepMod.Logger.LogDebug("Whispral detached from player, stopping attach effects.");
+            Debug.Log("Whispral detached from player, stopping attach effects.");
+        }
+    }
+
+    private class DetachWaitState : WhispralStateBase
+    {
+        private const float TimeToLeaveAfterDetach = 2f;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = TimeToLeaveAfterDetach;
+        }
+
+        public override void OnStateUpdate()
+        {
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
+            {
+                Fsm.NextStateStateId = State.Leave;
+            }
+        }
+    }
+
+    private class LeaveState : WhispralStateBase
+    {
+        private const float TimeToLeave = 5f;
+        private bool _hasDestination;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = TimeToLeave;
+            _hasDestination = false;
+
+            var levelPoint = SemiFunc.LevelPointGetPlayerDistance(Whispral.transform.position, 30f, 50f)
+                             ?? SemiFunc.LevelPointGetFurthestFromPlayer(Whispral.transform.position, 5f);
+
+            if (levelPoint &&
+                NavMesh.SamplePosition(levelPoint.transform.position + Random.insideUnitSphere * 3f,
+                    out var hit, 5f, -1) &&
+                Physics.Raycast(hit.position, Vector3.down, 5f, LayerMask.GetMask("Default")))
+            {
+                Whispral.agentDestination = hit.position;
+                _hasDestination = true;
+            }
+
+            SemiFunc.EnemyLeaveStart(Enemy);
+
+            if (_hasDestination)
+            {
+                Enemy.EnemyParent.SpawnedTimerSet(1f);
+            }
+        }
+
+        public override void OnStateUpdate()
+        {
+            if (!_hasDestination)
+            {
+                Fsm.NextStateStateId = State.Idle;
+                return;
+            }
+
+            if (Enemy.Rigidbody.notMovingTimer > 2f)
+            {
+                _timer -= Time.deltaTime;
+            }
+
+            Enemy.NavMeshAgent.SetDestination(Whispral.agentDestination);
+            Enemy.NavMeshAgent.OverrideAgent(5f, 10f, 0.25f);
+            SemiFunc.EnemyCartJump(Enemy);
+
+            if (Vector3.Distance(Whispral.transform.position, Whispral.agentDestination) < 1f || _timer <= 0f)
+            {
+                SemiFunc.EnemyCartJumpReset(Enemy);
+                Fsm.NextStateStateId = State.Idle;
+            }
+        }
+    }
+
+    private class StunState : WhispralStateBase
+    {
+        public override void OnStateUpdate()
+        {
+            if (!Enemy.IsStunned())
+            {
+                Fsm.NextStateStateId = State.StunEnd;
+            }
+        }
+    }
+
+    private class StunEndState : WhispralStateBase
+    {
+        private const float TimeToRecoverStun = 1f;
+        private float _timer;
+
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            _timer = TimeToRecoverStun;
+        }
+
+        public override void OnStateUpdate()
+        {
+            _timer -= Time.deltaTime;
+            if (_timer <= 0f)
+            {
+                Fsm.NextStateStateId = State.Leave;
+            }
+        }
+    }
+
+    private class DespawnState : WhispralStateBase
+    {
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            Enemy.EnemyParent.Despawn();
+            Fsm.NextStateStateId = State.Spawn;
         }
     }
 

@@ -7,11 +7,11 @@ using UnityEngine.SceneManagement;
 
 namespace VepMod;
 
-[BepInPlugin("Vep.VepMod", "VepMod", "0.0.2")]
+[BepInPlugin("Vep.VepMod", "VepMod", "0.0.3")]
 [BepInDependency(MyPluginInfo.PLUGIN_GUID)]
 public class VepMod : BaseUnityPlugin
 {
-    internal static VepMod Instance { get; private set; } = null!;
+    public static VepMod Instance { get; private set; } = null!;
     internal new static ManualLogSource Logger => Instance._logger;
     private ManualLogSource _logger => base.Logger;
     internal Harmony? Harmony { get; set; }

@@ -123,7 +123,7 @@ public class EnemyWhispralAnim : MonoBehaviour
     {
         BreathingLogic();
         FootstepLogic();
-        if (enemyWhispral.currentState == EnemyWhispral.State.Stun)
+        if (enemyWhispral.CurrentState == EnemyWhispral.State.Stun)
         {
             if (soundStunStartImpulse)
             {
@@ -193,7 +193,7 @@ public class EnemyWhispralAnim : MonoBehaviour
             soundJumpImpulse = true;
         }
 
-        if (enemyWhispral.currentState == EnemyWhispral.State.AttachPrepare)
+        if (enemyWhispral.CurrentState == EnemyWhispral.State.PrepareAttach)
         {
             if (soundPlayerPickupImpulse)
             {
@@ -208,7 +208,7 @@ public class EnemyWhispralAnim : MonoBehaviour
             soundPlayerPickupImpulse = true;
         }
 
-        if (enemyWhispral.currentState == EnemyWhispral.State.DetachWait)
+        if (enemyWhispral.CurrentState == EnemyWhispral.State.DetachWait)
         {
             if (soundPlayerReleaseImpulse)
             {
@@ -223,7 +223,7 @@ public class EnemyWhispralAnim : MonoBehaviour
             soundPlayerReleaseImpulse = true;
         }
 
-        if (enemyWhispral.currentState == EnemyWhispral.State.Attached && !enemy.Jump.jumping)
+        if (enemyWhispral.CurrentState == EnemyWhispral.State.Attached && !enemy.Jump.jumping)
         {
             soundPlayerMove.PlayLoop(true, 2f, 10f);
             soundPlayerMoveImpulse = true;
@@ -270,24 +270,24 @@ public class EnemyWhispralAnim : MonoBehaviour
     private void BreathingLogic()
     {
         if (enemy.Jump.jumping ||
-            enemyWhispral.currentState == EnemyWhispral.State.Stun ||
-            enemyWhispral.currentState == EnemyWhispral.State.Detach ||
-            enemyWhispral.currentState == EnemyWhispral.State.DetachWait ||
-            enemyWhispral.currentState == EnemyWhispral.State.AttachPrepare)
+            enemyWhispral.CurrentState == EnemyWhispral.State.Stun ||
+            enemyWhispral.CurrentState == EnemyWhispral.State.Detach ||
+            enemyWhispral.CurrentState == EnemyWhispral.State.DetachWait ||
+            enemyWhispral.CurrentState == EnemyWhispral.State.PrepareAttach)
         {
             breathingState = BreathingState.None;
         }
-        else if (enemyWhispral.currentState == EnemyWhispral.State.Attached)
+        else if (enemyWhispral.CurrentState == EnemyWhispral.State.Attached)
         {
             breathingState = BreathingState.FastNoSound;
         }
-        else if (enemyWhispral.currentState == EnemyWhispral.State.PlayerGoTo ||
-                 enemyWhispral.currentState == EnemyWhispral.State.Leave)
+        else if (enemyWhispral.CurrentState == EnemyWhispral.State.GoToPlayer ||
+                 enemyWhispral.CurrentState == EnemyWhispral.State.Leave)
         {
             breathingState = BreathingState.Fast;
         }
-        else if (enemyWhispral.currentState == EnemyWhispral.State.Roam ||
-                 enemyWhispral.currentState == EnemyWhispral.State.Investigate)
+        else if (enemyWhispral.CurrentState == EnemyWhispral.State.Roam ||
+                 enemyWhispral.CurrentState == EnemyWhispral.State.Investigate)
         {
             breathingState = BreathingState.Medium;
         }
@@ -371,29 +371,29 @@ public class EnemyWhispralAnim : MonoBehaviour
             movingTimer -= Time.deltaTime;
         }
 
-        if ((enemyWhispral.currentState == EnemyWhispral.State.Roam ||
-             enemyWhispral.currentState == EnemyWhispral.State.Investigate ||
-             enemyWhispral.currentState == EnemyWhispral.State.PlayerGoTo ||
-             enemyWhispral.currentState == EnemyWhispral.State.Attached ||
-             enemyWhispral.currentState == EnemyWhispral.State.Leave) && enemy.Rigidbody.velocity.magnitude > 0.5f)
+        if ((enemyWhispral.CurrentState == EnemyWhispral.State.Roam ||
+             enemyWhispral.CurrentState == EnemyWhispral.State.Investigate ||
+             enemyWhispral.CurrentState == EnemyWhispral.State.GoToPlayer ||
+             enemyWhispral.CurrentState == EnemyWhispral.State.Attached ||
+             enemyWhispral.CurrentState == EnemyWhispral.State.Leave) && enemy.Rigidbody.velocity.magnitude > 0.5f)
         {
             movingTimer = 0.25f;
         }
 
-        if (enemyWhispral.currentState == EnemyWhispral.State.Stun || enemy.Jump.jumping)
+        if (enemyWhispral.CurrentState == EnemyWhispral.State.Stun || enemy.Jump.jumping)
         {
             footstepState = FootstepState.None;
         }
-        else if (enemyWhispral.currentState == EnemyWhispral.State.StunEnd ||
-                 enemyWhispral.currentState == EnemyWhispral.State.PlayerNotice)
+        else if (enemyWhispral.CurrentState == EnemyWhispral.State.StunEnd ||
+                 enemyWhispral.CurrentState == EnemyWhispral.State.NoticePlayer)
         {
             footstepState = FootstepState.TimedSteps;
         }
         else if (movingTimer > 0f)
         {
-            if (enemyWhispral.currentState == EnemyWhispral.State.PlayerGoTo ||
-                enemyWhispral.currentState == EnemyWhispral.State.Attached ||
-                enemyWhispral.currentState == EnemyWhispral.State.Leave)
+            if (enemyWhispral.CurrentState == EnemyWhispral.State.GoToPlayer ||
+                enemyWhispral.CurrentState == EnemyWhispral.State.Attached ||
+                enemyWhispral.CurrentState == EnemyWhispral.State.Leave)
             {
                 footstepState = FootstepState.Sprinting;
             }
