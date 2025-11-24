@@ -33,6 +33,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [Header("Attach settings")] [Tooltip("Temps pendant lequel l’ennemi reste collé au joueur.")]
     public float attachedDuration = 20f;
 
+    public Collider enemyCollider;
+    public EnemyWhispralAnim enemyWhispralAnima;
     [Space] public SpringQuaternion rotationSpring;
 
     // Contexte partagé entre états
@@ -42,6 +44,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [HideInInspector] public float attachedTimer;
 
     [SerializeField] private State currentStateDebug;
+    private State _currentState;
     private float grabAggroTimer;
 
     private PhotonView photonView;
@@ -49,14 +52,21 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     protected override State DefaultState => State.Spawn;
 
-    public State CurrentState => fsm.CurrentStateStateId;
+    public State CurrentState
+    {
+        get => SemiFunc.IsMasterClientOrSingleplayer() ? fsm.CurrentStateStateId : _currentState;
+        set
+        {
+            if (SemiFunc.IsMasterClientOrSingleplayer()) return;
+            _currentState = value;
+        }
+    }
+
 
     protected override void Awake()
     {
         base.Awake();
         photonView = GetComponent<PhotonView>();
-        VepMod.Logger.LogDebug("EnemyWhispralNew Awake called.");
-        Debug.Log("EnemyWhispralNew Awake called.");
 
         // Enregistrement des états
         fsm.AddState(State.Spawn, new SpawnState());
@@ -73,9 +83,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         fsm.AddState(State.Stun, new StunState());
         fsm.AddState(State.StunEnd, new StunEndState());
         fsm.AddState(State.Despawn, new DespawnState());
-
-        VepMod.Logger.LogDebug("EnemyWhispralNew Awake End.");
-        Debug.Log("EnemyWhispralNew Awake End.");
     }
 
     protected override void Update()
@@ -123,6 +130,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
+
     private void UpdateGrabAggroTimer()
     {
         // While positive, decrement the grab aggro timer each frame so the enemy won't immediately react after being grabbed.
@@ -135,7 +143,85 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
+    #region Rotation / Attach follow
+
+    private void RotationLogic()
+    {
+        var hasPlayerTargetedState = CurrentState is State.NoticePlayer or State.GoToPlayer or State.PrepareAttach;
+        if (hasPlayerTargetedState && playerTarget)
+        {
+            if (Vector3.Distance(playerTarget.transform.position, transform.position) > 0.1f)
+            {
+                var look = Quaternion.LookRotation(playerTarget.transform.position - transform.position);
+                look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
+                rotationTarget = look;
+            }
+        }
+        else if (enemy.NavMeshAgent.AgentVelocity.normalized.magnitude > 0.1f)
+        {
+            var look = Quaternion.LookRotation(enemy.NavMeshAgent.AgentVelocity.normalized);
+            look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
+            rotationTarget = look;
+        }
+
+        transform.rotation = SemiFunc.SpringQuaternionGet(rotationSpring, rotationTarget);
+    }
+
+    private void AttachFollowLogic()
+    {
+        if (CurrentState != State.Attached) return;
+
+        if (!playerTarget || playerTarget.isDisabled || !attachAnchor)
+        {
+            return;
+        }
+
+        var desiredPos = attachAnchor.position + attachAnchor.TransformDirection(new Vector3(0f, 0.3f, -0.3f));
+        enemy.Rigidbody.transform.position = Vector3.Lerp(
+            enemy.Rigidbody.transform.position,
+            desiredPos,
+            10f * Time.fixedDeltaTime);
+
+        var desiredRot = Quaternion.LookRotation(attachAnchor.forward, Vector3.up);
+        enemy.Rigidbody.transform.rotation = Quaternion.Slerp(
+            enemy.Rigidbody.transform.rotation,
+            desiredRot,
+            10f * Time.fixedDeltaTime);
+    }
+
+    #endregion
+
     #region RPC
+
+    [PunRPC]
+    private void UpdateStateRPC(State state, PhotonMessageInfo _info = default)
+    {
+        Debug.Log("--------------------------------------------------");
+        var sentByMe = _info.Sender != null && _info.Sender.UserId == PhotonNetwork.LocalPlayer.UserId;
+        var otherSentByMe = _info.Sender is { IsLocal: true };
+        if (SemiFunc.MasterOnlyRPC(_info))
+        {
+            if (sentByMe)
+            {
+                Debug.Log("[RPC] Ignoring UpdateStateRPC call sent by myself.");
+                return;
+            }
+
+            if (otherSentByMe)
+            {
+                Debug.Log("[RPC] Ignoring UpdateStateRPC call sent by myself (other check).");
+                return;
+            }
+
+            Debug.Log($"Received UpdateStateRPC event by ${_info.Sender?.NickName}");
+            Debug.Log($"Current state: {fsm.CurrentStateStateId}, updating to: {state}");
+            CurrentState = state;
+        }
+        else
+        {
+            Debug.LogWarning($"[RPC] Unauthorized UpdateStateRPC call from {_info.Sender?.NickName}");
+        }
+    }
 
     [PunRPC]
     private void UpdatePlayerTargetRPC(int _photonViewID, PhotonMessageInfo _info = default)
@@ -238,63 +324,12 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     /// <summary>
     ///     Forcer le détachage (ex : quand le joueur passe en forme objet).
     /// </summary>
-    public void ForceDetach()
+    private void ForceDetach()
     {
-        // TODO: Trouver un moyen de forcer le détachage
-        if (CurrentState == State.PrepareAttach || CurrentState == State.Attached)
+        if (CurrentState is State.PrepareAttach or State.Attached)
         {
             fsm.NextStateStateId = State.Detach;
         }
-    }
-
-    #endregion
-
-    #region Rotation / Attach follow
-
-    private void RotationLogic()
-    {
-        var hasPlayerTargetedState = CurrentState is State.NoticePlayer or State.GoToPlayer or State.PrepareAttach;
-        if (hasPlayerTargetedState && playerTarget)
-        {
-            if (Vector3.Distance(playerTarget.transform.position, transform.position) > 0.1f)
-            {
-                var look = Quaternion.LookRotation(playerTarget.transform.position - transform.position);
-                look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
-                rotationTarget = look;
-            }
-        }
-        else if (enemy.NavMeshAgent.AgentVelocity.normalized.magnitude > 0.1f)
-        {
-            var look = Quaternion.LookRotation(enemy.NavMeshAgent.AgentVelocity.normalized);
-            look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
-            rotationTarget = look;
-        }
-
-        transform.rotation = SemiFunc.SpringQuaternionGet(rotationSpring, rotationTarget);
-    }
-
-    private void AttachFollowLogic()
-    {
-        // TODO: Faut comprendre qu'est-ce que fait cette méthode
-        // Elle sert à faire suivre l'ennemi au joueur quand il est attaché à lui (copilot a écrit ça)
-        if (CurrentState != State.Attached) return;
-
-        if (!playerTarget || playerTarget.isDisabled || !attachAnchor)
-        {
-            return;
-        }
-
-        var desiredPos = attachAnchor.position + attachAnchor.TransformDirection(new Vector3(0f, 0.3f, -0.3f));
-        enemy.Rigidbody.transform.position = Vector3.Lerp(
-            enemy.Rigidbody.transform.position,
-            desiredPos,
-            10f * Time.fixedDeltaTime);
-
-        var desiredRot = Quaternion.LookRotation(attachAnchor.forward, Vector3.up);
-        enemy.Rigidbody.transform.rotation = Quaternion.Slerp(
-            enemy.Rigidbody.transform.rotation,
-            desiredRot,
-            10f * Time.fixedDeltaTime);
     }
 
     #endregion
@@ -314,13 +349,22 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
-            VepMod.Logger.LogDebug("Whispral entered state: " + Fsm.CurrentStateStateId);
-            Debug.Log("Whispral entered state: " + Fsm.CurrentStateStateId);
             Enemy.Rigidbody.StuckReset();
+            if (GameManager.Multiplayer())
+            {
+                Debug.Log("--------------------------------------------------");
+                Debug.Log("Sending UpdateStateRPC event from master client to all clients. ");
+                Debug.Log($"Previous state: {previous}, New state: {Fsm.NextStateStateId}");
+                Whispral.photonView.RPC("UpdateStateRPC", RpcTarget.All, Fsm.NextStateStateId);
+            }
+            else
+            {
+                Whispral.UpdateStateRPC(Fsm.NextStateStateId);
+            }
         }
     }
 
-    private class SpawnState : WhispralStateBase
+    private sealed class SpawnState : WhispralStateBase
     {
         private float _timer;
 
@@ -619,7 +663,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private void StartAttachEffects()
         {
-            VepMod.Logger.LogDebug("Whispral attached to player, starting attach effects.");
             Debug.Log("Whispral attached to player, starting attach effects.");
         }
 
@@ -675,7 +718,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private void StopAttachEffects()
         {
-            VepMod.Logger.LogDebug("Whispral detached from player, stopping attach effects.");
             Debug.Log("Whispral detached from player, stopping attach effects.");
         }
     }
