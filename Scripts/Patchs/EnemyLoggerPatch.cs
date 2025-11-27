@@ -1,13 +1,16 @@
-﻿using HarmonyLib;
+﻿using BepInEx.Logging;
+using HarmonyLib;
 
 namespace VepMod.Scripts.Patchs;
 
 [HarmonyPatch(typeof(EnemyDirector), "FirstSpawnPointAdd")]
 public class EnemyLoggerPatch
 {
+    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.EnemyLoggerPatch");
+
     [HarmonyPrefix]
     private static void Prefix(EnemyParent _enemyParent)
     {
-        VepMod.Logger.LogInfo($"EnemyDirector.FirstSpawnPointAdd: {_enemyParent} added as first spawn point.");
+        LOG.LogInfo($"EnemyDirector.FirstSpawnPointAdd: {_enemyParent} added as first spawn point.");
     }
 }

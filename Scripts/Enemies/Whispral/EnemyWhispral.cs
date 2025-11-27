@@ -196,30 +196,12 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [PunRPC]
     private void UpdateStateRPC(State state, PhotonMessageInfo _info = default)
     {
-        Debug.Log("--------------------------------------------------");
         var sentByMe = _info.Sender != null && _info.Sender.UserId == PhotonNetwork.LocalPlayer.UserId;
         var otherSentByMe = _info.Sender is { IsLocal: true };
         if (SemiFunc.MasterOnlyRPC(_info))
         {
-            if (sentByMe)
-            {
-                Debug.Log("[RPC] Ignoring UpdateStateRPC call sent by myself.");
-                return;
-            }
-
-            if (otherSentByMe)
-            {
-                Debug.Log("[RPC] Ignoring UpdateStateRPC call sent by myself (other check).");
-                return;
-            }
-
-            Debug.Log($"Received UpdateStateRPC event by ${_info.Sender?.NickName}");
-            Debug.Log($"Current state: {fsm.CurrentStateStateId}, updating to: {state}");
+            if (sentByMe) return;
             CurrentState = state;
-        }
-        else
-        {
-            Debug.LogWarning($"[RPC] Unauthorized UpdateStateRPC call from {_info.Sender?.NickName}");
         }
     }
 
@@ -352,9 +334,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             Enemy.Rigidbody.StuckReset();
             if (GameManager.Multiplayer())
             {
-                Debug.Log("--------------------------------------------------");
-                Debug.Log("Sending UpdateStateRPC event from master client to all clients. ");
-                Debug.Log($"Previous state: {previous}, New state: {Fsm.NextStateStateId}");
                 Whispral.photonView.RPC("UpdateStateRPC", RpcTarget.All, Fsm.NextStateStateId);
             }
             else
