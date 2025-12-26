@@ -4,7 +4,7 @@ using HarmonyLib;
 using Photon.Pun;
 using Photon.Voice;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(LocalVoiceFramed<short>), "PushDataAsync")]
 internal class LocalVoiceFramedPatch

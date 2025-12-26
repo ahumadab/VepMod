@@ -2,10 +2,10 @@
 using BepInEx.Logging;
 using HarmonyLib;
 using Photon.Pun;
-using VepMod.Scripts.Enemies.Whispral;
+using VepMod.Enemies.Whispral;
 using Logger = BepInEx.Logging.Logger;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(PlayerAvatar), "Awake")]
 internal class PlayerAvatarPatch

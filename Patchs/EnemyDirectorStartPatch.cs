@@ -5,7 +5,7 @@ using BepInEx.Logging;
 using HarmonyLib;
 using Logger = BepInEx.Logging.Logger;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(EnemyDirector))]
 internal class EnemyDirectorStartPatch

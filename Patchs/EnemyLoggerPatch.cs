@@ -1,7 +1,7 @@
 ﻿using BepInEx.Logging;
 using HarmonyLib;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(EnemyDirector), "FirstSpawnPointAdd")]
 public class EnemyLoggerPatch

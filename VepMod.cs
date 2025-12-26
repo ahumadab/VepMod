@@ -2,15 +2,14 @@
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
-using REPOLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using VepMod.Scripts.Patchs;
+using VepMod.Patchs;
 
 namespace VepMod;
 
 [BepInPlugin("com.vep.vepMod", "VepMod", "0.1.0")]
-[BepInDependency(MyPluginInfo.PLUGIN_GUID)]
+[BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
     private static Harmony _harmony;

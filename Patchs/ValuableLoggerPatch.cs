@@ -1,6 +1,6 @@
 ﻿using HarmonyLib;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(ValuableDirector), "Spawn")]
 public class ValuableLoggerPatch

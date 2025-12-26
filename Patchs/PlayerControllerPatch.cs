@@ -1,6 +1,6 @@
 ﻿using HarmonyLib;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(PlayerController))]
 internal static class PlayerControllerPatch

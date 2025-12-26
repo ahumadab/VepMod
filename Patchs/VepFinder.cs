@@ -2,10 +2,10 @@
 using BepInEx.Logging;
 using Photon.Pun;
 using UnityEngine;
-using VepMod.Scripts.Enemies.Whispral;
+using VepMod.Enemies.Whispral;
 using Logger = BepInEx.Logging.Logger;
 
-namespace VepMod.Scripts.Patchs;
+namespace VepMod.Patchs;
 
 public class VepFinder : MonoBehaviour
 {

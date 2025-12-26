@@ -12,7 +12,7 @@ using VepMod.VepFramework.Extensions;
 using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
 
-namespace VepMod.Scripts.Enemies.Whispral;
+namespace VepMod.Enemies.Whispral;
 
 public class WhispralMimics : MonoBehaviour
 {

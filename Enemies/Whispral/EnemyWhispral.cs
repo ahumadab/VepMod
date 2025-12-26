@@ -1,10 +1,11 @@
 ﻿using Photon.Pun;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.VepFramework.Structures.FSM;
 using Random = UnityEngine.Random;
 
-namespace VepMod.Scripts.Enemies.Whispral;
+namespace VepMod.Enemies.Whispral;
 
 public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.State>
 {
@@ -33,7 +34,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [Header("Attach settings")] [Tooltip("Temps pendant lequel l’ennemi reste collé au joueur.")]
     public float attachedDuration = 20f;
 
-    public Collider enemyCollider;
     public EnemyWhispralAnim enemyWhispralAnima;
     [Space] public SpringQuaternion rotationSpring;
 
@@ -642,6 +642,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private void StartAttachEffects()
         {
+            var player = Whispral.playerTarget;
+            var invisibleDebuff = player.GetOrAddComponent<InvisibleDebuff>();
+            invisibleDebuff.ApplyMadness(true);
             Debug.Log("Whispral attached to player, starting attach effects.");
         }
 
@@ -697,6 +700,13 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private void StopAttachEffects()
         {
+            var player = Whispral.playerTarget;
+            var invisibleDebuff = player.GetComponent<InvisibleDebuff>();
+            if (invisibleDebuff)
+            {
+                invisibleDebuff.ApplyMadness(false);
+            }
+
             Debug.Log("Whispral detached from player, stopping attach effects.");
         }
     }

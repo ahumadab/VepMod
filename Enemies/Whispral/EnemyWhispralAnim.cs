@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using VepMod.VepFramework.Structures.FSM;
 
-namespace VepMod.Scripts.Enemies.Whispral;
+namespace VepMod.Enemies.Whispral;
 
 public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyWhispralAnim.State>
 {
