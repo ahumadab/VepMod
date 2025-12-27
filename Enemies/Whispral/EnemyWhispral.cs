@@ -1,9 +1,16 @@
-﻿using Photon.Pun;
+﻿using BepInEx.Logging;
+using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.VepFramework.Structures.FSM;
+using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
+
+// ReSharper disable InconsistentNaming
+
+// ReSharper disable ClassCanBeSealed.Global
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace VepMod.Enemies.Whispral;
 
@@ -27,6 +34,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         Despawn = 13
     }
 
+    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.EnemyWhispral");
+
     [Header("Core refs")] public Enemy enemy;
 
     public EnemyWhispralAnim enemyWhispralAnim;
@@ -43,7 +52,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [HideInInspector] public Transform attachAnchor;
     [HideInInspector] public float attachedTimer;
 
-    [SerializeField] private State currentStateDebug;
     private State _currentState;
     private float grabAggroTimer;
 
@@ -99,8 +107,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         CheckForDespawnState();
         RotationLogic();
         base.Update(); // fsm.Update() 
-
-        currentStateDebug = CurrentState; // For debug display
     }
 
     private void FixedUpdate()
@@ -197,7 +203,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     private void UpdateStateRPC(State state, PhotonMessageInfo _info = default)
     {
         var sentByMe = _info.Sender != null && _info.Sender.UserId == PhotonNetwork.LocalPlayer.UserId;
-        var otherSentByMe = _info.Sender is { IsLocal: true };
+        // var otherSentByMe = _info.Sender is { IsLocal: true };
         if (SemiFunc.MasterOnlyRPC(_info))
         {
             if (sentByMe) return;
@@ -222,6 +228,26 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 break;
             }
         }
+    }
+
+    [PunRPC]
+    private void ApplyInvisibleDebuffRPC(int targetViewID, bool apply, PhotonMessageInfo _info = default)
+    {
+        if (!SemiFunc.MasterOnlyRPC(_info))
+        {
+            return;
+        }
+
+        // Seul le client ciblé applique le debuff
+        var localPlayer = PlayerAvatar.instance;
+        if (!localPlayer || localPlayer.photonView.ViewID != targetViewID)
+        {
+            return;
+        }
+
+        LOG.LogInfo($"ApplyInvisibleDebuffRPC received: apply={apply}");
+        var debuff = localPlayer.GetOrAddComponent<InvisibleDebuff>();
+        debuff.ApplyDebuff(apply);
     }
 
     #endregion
@@ -643,9 +669,18 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         private void StartAttachEffects()
         {
             var player = Whispral.playerTarget;
-            var invisibleDebuff = player.GetOrAddComponent<InvisibleDebuff>();
-            invisibleDebuff.ApplyMadness(true);
-            Debug.Log("Whispral attached to player, starting attach effects.");
+            if (!player) return;
+
+            LOG.LogInfo("Whispral attached to player, sending debuff RPC.");
+            if (SemiFunc.IsMultiplayer())
+            {
+                Whispral.photonView.RPC("ApplyInvisibleDebuffRPC", RpcTarget.All, player.photonView.ViewID, true);
+            }
+            else
+            {
+                var debuff = player.GetOrAddComponent<InvisibleDebuff>();
+                debuff.ApplyDebuff(true);
+            }
         }
 
 
@@ -701,13 +736,21 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         private void StopAttachEffects()
         {
             var player = Whispral.playerTarget;
-            var invisibleDebuff = player.GetComponent<InvisibleDebuff>();
-            if (invisibleDebuff)
-            {
-                invisibleDebuff.ApplyMadness(false);
-            }
+            if (!player) return;
 
-            Debug.Log("Whispral detached from player, stopping attach effects.");
+            LOG.LogInfo("Whispral detached from player, sending debuff RPC.");
+            if (SemiFunc.IsMultiplayer())
+            {
+                Whispral.photonView.RPC("ApplyInvisibleDebuffRPC", RpcTarget.All, player.photonView.ViewID, false);
+            }
+            else
+            {
+                var debuff = player.GetComponent<InvisibleDebuff>();
+                if (debuff)
+                {
+                    debuff.ApplyDebuff(false);
+                }
+            }
         }
     }
 

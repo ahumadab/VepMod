@@ -1,5 +1,7 @@
-﻿using UnityEngine;
+﻿using BepInEx.Logging;
+using UnityEngine;
 using VepMod.VepFramework.Structures.FSM;
+using Logger = BepInEx.Logging.Logger;
 
 namespace VepMod.Enemies.Whispral;
 
@@ -11,6 +13,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         BreatheIn,
         BreatheOut
     }
+
+    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.EnemyWhispralAnim");
 
     [Space] [SerializeField] private Enemy enemy;
     [SerializeField] private EnemyWhispral enemyWhispral;
@@ -96,21 +100,39 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     private sealed class BreathingState(EnemyWhispralAnim owner, Sound sound, Vector2 durationRange, State nextState)
         : StateMachineBase<StateMachine, State>.StateBaseTransition(durationRange.x, nextState)
     {
+        private const float MinDuration = 3f;
         private readonly State _nextState = nextState;
-        private AudioSource? _audioSource;
+        private AudioSource _audioSource;
 
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
             owner.Show(false);
-            Duration = Random.Range(durationRange.x, durationRange.y);
+            Duration = GetDuration();
             _audioSource = sound.Play(owner.enemyWhispral.playerTarget.transform.position);
+        }
+
+        private float GetDuration()
+        {
+            var min = Mathf.Max(durationRange.x, MinDuration);
+            if (durationRange.x < MinDuration)
+            {
+                LOG.LogWarning($"Adjusted min duration from {durationRange.x} to {MinDuration} (minimum allowed).");
+            }
+
+            var max = Mathf.Max(durationRange.y, min);
+            if (durationRange.y < min)
+            {
+                LOG.LogWarning($"Adjusted max duration from {durationRange.y} to {min} (must be >= min).");
+            }
+
+            return Random.Range(min, max);
         }
 
         public override void OnStateExit(State next)
         {
             base.OnStateExit(next);
-            if (_audioSource != null && _audioSource) _audioSource.Stop();
+            if (_audioSource) _audioSource.Stop();
             if (next != _nextState) // Si on ne va pas à l’état suivant prévu, on coupe la respiration.
             {
                 owner.Show(true);

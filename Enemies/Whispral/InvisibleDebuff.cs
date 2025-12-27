@@ -11,21 +11,31 @@ public sealed class InvisibleDebuff : MonoBehaviour
     private readonly List<PlayerAvatar> hiddenPlayers = new();
     public bool IsActive { get; private set; }
 
-    public void ApplyMadness(bool enable)
+    public void ApplyDebuff(bool invisible)
     {
-        IsActive = enable;
-
-        foreach (var player in GameDirector.instance.PlayerList)
+        IsActive = invisible;
+        if (!SemiFunc.IsMultiplayer())
         {
+            LOG.LogWarning("Singleplayer mode detected, skipping invisibility application.");
+            return;
+        }
+
+        LOG.LogDebug($"Applying invisibility debuff: {invisible}");
+        var instancePlayerList = GameDirector.instance.PlayerList;
+        foreach (var player in instancePlayerList)
+        {
+            if (CheckNull(player)) continue;
+
             // Skip le joueur local (celui qui subit le debuff)
             if (player.photonView.IsMine)
             {
+                LOG.LogDebug($"Skipping local player {player.photonView.Owner.NickName}.");
                 continue;
             }
 
-            LOG.LogInfo($"Setting invisibility for Player {player.photonView.Owner.ActorNumber} to {enable}");
-            SetPlayerVisibility(player, !enable);
-            if (enable)
+            LOG.LogDebug($"Setting invisibility for Player {player.photonView.Owner.NickName} to {invisible}");
+            SetPlayerVisibility(player, !invisible);
+            if (invisible)
             {
                 hiddenPlayers.Add(player);
             }
@@ -36,59 +46,76 @@ public sealed class InvisibleDebuff : MonoBehaviour
         }
     }
 
-    private static void HideFlashlight(PlayerAvatar player, bool visible)
+    private static bool CheckNull(PlayerAvatar player)
     {
-        if (player.flashlightController != null)
+        if (!player)
+        {
+            LOG.LogWarning("Encountered null PlayerAvatar reference, skipping.");
+            return true;
+        }
+
+        if (!player.photonView || player.photonView.Owner == null)
+        {
+            LOG.LogWarning($"PlayerAvatar {player} has null photonView or Owner, skipping.");
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void SetPlayerVisibility(PlayerAvatar player, bool visible)
+    {
+        // 1. Mesh principal (corps du joueur)
+        ToggleMesh(player, visible);
+
+        // 2. Nametag au-dessus de la tête
+        ToggleNameplate(player, visible);
+
+        // 3. Lampe torche (lumière + mesh)
+        ToggleFlashlight(player, visible);
+
+        // 4. Voice chat (optionnel - pour ne plus entendre les autres)
+        ToggleVoiceCom(player, visible);
+    }
+
+    private static void ToggleFlashlight(PlayerAvatar player, bool visible)
+    {
+        LOG.LogInfo($"Set flashlight visibility for Player {player.photonView.Owner.NickName} to {visible}");
+        if (player.flashlightController)
         {
             player.flashlightController.spotlight.enabled = visible;
             player.flashlightController.mesh.enabled = visible;
-            if (player.flashlightController.halo != null)
+            if (player.flashlightController.halo)
             {
                 player.flashlightController.halo.enabled = visible;
             }
         }
     }
 
-    private static void HideMesh(PlayerAvatar player, bool visible)
+    private static void ToggleMesh(PlayerAvatar player, bool visible)
     {
-        if (player.playerAvatarVisuals?.meshParent != null)
+        LOG.LogDebug($"Set mesh visibility for Player {player.photonView.Owner.NickName} to {visible}");
+        if (player.playerAvatarVisuals ? player.playerAvatarVisuals.meshParent : null)
         {
             player.playerAvatarVisuals.meshParent.SetActive(visible);
         }
     }
 
-    private static void HideNameplate(PlayerAvatar player, bool visible)
+    private static void ToggleNameplate(PlayerAvatar player, bool visible)
     {
-        if (player.worldSpaceUIPlayerName != null)
+        LOG.LogDebug($"Set nameplate visibility for Player {player.photonView.Owner.NickName} to {visible}");
+        if (player.worldSpaceUIPlayerName)
         {
             player.worldSpaceUIPlayerName.gameObject.SetActive(visible);
         }
     }
 
-    private static void MuteVoiceCom(PlayerAvatar player, bool visible)
+    private static void ToggleVoiceCom(PlayerAvatar player, bool visible)
     {
-        if (player.voiceChat?.audioSource != null)
+        LOG.LogDebug($"Set voice chat mute for Player {player.photonView.Owner.NickName} to {visible}");
+        if (player.voiceChat ? player.voiceChat.audioSource : null)
         {
             player.voiceChat.audioSource.mute = !visible;
         }
-    }
-
-    private static void SetPlayerVisibility(PlayerAvatar player, bool visible)
-    {
-        // 1. Mesh principal (corps du joueur)
-        HideMesh(player, visible);
-        LOG.LogInfo($"Set mesh visibility for Player {player.photonView.Owner.ActorNumber} to {visible}");
-
-        // 2. Nametag au-dessus de la tête
-        HideNameplate(player, visible);
-        LOG.LogInfo($"Set nameplate visibility for Player {player.photonView.Owner.ActorNumber} to {visible}");
-
-        // 3. Lampe torche (lumière + mesh)
-        HideFlashlight(player, visible);
-        LOG.LogInfo($"Set flashlight visibility for Player {player.photonView.Owner.ActorNumber} to {visible}");
-
-        // 4. Voice chat (optionnel - pour ne plus entendre les autres)
-        MuteVoiceCom(player, visible);
-        LOG.LogInfo($"Set voice chat mute for Player {player.photonView.Owner.ActorNumber} to {visible}");
     }
 }
