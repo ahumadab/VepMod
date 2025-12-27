@@ -116,12 +116,6 @@ public class WhispralMimics : MonoBehaviour
         }
 
         // 20 ms par frame → estimateSR ≈ len * 50
-        var estimatedSr = voiceData.Length * 50;
-        log.LogInfo(
-            $"ProcessVoiceData: voiceData.Length={voiceData.Length}, " +
-            $"bufferPos={bufferPosition}/{audioBuffer.Length}, " +
-            $"estimatedSampleRate≈{estimatedSr}, configuredSampleRate={sampleRate}"
-        );
 
         var num = Mathf.Min(voiceData.Length, audioBuffer.Length - bufferPosition);
         for (var index = 0; index < num; ++index)
