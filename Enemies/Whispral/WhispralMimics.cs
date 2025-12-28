@@ -56,9 +56,10 @@ public sealed class WhispralMimics : MonoBehaviour
     #region Constants
 
     // Enregistrement audio
-    private const int AudioBufferDurationSeconds = 3;
+    private const int AudioBufferDurationSeconds = 6;
     private const int FrameDurationMs = 20;
     private const int FramesPerSecond = 1000 / FrameDurationMs; // 50 frames/s
+    private const float SilenceTimeoutSeconds = 0.5f; // Temps de silence avant d'arrêter l'enregistrement
 
     // Transmission réseau
     private const int ChunkSizeBytes = 8192;
@@ -90,6 +91,7 @@ public sealed class WhispralMimics : MonoBehaviour
     private bool isRecording;
     private bool capturingSpeech;
     private bool fileSaved;
+    private float silenceTimer;
 
     // Réception chunks
     private readonly List<byte[]> receivedChunks = new();
@@ -224,6 +226,7 @@ public sealed class WhispralMimics : MonoBehaviour
             capturingSpeech = true;
             bufferPosition = 0;
             fileSaved = false;
+            silenceTimer = 0f;
             LOG.LogInfo("Speech detected, capturing audio.");
         }
 
@@ -234,6 +237,22 @@ public sealed class WhispralMimics : MonoBehaviour
 
         EnsureBufferAllocated(voiceData.Length);
         CopyVoiceDataToBuffer(voiceData);
+
+        // Gérer le timeout de silence
+        if (isTalking)
+        {
+            silenceTimer = 0f;
+        }
+        else
+        {
+            silenceTimer += FrameDurationMs / 1000f;
+            if (silenceTimer >= SilenceTimeoutSeconds && bufferPosition > 0 && !fileSaved)
+            {
+                LOG.LogInfo($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
+                FinalizeRecording();
+                return;
+            }
+        }
 
         if (audioBuffer != null && bufferPosition >= audioBuffer.Length && !fileSaved)
         {
@@ -276,8 +295,15 @@ public sealed class WhispralMimics : MonoBehaviour
         isRecording = false;
         capturingSpeech = false;
         fileSaved = true;
-        LOG.LogInfo("Buffer full, saving audio.");
-        if (audioBuffer != null) SaveAndPlayAsync(audioBuffer);
+
+        if (audioBuffer == null || bufferPosition == 0) return;
+
+        // Créer un tableau avec uniquement les données enregistrées
+        var recordedData = new float[bufferPosition];
+        Array.Copy(audioBuffer, recordedData, bufferPosition);
+
+        LOG.LogInfo($"Recording finalized: {bufferPosition} samples ({(float)bufferPosition / sampleRate:F2}s)");
+        SaveAndPlayAsync(recordedData);
     }
 
     private void StartRecording()
@@ -445,7 +471,7 @@ public sealed class WhispralMimics : MonoBehaviour
                 return;
             }
 
-            var applyFilter = Random.value < VoiceFilterProbability;
+            var applyFilter = VepMod.ConfigFilterEnabled.Value && Random.value < VoiceFilterProbability;
             var target = VepMod.ConfigHearYourself.Value ? RpcTarget.All : RpcTarget.Others;
 
             PhotonView.RPC(nameof(ReceiveAudioChunk), target, chunks[i], i, chunks.Count, applyFilter, sampleRate);
