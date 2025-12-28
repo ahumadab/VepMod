@@ -1,8 +1,11 @@
-﻿using BepInEx.Logging;
+﻿using System.Collections.Generic;
+using System.Linq;
+using BepInEx.Logging;
 using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
+using VepMod.Patchs;
 using VepMod.VepFramework.Structures.FSM;
 using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
@@ -48,8 +51,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     // Contexte partagé entre états
     [HideInInspector] public Vector3 agentDestination;
-    [HideInInspector] public PlayerAvatar playerTarget;
-    [HideInInspector] public Transform attachAnchor;
+    [HideInInspector] public PlayerAvatar? playerTarget;
+    [HideInInspector] public Transform? attachAnchor;
     [HideInInspector] public float attachedTimer;
 
     private State _currentState;
@@ -154,7 +157,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     private void RotationLogic()
     {
         var hasPlayerTargetedState = CurrentState is State.NoticePlayer or State.GoToPlayer or State.PrepareAttach;
-        if (hasPlayerTargetedState && playerTarget)
+        if (hasPlayerTargetedState && playerTarget != null)
         {
             if (Vector3.Distance(playerTarget.transform.position, transform.position) > 0.1f)
             {
@@ -177,7 +180,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         if (CurrentState != State.Attached) return;
 
-        if (!playerTarget || playerTarget.isDisabled || !attachAnchor)
+        if (playerTarget == null || playerTarget.isDisabled || attachAnchor == null)
         {
             return;
         }
@@ -389,7 +392,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class IdleState : WhispralStateBase
+    private sealed class IdleState : WhispralStateBase
     {
         private float _timer;
 
@@ -421,7 +424,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class RoamState : WhispralStateBase
+    private sealed class RoamState : WhispralStateBase
     {
         private const float TimeToStopRoaming = 2f;
         private const float TimeToRoam = 5f;
@@ -488,7 +491,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class InvestigateState : WhispralStateBase
+    private sealed class InvestigateState : WhispralStateBase
     {
         private float _timer;
 
@@ -523,7 +526,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class PlayerNoticeState : WhispralStateBase
+    private sealed class PlayerNoticeState : WhispralStateBase
     {
         private const float TimeToNoticePlayer = 2f;
         private float _timer;
@@ -546,7 +549,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class PlayerGoToState : WhispralStateBase
+    private sealed class PlayerGoToState : WhispralStateBase
     {
         private const float TimeToStopGoingToPlayer = 2f;
         private const float AttachDistanceThreshold = 1.5f;
@@ -570,13 +573,13 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _timer -= Time.deltaTime;
 
             var player = Whispral.playerTarget;
-            var hasToStop = !player || player.isDisabled || _timer <= 0f;
-            if (hasToStop)
+            if (player == null || player.isDisabled || _timer <= 0f) // has to stop going to player
             {
                 Fsm.NextStateStateId = State.Leave;
                 return;
             }
 
+            // if (player == null) return;
             var playerPos = player.transform.position;
             SemiFunc.EnemyCartJump(Enemy);
 
@@ -613,7 +616,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class AttachPrepareState : WhispralStateBase
+    private sealed class AttachPrepareState : WhispralStateBase
     {
         private const float TimeToPrepareAttach = 1f;
         private float _timer;
@@ -629,7 +632,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         public override void OnStateUpdate()
         {
             var player = Whispral.playerTarget;
-            if (!player || player.isDisabled)
+            if (player == null || player.isDisabled)
             {
                 Fsm.NextStateStateId = State.Leave;
                 return;
@@ -643,20 +646,18 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    private class AttachedState : WhispralStateBase
+    private sealed class AttachedState : WhispralStateBase
     {
+        private const float VoiceFilterProbability = 0.5f;
+        private float voiceTimer;
+
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
-
             Whispral.attachedTimer = Whispral.attachedDuration;
-
+            voiceTimer = GetRandomVoiceDelay();
             var player = Whispral.playerTarget;
-            Whispral.attachAnchor = player
-                ? SemiFunc.PlayerGetFaceEyeTransform(player)
-                : null;
-
-            // TODO : démarrer les hallucinations côté client local
+            Whispral.attachAnchor = player ? SemiFunc.PlayerGetFaceEyeTransform(player) : null;
             StartAttachEffects();
         }
 
@@ -664,6 +665,67 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             if (CheckLeaveState()) return;
             CheckDetachState();
+
+            // BOUCLE 2 : Master envoie des commandes de lecture
+            if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+            voiceTimer -= Time.deltaTime;
+            if (!(voiceTimer <= 0f)) return;
+            SendVoiceCommand();
+            voiceTimer = GetRandomVoiceDelay();
+        }
+
+        private static float GetRandomVoiceDelay()
+        {
+            return Random.Range(VepMod.ConfigVoiceMinDelay.Value, VepMod.ConfigVoiceMaxDelay.Value);
+        }
+
+        private void SendVoiceCommand()
+        {
+            var targetPlayer = Whispral.playerTarget;
+            if (targetPlayer == null) return;
+
+            var localMimics = VepFinder.LocalMimics;
+            if (!localMimics)
+            {
+                LOG.LogWarning("LocalMimics not found, cannot send voice command.");
+                return;
+            }
+
+            var targetViewID = targetPlayer.photonView.ViewID;
+
+            // Choisir un joueur source aléatoire
+            var sourcePlayerNickName = ChooseRandomSourcePlayer(targetPlayer);
+            if (sourcePlayerNickName == null)
+            {
+                LOG.LogWarning("No source player available for voice command.");
+                return;
+            }
+
+            var applyFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
+
+            LOG.LogInfo(
+                $"Sending voice command: target={targetPlayer.photonView.Owner.NickName}, source={sourcePlayerNickName}, filter={applyFilter}");
+            localMimics.SendPlayVoiceCommand(targetViewID, sourcePlayerNickName, applyFilter);
+        }
+
+        private static string? ChooseRandomSourcePlayer(PlayerAvatar targetPlayer)
+        {
+            // Récupérer tous les joueurs disponibles
+            var excludeNickNames = new List<string>();
+
+            // Exclure la cible si HearYourself est désactivé
+            if (!VepMod.ConfigHearYourself.Value && targetPlayer.photonView.Owner != null)
+            {
+                excludeNickNames.Add(targetPlayer.photonView.Owner.NickName);
+            }
+
+            // Filtrer les joueurs
+            var players = PhotonNetwork.PlayerList
+                .Where(p => !string.IsNullOrEmpty(p.NickName) && !excludeNickNames.Contains(p.NickName))
+                .ToList();
+
+            if (players.Count == 0) return null;
+            return players[Random.Range(0, players.Count)].NickName;
         }
 
         private void StartAttachEffects()
@@ -682,7 +744,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 debuff.ApplyDebuff(true);
             }
         }
-
 
         private void CheckDetachState()
         {

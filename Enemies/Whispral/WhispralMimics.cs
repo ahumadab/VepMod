@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -16,9 +17,15 @@ using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
 
+/// <summary>
+///     Gère l'enregistrement, le partage et la lecture des voix pour le système Mimic.
+///     Architecture à 2 boucles:
+///     - Boucle 1: Partage des sons entre tous les clients
+///     - Boucle 2: Commandes de lecture du Master vers les joueurs debuffés
+/// </summary>
 public sealed class WhispralMimics : MonoBehaviour
 {
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.WhispralMimics");
+    private static readonly ManualLogSource LOG = Logger.CreateLogSource($"VepMod.{nameof(WhispralMimics)}");
 
     public PhotonView PhotonView { get; private set; }
 
@@ -59,12 +66,11 @@ public sealed class WhispralMimics : MonoBehaviour
     private const int AudioBufferDurationSeconds = 6;
     private const int FrameDurationMs = 20;
     private const int FramesPerSecond = 1000 / FrameDurationMs; // 50 frames/s
-    private const float SilenceTimeoutSeconds = 0.5f; // Temps de silence avant d'arrêter l'enregistrement
+    private const float SilenceTimeoutSeconds = 0.5f;
 
     // Transmission réseau
     private const int ChunkSizeBytes = 8192;
     private const int ChunkDelayMs = 125;
-    private const float VoiceFilterProbability = 0.1f;
 
     // Lecture audio
     private const float SpatialBlend = 1f;
@@ -78,6 +84,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private PlayerVoiceChat playerVoiceChat;
     private WavFileManager wavFileManager;
+    private string localPlayerNickName;
 
     // Reflection fields
     private FieldInfo? voiceChatField;
@@ -92,11 +99,12 @@ public sealed class WhispralMimics : MonoBehaviour
     private bool capturingSpeech;
     private bool fileSaved;
     private float silenceTimer;
+    private byte[]? lastSavedAudioBytes;
+    private bool hasNewRecording;
 
-    // Réception chunks
-    private readonly List<byte[]> receivedChunks = new();
-    private readonly HashSet<int> sentChunks = new();
-    private int expectedChunkCount;
+    // Réception chunks par joueur (pour le partage)
+    private readonly Dictionary<string, List<byte[]>> receivedChunksByPlayer = new();
+    private readonly Dictionary<string, int> expectedChunkCountByPlayer = new();
 
     // Filtrage ennemis
     private Dictionary<string, bool> enemyFilter;
@@ -133,7 +141,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private void InitializeEnemyFilter()
     {
-        if (!VepMod.ConfigFilterEnabled.Value)
+        if (!VepMod.ConfigEnemyFilterEnabled.Value)
         {
             LOG.LogInfo("Filter disabled. All enemies will mimic voices.");
             return;
@@ -150,7 +158,6 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private IEnumerator WaitForVoiceChat(PlayerAvatar playerAvatar)
     {
-        // Attendre que PlayerVoiceChat soit initialisé
         while (!playerVoiceChat)
         {
             if (voiceChatField == null)
@@ -166,10 +173,24 @@ public sealed class WhispralMimics : MonoBehaviour
 
         DetectSampleRate();
 
-        if (PhotonView.IsMine && SemiFunc.RunIsLevel())
+        // Initialiser wavFileManager pour TOUS les joueurs (nécessaire pour recevoir les RPCs)
+        // mais la boucle de partage ne démarre que pour le joueur local
+        if (SemiFunc.RunIsLevel())
         {
-            wavFileManager = new WavFileManager();
-            StartCoroutine(RecordAtRandomIntervals());
+            wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
+            localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
+
+            if (PhotonView.IsMine)
+            {
+                LOG.LogInfo($"WhispralMimics initialized for local player: {localPlayerNickName}");
+
+                // BOUCLE 1: Partage des sons (uniquement pour le joueur local)
+                StartCoroutine(ShareAudioLoop());
+            }
+            else
+            {
+                LOG.LogInfo("WhispralMimics initialized for remote player (RPC reception only).");
+            }
         }
     }
 
@@ -238,7 +259,6 @@ public sealed class WhispralMimics : MonoBehaviour
         EnsureBufferAllocated(voiceData.Length);
         CopyVoiceDataToBuffer(voiceData);
 
-        // Gérer le timeout de silence
         if (isTalking)
         {
             silenceTimer = 0f;
@@ -264,7 +284,6 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (audioBuffer != null) return;
 
-        // Vérifier le sample rate basé sur la taille de frame (20ms par frame Photon)
         var inferredSampleRate = frameLength * FramesPerSecond;
         if (sampleRate != inferredSampleRate)
         {
@@ -298,12 +317,11 @@ public sealed class WhispralMimics : MonoBehaviour
 
         if (audioBuffer == null || bufferPosition == 0) return;
 
-        // Créer un tableau avec uniquement les données enregistrées
         var recordedData = new float[bufferPosition];
         Array.Copy(audioBuffer, recordedData, bufferPosition);
 
         LOG.LogInfo($"Recording finalized: {bufferPosition} samples ({(float)bufferPosition / sampleRate:F2}s)");
-        SaveAndPlayAsync(recordedData);
+        SaveRecordingAsync(recordedData);
     }
 
     private void StartRecording()
@@ -318,43 +336,252 @@ public sealed class WhispralMimics : MonoBehaviour
         fileSaved = false;
     }
 
-    private IEnumerator RecordAtRandomIntervals()
+    private async void SaveRecordingAsync(float[] audioData)
     {
+        try
+        {
+            await wavFileManager.SaveAsync(audioData, sampleRate, localPlayerNickName);
+
+            // Convertir en bytes pour le partage
+            var audioBytes = AudioFilters.ConvertFloatsToBytes(audioData);
+
+            // Créer un fichier WAV complet avec header
+            using var memoryStream = new MemoryStream();
+            using var writer = new BinaryWriter(memoryStream);
+            WavFileManager.WriteWavHeader(writer, audioData.Length, sampleRate);
+            writer.Write(audioBytes);
+
+            lastSavedAudioBytes = memoryStream.ToArray();
+            hasNewRecording = true;
+
+            LOG.LogInfo($"Audio saved and ready for sharing: {lastSavedAudioBytes.Length} bytes");
+        }
+        catch (Exception ex)
+        {
+            LOG.LogError($"Error saving recording: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Boucle 1: Partage des sons
+
+    /// <summary>
+    ///     BOUCLE 1: Enregistre périodiquement la voix et la partage avec les autres joueurs.
+    /// </summary>
+    private IEnumerator ShareAudioLoop()
+    {
+        LOG.LogInfo("ShareAudioLoop started.");
+
         while (true)
         {
-            if (wavFileManager.IsAtCapacity())
+            var delay = Random.Range(VepMod.ConfigShareMinDelay.Value, VepMod.ConfigShareMaxDelay.Value);
+            yield return new WaitForSeconds(delay);
+
+            // Démarrer l'enregistrement
+            StartRecording();
+
+            // Attendre que l'enregistrement soit terminé (max AudioBufferDurationSeconds + 1s)
+            var timeout = AudioBufferDurationSeconds + 1f;
+            while (isRecording && timeout > 0)
             {
-                yield return wavFileManager.ClearAsync().AsCoroutine();
+                timeout -= 0.1f;
+                yield return new WaitForSeconds(0.1f);
             }
 
-            var delay = Random.Range(VepMod.ConfigMinDelay.Value, VepMod.ConfigMaxDelay.Value);
-            yield return new WaitForSeconds(delay);
-            StartRecording();
+            // Si on a un nouvel enregistrement, le partager
+            if (hasNewRecording && lastSavedAudioBytes != null)
+            {
+                hasNewRecording = false;
+                yield return ShareAudioWithOthersAsync(lastSavedAudioBytes).AsCoroutine();
+            }
         }
         // ReSharper disable once IteratorNeverReturns
+    }
+
+    /// <summary>
+    ///     Envoie les données audio en chunks aux autres joueurs.
+    /// </summary>
+    private async Task ShareAudioWithOthersAsync(byte[] audioData)
+    {
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            LOG.LogWarning("Photon not connected, skipping share.");
+            return;
+        }
+
+        var chunks = ChunkAudioData(audioData);
+        LOG.LogInfo($"Sharing audio: {audioData.Length} bytes in {chunks.Count} chunks");
+
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            if (!PhotonNetwork.IsConnectedAndReady)
+            {
+                LOG.LogWarning("Photon disconnected, aborting share.");
+                return;
+            }
+
+            PhotonView.RPC(nameof(ReceiveSharedAudioChunk), RpcTarget.Others,
+                chunks[i], i, chunks.Count, localPlayerNickName, sampleRate);
+
+            await Task.Delay(ChunkDelayMs);
+        }
+
+        LOG.LogInfo($"Audio shared successfully: {chunks.Count} chunks sent.");
+    }
+
+    private static List<byte[]> ChunkAudioData(byte[] audioData)
+    {
+        var chunks = new List<byte[]>();
+        for (var offset = 0; offset < audioData.Length; offset += ChunkSizeBytes)
+        {
+            var length = Mathf.Min(ChunkSizeBytes, audioData.Length - offset);
+            var chunk = new byte[length];
+            Array.Copy(audioData, offset, chunk, 0, length);
+            chunks.Add(chunk);
+        }
+
+        return chunks;
+    }
+
+    /// <summary>
+    ///     RPC: Reçoit un chunk audio d'un autre joueur et le stocke.
+    /// </summary>
+    [PunRPC]
+    public void ReceiveSharedAudioChunk(byte[] chunk, int chunkIndex, int totalChunks, string sourcePlayerNickName,
+        int srcSampleRate)
+    {
+        // Ignorer mes propres sons (ne devrait pas arriver avec RpcTarget.Others)
+        if (sourcePlayerNickName == localPlayerNickName) return;
+
+        // Initialiser le buffer pour ce joueur si c'est le premier chunk
+        if (chunkIndex == 0)
+        {
+            receivedChunksByPlayer[sourcePlayerNickName] = new List<byte[]>();
+            expectedChunkCountByPlayer[sourcePlayerNickName] = totalChunks;
+            LOG.LogInfo($"Receiving shared audio from {sourcePlayerNickName}: {totalChunks} chunks at {srcSampleRate} Hz");
+        }
+
+        // Vérifier que le joueur existe dans nos buffers
+        if (!receivedChunksByPlayer.TryGetValue(sourcePlayerNickName, out var chunks))
+        {
+            LOG.LogWarning($"Received chunk for unknown player: {sourcePlayerNickName}");
+            return;
+        }
+
+        // Ajouter le chunk
+        while (chunks.Count <= chunkIndex)
+        {
+            chunks.Add(null);
+        }
+
+        chunks[chunkIndex] = chunk;
+
+        // Vérifier si tous les chunks sont reçus
+        var expectedCount = expectedChunkCountByPlayer.GetValueOrDefault(sourcePlayerNickName, 0);
+        if (chunks.Count >= expectedCount && chunks.All(c => c != null))
+        {
+            LOG.LogInfo($"All chunks received from {sourcePlayerNickName}, saving audio.");
+
+            var combinedData = CombineChunks(chunks);
+            SaveReceivedAudioAsync(combinedData, srcSampleRate, sourcePlayerNickName);
+
+            // Nettoyer
+            receivedChunksByPlayer.Remove(sourcePlayerNickName);
+            expectedChunkCountByPlayer.Remove(sourcePlayerNickName);
+        }
+    }
+
+    private static byte[] CombineChunks(List<byte[]> chunks)
+    {
+        var totalLength = chunks.Sum(c => c.Length);
+        var result = new byte[totalLength];
+        var offset = 0;
+
+        foreach (var chunk in chunks)
+        {
+            Array.Copy(chunk, 0, result, offset, chunk.Length);
+            offset += chunk.Length;
+        }
+
+        return result;
+    }
+
+    private async void SaveReceivedAudioAsync(byte[] audioData, int srcSampleRate, string sourcePlayerNickName)
+    {
+        try
+        {
+            await wavFileManager.SaveFromBytesAsync(audioData, srcSampleRate, sourcePlayerNickName);
+            LOG.LogInfo($"Audio from {sourcePlayerNickName} saved successfully.");
+        }
+        catch (Exception ex)
+        {
+            LOG.LogError($"Error saving audio from {sourcePlayerNickName}: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Boucle 2: Commandes de lecture
+
+    /// <summary>
+    ///     RPC: Le Master demande à un joueur spécifique de jouer un son d'un joueur source.
+    ///     Appelé depuis EnemyWhispral.AttachedState.
+    /// </summary>
+    [PunRPC]
+    public void PlayVoiceCommandRPC(int targetViewID, string sourcePlayerNickName, bool applyFilter)
+    {
+        // Seul le joueur ciblé joue le son
+        var localPlayer = PlayerAvatar.instance;
+        if (!localPlayer || localPlayer.photonView.ViewID != targetViewID)
+        {
+            return;
+        }
+
+        // Vérifier HearYourself
+        if (sourcePlayerNickName == localPlayerNickName && !VepMod.ConfigHearYourself.Value)
+        {
+            LOG.LogInfo("HearYourself disabled, skipping own voice.");
+            return;
+        }
+
+        // Récupérer un son LOCALEMENT depuis les fichiers stockés
+        var audioData = wavFileManager.GetRandomFile(sourcePlayerNickName);
+        if (audioData == null)
+        {
+            LOG.LogWarning($"No audio found for player {sourcePlayerNickName}");
+            return;
+        }
+
+        LOG.LogInfo($"Playing voice from {sourcePlayerNickName} (filter: {applyFilter})");
+        PlayReceivedAudio(audioData, applyFilter, sampleRate);
+    }
+
+    /// <summary>
+    ///     Méthode publique pour que EnemyWhispral puisse envoyer une commande de lecture.
+    /// </summary>
+    public void SendPlayVoiceCommand(int targetViewID, string sourcePlayerName, bool applyFilter)
+    {
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            LOG.LogWarning("Photon not connected, cannot send voice command.");
+            return;
+        }
+
+        PhotonView.RPC(nameof(PlayVoiceCommandRPC), RpcTarget.All, targetViewID, sourcePlayerName, applyFilter);
+    }
+
+    /// <summary>
+    ///     Retourne la liste des joueurs ayant des sons stockés localement.
+    /// </summary>
+    public string[] GetAvailablePlayerIds()
+    {
+        return wavFileManager?.GetAllPlayerNickNames() ?? Array.Empty<string>();
     }
 
     #endregion
 
     #region Audio Processing & Playback
-
-    private async void SaveAndPlayAsync(float[] audioData)
-    {
-        try
-        {
-            await wavFileManager.SaveAsync(audioData, sampleRate);
-
-            var audioBytes = await wavFileManager.GetRandomFileAsync();
-            if (audioBytes != null)
-            {
-                await SendAudioInChunksAsync(audioBytes);
-            }
-        }
-        catch (Exception)
-        {
-            // ignored
-        }
-    }
 
     private float[] ProcessReceivedAudio(byte[] audioData, bool applyVoiceFilter, int receivedSampleRate)
     {
@@ -400,11 +627,7 @@ public sealed class WhispralMimics : MonoBehaviour
         var enemies = GetValidEnemies();
         foreach (var enemy in enemies)
         {
-            enemy.transform.Find("Enable/Controller");
-            var controller = enemy.transform.gameObject;
-            if (controller == null) continue;
-
-            var audioSource = controller.GetOrAddComponent<AudioSource>();
+            var audioSource = enemy.GetOrAddComponent<AudioSource>();
             ConfigureAudioSource(audioSource, clip);
             audioSource.Play();
 
@@ -426,7 +649,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private IEnumerable<GameObject> GetValidEnemies()
     {
-        var enemiesParent = GameObject.Find("Level Generator").transform.Find("Enemies");
+        var enemiesParent = GameObject.Find("Level Generator")?.transform.Find("Enemies");
         if (enemiesParent == null) yield break;
 
         foreach (Transform child in enemiesParent)
@@ -439,7 +662,6 @@ public sealed class WhispralMimics : MonoBehaviour
                 var enemyName = enemy.name.Replace("(Clone)", "");
                 if (!enemyFilter.TryGetValue(enemyName, out var isEnabled) || !isEnabled)
                 {
-                    LOG.LogInfo($"Skipped {enemyName}: disabled in config");
                     continue;
                 }
             }
@@ -452,100 +674,6 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
         Destroy(source);
-    }
-
-    #endregion
-
-    #region Network (RPC)
-
-    private async Task SendAudioInChunksAsync(byte[] audioData)
-    {
-        var chunks = ChunkAudioData(audioData);
-        sentChunks.Clear();
-
-        for (var i = 0; i < chunks.Count; i++)
-        {
-            if (!PhotonNetwork.IsConnectedAndReady)
-            {
-                LOG.LogWarning("Photon disconnected, aborting send.");
-                return;
-            }
-
-            var applyFilter = VepMod.ConfigFilterEnabled.Value && Random.value < VoiceFilterProbability;
-            var target = VepMod.ConfigHearYourself.Value ? RpcTarget.All : RpcTarget.Others;
-
-            PhotonView.RPC(nameof(ReceiveAudioChunk), target, chunks[i], i, chunks.Count, applyFilter, sampleRate);
-            sentChunks.Add(i);
-
-            await Task.Delay(ChunkDelayMs);
-        }
-
-        LOG.LogInfo($"All {chunks.Count} chunks sent.");
-    }
-
-    private static List<byte[]> ChunkAudioData(byte[] audioData)
-    {
-        var chunks = new List<byte[]>();
-        for (var offset = 0; offset < audioData.Length; offset += ChunkSizeBytes)
-        {
-            var length = Mathf.Min(ChunkSizeBytes, audioData.Length - offset);
-            var chunk = new byte[length];
-            Array.Copy(audioData, offset, chunk, 0, length);
-            chunks.Add(chunk);
-        }
-
-        return chunks;
-    }
-
-    [PunRPC]
-    public void ReceiveAudioChunk(byte[] chunk, int chunkIndex, int totalChunks, bool applyFilter, int senderSampleRate)
-    {
-        if (chunkIndex == 0)
-        {
-            receivedChunks.Clear();
-            expectedChunkCount = totalChunks;
-            LOG.LogInfo($"Receiving audio: {totalChunks} chunks at {senderSampleRate} Hz");
-        }
-
-        if (chunkIndex >= expectedChunkCount)
-        {
-            LOG.LogWarning($"Chunk index {chunkIndex} exceeds expected {expectedChunkCount}.");
-            return;
-        }
-
-        // Ensure list is large enough
-        while (receivedChunks.Count <= chunkIndex)
-        {
-            receivedChunks.Add(null);
-        }
-
-        receivedChunks[chunkIndex] = chunk;
-
-        // Check if all chunks received
-        if (receivedChunks.Count >= expectedChunkCount && receivedChunks.All(c => c != null))
-        {
-            LOG.LogInfo("All chunks received, playing audio.");
-            var combinedData = CombineChunks();
-            PlayReceivedAudio(combinedData, applyFilter, senderSampleRate);
-
-            receivedChunks.Clear();
-            expectedChunkCount = 0;
-        }
-    }
-
-    private byte[] CombineChunks()
-    {
-        var totalLength = receivedChunks.Sum(c => c.Length);
-        var result = new byte[totalLength];
-        var offset = 0;
-
-        foreach (var chunk in receivedChunks)
-        {
-            Array.Copy(chunk, 0, result, offset, chunk.Length);
-            offset += chunk.Length;
-        }
-
-        return result;
     }
 
     #endregion

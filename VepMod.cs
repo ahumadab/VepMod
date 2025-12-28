@@ -14,11 +14,20 @@ public class VepMod : BaseUnityPlugin
 {
     private static Harmony _harmony;
     public static ConfigEntry<float> ConfigVoiceVolume;
-    public static ConfigEntry<float> ConfigMinDelay;
-    public static ConfigEntry<float> ConfigMaxDelay;
     public static ConfigEntry<bool> ConfigHearYourself;
-    public static ConfigEntry<bool> ConfigFilterEnabled;
+    public static ConfigEntry<bool> ConfigEnemyFilterEnabled;
     public static ConfigEntry<int> ConfigSamplingRate;
+
+    // Boucle 1 : Partage des sons entre clients
+    public static ConfigEntry<float> ConfigShareMinDelay;
+    public static ConfigEntry<float> ConfigShareMaxDelay;
+    public static ConfigEntry<int> ConfigSamplesPerPlayer;
+
+    // Boucle 2 : Commandes de lecture (pendant debuff)
+    public static ConfigEntry<float> ConfigVoiceMinDelay;
+    public static ConfigEntry<float> ConfigVoiceMaxDelay;
+    public static ConfigEntry<bool> ConfigVoiceFilterEnabled;
+
     public static Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
 
     internal Harmony? Harmony { get; set; }
@@ -43,21 +52,43 @@ public class VepMod : BaseUnityPlugin
     private void InitConfig()
     {
         Logger.LogInfo("Initializing config for VepMod...");
+
+        // General settings
         ConfigVoiceVolume = Config.Bind("General", "Volume", 0.75f,
             new ConfigDescription("Volume of the mimic voices.", new AcceptableValueRange<float>(0.0f, 1f)));
-        ConfigMinDelay = Config.Bind("General", "MinDelay", 30f,
-            new ConfigDescription("Minimum time before an audio clip is recorded and played.",
-                new AcceptableValueRange<float>(30f, 120f)));
-        ConfigMaxDelay = Config.Bind("General", "MaxDelay", 120f,
-            new ConfigDescription("Maximum time before an audio clip is recorded and played.",
-                new AcceptableValueRange<float>(60f, 240f)));
         ConfigHearYourself = Config.Bind("General", "Hear Yourself?", false,
             new ConfigDescription("Turning this off will make it so you won't hear your own voice played by mimics."));
+
+        // Boucle 1 : Partage des sons entre clients
+        ConfigShareMinDelay = Config.Bind("Audio Sharing", "Share Min Delay", 30f,
+            new ConfigDescription("Minimum time between sharing audio clips with other players.",
+                new AcceptableValueRange<float>(10f, 120f)));
+        ConfigShareMaxDelay = Config.Bind("Audio Sharing", "Share Max Delay", 60f,
+            new ConfigDescription("Maximum time between sharing audio clips with other players.",
+                new AcceptableValueRange<float>(30f, 180f)));
+        ConfigSamplesPerPlayer = Config.Bind("Audio Sharing", "Samples Per Player", 10,
+            new ConfigDescription("Maximum number of audio samples stored per player.",
+                new AcceptableValueRange<int>(5, 20)));
+
+        // Boucle 2 : Commandes de lecture (pendant debuff Whispral)
+        ConfigVoiceMinDelay = Config.Bind("Voice Playback", "Voice Min Delay", 3f,
+            new ConfigDescription("Minimum time between voice playback commands during Whispral debuff.",
+                new AcceptableValueRange<float>(1f, 10f)));
+        ConfigVoiceMaxDelay = Config.Bind("Voice Playback", "Voice Max Delay", 8f,
+            new ConfigDescription("Maximum time between voice playback commands during Whispral debuff.",
+                new AcceptableValueRange<float>(3f, 20f)));
+        ConfigVoiceFilterEnabled = Config.Bind("Voice Playback", "Voice Filter Enabled?", false,
+            new ConfigDescription(
+                "Turning this will enable modifiable filters for which enemies can play back voices during the Whispral debuff."));
+
+        // Experimental settings
         ConfigSamplingRate = Config.Bind("Experimental", "Sampling Rate", 48000,
             new ConfigDescription(
                 "Only change this value if the console gives you a warning about your microphone frequency not being supported.",
                 new AcceptableValueRange<int>(16000, 48000)));
-        ConfigFilterEnabled = Config.Bind("Filter", "Filter Enabled?", false,
+
+        // Filter settings
+        ConfigEnemyFilterEnabled = Config.Bind("Filter", "Filter Enabled?", false,
             "Turning this on allows you to customize which enemies can mimic voices. (Keep as 'false' if you want to allow custom enemies to mimic voices)");
 
         EnemyDirectorStartPatch.Initialize(Config);
