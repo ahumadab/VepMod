@@ -25,7 +25,7 @@ internal class LocalVoiceFramedPatch
         var isLocalMimicsNull = mimics == null;
         if (isNotConnectedAndReady || isLocalMimicsNull) return true;
         var isMimicsGameObjectNull = mimics.gameObject == null;
-        var photonIsNotMine = mimics.photonView == null || !mimics.photonView.IsMine;
+        var photonIsNotMine = mimics.PhotonView == null || !mimics.PhotonView.IsMine;
         return isMimicsGameObjectNull || photonIsNotMine;
     }
 }
