@@ -1,13 +1,12 @@
 ﻿using System.Collections.Generic;
-using BepInEx.Logging;
 using UnityEngine;
-using Logger = BepInEx.Logging.Logger;
+using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
 public sealed class InvisibleDebuff : MonoBehaviour
 {
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.InvisibleDebuff");
+    private static readonly VepLogger LOG = VepLogger.Create<InvisibleDebuff>(false);
     private readonly List<PlayerAvatar> hiddenPlayers = new();
     public bool IsActive { get; private set; }
 
@@ -16,11 +15,11 @@ public sealed class InvisibleDebuff : MonoBehaviour
         IsActive = invisible;
         if (!SemiFunc.IsMultiplayer())
         {
-            LOG.LogWarning("Singleplayer mode detected, skipping invisibility application.");
+            LOG.Warning("Singleplayer mode detected, skipping invisibility application.");
             return;
         }
 
-        LOG.LogDebug($"Applying invisibility debuff: {invisible}");
+        LOG.Debug($"Applying invisibility debuff: {invisible}");
         var instancePlayerList = GameDirector.instance.PlayerList;
         foreach (var player in instancePlayerList)
         {
@@ -29,11 +28,11 @@ public sealed class InvisibleDebuff : MonoBehaviour
             // Skip le joueur local (celui qui subit le debuff)
             if (player.photonView.IsMine)
             {
-                LOG.LogDebug($"Skipping local player {player.photonView.Owner.NickName}.");
+                LOG.Debug($"Skipping local player {player.photonView.Owner.NickName}.");
                 continue;
             }
 
-            LOG.LogDebug($"Setting invisibility for Player {player.photonView.Owner.NickName} to {invisible}");
+            LOG.Debug($"Setting invisibility for Player {player.photonView.Owner.NickName} to {invisible}");
             SetPlayerVisibility(player, !invisible);
             if (invisible)
             {
@@ -50,13 +49,13 @@ public sealed class InvisibleDebuff : MonoBehaviour
     {
         if (!player)
         {
-            LOG.LogWarning("Encountered null PlayerAvatar reference, skipping.");
+            LOG.Warning("Encountered null PlayerAvatar reference, skipping.");
             return true;
         }
 
         if (!player.photonView || player.photonView.Owner == null)
         {
-            LOG.LogWarning($"PlayerAvatar {player} has null photonView or Owner, skipping.");
+            LOG.Warning($"PlayerAvatar {player} has null photonView or Owner, skipping.");
             return true;
         }
 
@@ -80,7 +79,7 @@ public sealed class InvisibleDebuff : MonoBehaviour
 
     private static void ToggleFlashlight(PlayerAvatar player, bool visible)
     {
-        LOG.LogInfo($"Set flashlight visibility for Player {player.photonView.Owner.NickName} to {visible}");
+        LOG.Debug($"Set flashlight visibility for Player {player.photonView.Owner.NickName} to {visible}");
         if (player.flashlightController)
         {
             player.flashlightController.spotlight.enabled = visible;
@@ -94,7 +93,7 @@ public sealed class InvisibleDebuff : MonoBehaviour
 
     private static void ToggleMesh(PlayerAvatar player, bool visible)
     {
-        LOG.LogDebug($"Set mesh visibility for Player {player.photonView.Owner.NickName} to {visible}");
+        LOG.Debug($"Set mesh visibility for Player {player.photonView.Owner.NickName} to {visible}");
         if (player.playerAvatarVisuals ? player.playerAvatarVisuals.meshParent : null)
         {
             player.playerAvatarVisuals.meshParent.SetActive(visible);
@@ -103,7 +102,7 @@ public sealed class InvisibleDebuff : MonoBehaviour
 
     private static void ToggleNameplate(PlayerAvatar player, bool visible)
     {
-        LOG.LogDebug($"Set nameplate visibility for Player {player.photonView.Owner.NickName} to {visible}");
+        LOG.Debug($"Set nameplate visibility for Player {player.photonView.Owner.NickName} to {visible}");
         if (player.worldSpaceUIPlayerName)
         {
             player.worldSpaceUIPlayerName.gameObject.SetActive(visible);
@@ -112,7 +111,7 @@ public sealed class InvisibleDebuff : MonoBehaviour
 
     private static void ToggleVoiceCom(PlayerAvatar player, bool visible)
     {
-        LOG.LogDebug($"Set voice chat mute for Player {player.photonView.Owner.NickName} to {visible}");
+        LOG.Debug($"Set voice chat mute for Player {player.photonView.Owner.NickName} to {visible}");
         if (player.voiceChat ? player.voiceChat.audioSource : null)
         {
             player.voiceChat.audioSource.mute = !visible;

@@ -1,7 +1,6 @@
-﻿using BepInEx.Logging;
-using UnityEngine;
+﻿using UnityEngine;
+using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
-using Logger = BepInEx.Logging.Logger;
 
 namespace VepMod.Enemies.Whispral;
 
@@ -14,7 +13,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         BreatheOut
     }
 
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.EnemyWhispralAnim");
+    private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>(false);
 
     [Space] [SerializeField] private Enemy enemy;
     [SerializeField] private EnemyWhispral enemyWhispral;
@@ -109,7 +108,10 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
             base.OnStateEnter(previous);
             owner.Show(false);
             Duration = GetDuration();
-            _audioSource = sound.Play(owner.enemyWhispral.playerTarget.transform.position);
+            if (owner.enemyWhispral.playerTarget != null)
+            {
+                _audioSource = sound.Play(owner.enemyWhispral.playerTarget.transform.position);
+            }
         }
 
         private float GetDuration()
@@ -117,13 +119,13 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
             var min = Mathf.Max(durationRange.x, MinDuration);
             if (durationRange.x < MinDuration)
             {
-                LOG.LogWarning($"Adjusted min duration from {durationRange.x} to {MinDuration} (minimum allowed).");
+                LOG.Warning($"Adjusted min duration from {durationRange.x} to {MinDuration} (minimum allowed).");
             }
 
             var max = Mathf.Max(durationRange.y, min);
             if (durationRange.y < min)
             {
-                LOG.LogWarning($"Adjusted max duration from {durationRange.y} to {min} (must be >= min).");
+                LOG.Warning($"Adjusted max duration from {durationRange.y} to {min} (must be >= min).");
             }
 
             return Random.Range(min, max);

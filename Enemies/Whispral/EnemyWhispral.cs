@@ -1,13 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using BepInEx.Logging;
 using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.Patchs;
+using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
-using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
 
 // ReSharper disable InconsistentNaming
@@ -37,7 +36,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         Despawn = 13
     }
 
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.EnemyWhispral");
+    private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispral>(false);
 
     [Header("Core refs")] public Enemy enemy;
 
@@ -248,7 +247,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             return;
         }
 
-        LOG.LogInfo($"ApplyInvisibleDebuffRPC received: apply={apply}");
+        LOG.Debug($"ApplyInvisibleDebuffRPC received: apply={apply}");
         var debuff = localPlayer.GetOrAddComponent<InvisibleDebuff>();
         debuff.ApplyDebuff(apply);
     }
@@ -279,13 +278,13 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             }
         }
 
-        if (!targetPlayer)
+        if (targetPlayer == null)
         {
-            LOG.LogWarning($"ApplyDilatedPupilsDebuffRPC: Player with ViewID {targetViewID} not found.");
+            LOG.Warning($"ApplyDilatedPupilsDebuffRPC: Player with ViewID {targetViewID} not found.");
             return;
         }
 
-        LOG.LogInfo($"ApplyDilatedPupilsDebuffRPC received: apply={apply} for player {targetPlayer.playerName}");
+        LOG.Debug($"ApplyDilatedPupilsDebuffRPC received: apply={apply} for player {targetPlayer.playerName}");
         var pupilDebuff = targetPlayer.GetOrAddComponent<DilatedPupilsDebuff>();
         pupilDebuff.ApplyDebuff(apply);
     }
@@ -724,7 +723,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var localMimics = VepFinder.LocalMimics;
             if (!localMimics)
             {
-                LOG.LogWarning("LocalMimics not found, cannot send voice command.");
+                LOG.Warning("LocalMimics not found, cannot send voice command.");
                 return;
             }
 
@@ -734,13 +733,13 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var sourcePlayerNickName = ChooseRandomSourcePlayer(targetPlayer);
             if (sourcePlayerNickName == null)
             {
-                LOG.LogWarning("No source player available for voice command.");
+                LOG.Warning("No source player available for voice command.");
                 return;
             }
 
             var applyFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
 
-            LOG.LogInfo(
+            LOG.Debug(
                 $"Sending voice command: target={targetPlayer.photonView.Owner.NickName}, source={sourcePlayerNickName}, filter={applyFilter}");
             localMimics.SendPlayVoiceCommand(targetViewID, sourcePlayerNickName, applyFilter);
         }
@@ -768,9 +767,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         private void StartAttachEffects()
         {
             var player = Whispral.playerTarget;
-            if (!player) return;
+            if (player == null) return;
 
-            LOG.LogInfo("Whispral attached to player, sending debuff RPCs.");
+            LOG.Debug("Whispral attached to player, sending debuff RPCs.");
             if (SemiFunc.IsMultiplayer())
             {
                 Whispral.photonView.RPC(nameof(ApplyInvisibleDebuffRPC), RpcTarget.All, player.photonView.ViewID, true);
@@ -837,9 +836,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         private void StopAttachEffects()
         {
             var player = Whispral.playerTarget;
-            if (!player) return;
+            if (player == null) return;
 
-            LOG.LogInfo("Whispral detached from player, sending debuff RPCs.");
+            LOG.Debug("Whispral detached from player, sending debuff RPCs.");
             if (SemiFunc.IsMultiplayer())
             {
                 Whispral.photonView.RPC("ApplyInvisibleDebuffRPC", RpcTarget.All, player.photonView.ViewID, false);

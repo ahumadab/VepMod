@@ -1,6 +1,5 @@
-using BepInEx.Logging;
 using UnityEngine;
-using Logger = BepInEx.Logging.Logger;
+using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
@@ -13,7 +12,7 @@ public sealed class DilatedPupilsDebuff : MonoBehaviour
     private const float SpringSpeedOut = 5f;
     private const float SpringDampOut = 0.3f;
     private const float RefreshInterval = 0.1f;
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource($"VepMod.{nameof(DilatedPupilsDebuff)}");
+    private static readonly VepLogger LOG = VepLogger.Create<DilatedPupilsDebuff>(debugEnabled: true);
 
     private PlayerAvatar? playerAvatar;
     private float refreshTimer;
@@ -40,7 +39,7 @@ public sealed class DilatedPupilsDebuff : MonoBehaviour
     public void ApplyDebuff(bool dilated)
     {
         IsActive = dilated;
-        LOG.LogDebug($"Applying dilated pupils debuff: {dilated}");
+        LOG.Debug($"Applying dilated pupils debuff: {dilated}");
 
         if (dilated)
         {

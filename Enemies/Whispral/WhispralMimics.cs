@@ -5,12 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using BepInEx.Logging;
 using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
+using VepMod.VepFramework;
 using VepMod.VepFramework.Extensions;
-using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
@@ -25,7 +24,7 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class WhispralMimics : MonoBehaviour
 {
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource($"VepMod.{nameof(WhispralMimics)}");
+    private static readonly VepLogger LOG = VepLogger.Create<WhispralMimics>(false);
 
     public PhotonView PhotonView { get; private set; }
 
@@ -36,14 +35,14 @@ public sealed class WhispralMimics : MonoBehaviour
         PhotonView = GetComponent<PhotonView>();
         if (!PhotonView)
         {
-            LOG.LogError("PhotonView not found.");
+            LOG.Error("PhotonView not found.");
             return;
         }
 
         var playerAvatar = GetComponent<PlayerAvatar>();
         if (!playerAvatar)
         {
-            LOG.LogError("PlayerAvatar not found.");
+            LOG.Error("PlayerAvatar not found.");
             return;
         }
 
@@ -118,21 +117,21 @@ public sealed class WhispralMimics : MonoBehaviour
         voiceChatField = typeof(PlayerAvatar).GetField("voiceChat", BindingFlags.Instance | BindingFlags.NonPublic);
         if (voiceChatField == null)
         {
-            LOG.LogError("Could not find 'voiceChat' field in PlayerAvatar.");
+            LOG.Error("Could not find 'voiceChat' field in PlayerAvatar.");
             return false;
         }
 
         recorderField = typeof(PlayerVoiceChat).GetField("recorder", BindingFlags.Instance | BindingFlags.NonPublic);
         if (recorderField == null)
         {
-            LOG.LogError("Could not find 'recorder' field in PlayerVoiceChat.");
+            LOG.Error("Could not find 'recorder' field in PlayerVoiceChat.");
             return false;
         }
 
         isTalkingField = typeof(PlayerVoiceChat).GetField("isTalking", BindingFlags.Instance | BindingFlags.NonPublic);
         if (isTalkingField == null)
         {
-            LOG.LogError("Could not find 'isTalking' field in PlayerVoiceChat.");
+            LOG.Error("Could not find 'isTalking' field in PlayerVoiceChat.");
             return false;
         }
 
@@ -143,7 +142,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (!VepMod.ConfigEnemyFilterEnabled.Value)
         {
-            LOG.LogInfo("Filter disabled. All enemies will mimic voices.");
+            LOG.Info("Filter disabled. All enemies will mimic voices.");
             return;
         }
 
@@ -153,7 +152,7 @@ public sealed class WhispralMimics : MonoBehaviour
             enemyFilter[entry.Key ?? ""] = entry.Value.Value;
         }
 
-        LOG.LogInfo("Enemy filter initialized.");
+        LOG.Info("Enemy filter initialized.");
     }
 
     private IEnumerator WaitForVoiceChat(PlayerAvatar playerAvatar)
@@ -169,7 +168,7 @@ public sealed class WhispralMimics : MonoBehaviour
             yield return null;
         }
 
-        LOG.LogInfo("PlayerVoiceChat initialized.");
+        LOG.Info("PlayerVoiceChat initialized.");
 
         DetectSampleRate();
 
@@ -182,14 +181,14 @@ public sealed class WhispralMimics : MonoBehaviour
 
             if (PhotonView.IsMine)
             {
-                LOG.LogInfo($"WhispralMimics initialized for local player: {localPlayerNickName}");
+                LOG.Info($"WhispralMimics initialized for local player: {localPlayerNickName}");
 
                 // BOUCLE 1: Partage des sons (uniquement pour le joueur local)
                 StartCoroutine(ShareAudioLoop());
             }
             else
             {
-                LOG.LogInfo("WhispralMimics initialized for remote player (RPC reception only).");
+                LOG.Info("WhispralMimics initialized for remote player (RPC reception only).");
             }
         }
     }
@@ -210,14 +209,14 @@ public sealed class WhispralMimics : MonoBehaviour
                 if (value is int sr and > 0)
                 {
                     sampleRate = sr;
-                    LOG.LogInfo($"Detected sample rate: {sampleRate} Hz");
+                    LOG.Debug($"Detected sample rate: {sampleRate} Hz");
                     return;
                 }
 
                 if (value != null && value.GetType().IsEnum)
                 {
                     sampleRate = (int)value;
-                    LOG.LogInfo($"Detected enum sample rate: {sampleRate} Hz");
+                    LOG.Debug($"Detected enum sample rate: {sampleRate} Hz");
                     return;
                 }
             }
@@ -226,7 +225,7 @@ public sealed class WhispralMimics : MonoBehaviour
         if (sampleRate <= 0)
         {
             sampleRate = AudioSettings.outputSampleRate;
-            LOG.LogWarning($"Fallback to AudioSettings.outputSampleRate: {sampleRate} Hz");
+            LOG.Warning($"Fallback to AudioSettings.outputSampleRate: {sampleRate} Hz");
         }
     }
 
@@ -248,7 +247,7 @@ public sealed class WhispralMimics : MonoBehaviour
             bufferPosition = 0;
             fileSaved = false;
             silenceTimer = 0f;
-            LOG.LogInfo("Speech detected, capturing audio.");
+            LOG.Debug("Speech detected, capturing audio.");
         }
 
         if (!capturingSpeech)
@@ -268,7 +267,7 @@ public sealed class WhispralMimics : MonoBehaviour
             silenceTimer += FrameDurationMs / 1000f;
             if (silenceTimer >= SilenceTimeoutSeconds && bufferPosition > 0 && !fileSaved)
             {
-                LOG.LogInfo($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
+                LOG.Debug($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
                 FinalizeRecording();
                 return;
             }
@@ -287,13 +286,13 @@ public sealed class WhispralMimics : MonoBehaviour
         var inferredSampleRate = frameLength * FramesPerSecond;
         if (sampleRate != inferredSampleRate)
         {
-            LOG.LogWarning(
+            LOG.Warning(
                 $"SampleRate mismatch: {sampleRate} vs inferred {inferredSampleRate}. Using {inferredSampleRate}.");
             sampleRate = inferredSampleRate;
         }
 
         audioBuffer = new float[sampleRate * AudioBufferDurationSeconds];
-        LOG.LogInfo(
+        LOG.Debug(
             $"Audio buffer allocated: {audioBuffer.Length} samples ({sampleRate} Hz, {AudioBufferDurationSeconds}s)");
     }
 
@@ -320,7 +319,7 @@ public sealed class WhispralMimics : MonoBehaviour
         var recordedData = new float[bufferPosition];
         Array.Copy(audioBuffer, recordedData, bufferPosition);
 
-        LOG.LogInfo($"Recording finalized: {bufferPosition} samples ({(float)bufferPosition / sampleRate:F2}s)");
+        LOG.Debug($"Recording finalized: {bufferPosition} samples ({(float)bufferPosition / sampleRate:F2}s)");
         SaveRecordingAsync(recordedData);
     }
 
@@ -328,7 +327,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (isRecording) return;
 
-        LOG.LogInfo($"StartRecording (sampleRate={sampleRate})");
+        LOG.Debug($"StartRecording (sampleRate={sampleRate})");
         audioBuffer = null;
         bufferPosition = 0;
         isRecording = true;
@@ -354,11 +353,11 @@ public sealed class WhispralMimics : MonoBehaviour
             lastSavedAudioBytes = memoryStream.ToArray();
             hasNewRecording = true;
 
-            LOG.LogInfo($"Audio saved and ready for sharing: {lastSavedAudioBytes.Length} bytes");
+            LOG.Debug($"Audio saved and ready for sharing: {lastSavedAudioBytes.Length} bytes");
         }
         catch (Exception ex)
         {
-            LOG.LogError($"Error saving recording: {ex.Message}");
+            LOG.Error($"Error saving recording: {ex.Message}");
         }
     }
 
@@ -371,7 +370,7 @@ public sealed class WhispralMimics : MonoBehaviour
     /// </summary>
     private IEnumerator ShareAudioLoop()
     {
-        LOG.LogInfo("ShareAudioLoop started.");
+        LOG.Info("ShareAudioLoop started.");
 
         while (true)
         {
@@ -406,18 +405,18 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (!PhotonNetwork.IsConnectedAndReady)
         {
-            LOG.LogWarning("Photon not connected, skipping share.");
+            LOG.Warning("Photon not connected, skipping share.");
             return;
         }
 
         var chunks = ChunkAudioData(audioData);
-        LOG.LogInfo($"Sharing audio: {audioData.Length} bytes in {chunks.Count} chunks");
+        LOG.Debug($"Sharing audio: {audioData.Length} bytes in {chunks.Count} chunks");
 
         for (var i = 0; i < chunks.Count; i++)
         {
             if (!PhotonNetwork.IsConnectedAndReady)
             {
-                LOG.LogWarning("Photon disconnected, aborting share.");
+                LOG.Warning("Photon disconnected, aborting share.");
                 return;
             }
 
@@ -427,7 +426,7 @@ public sealed class WhispralMimics : MonoBehaviour
             await Task.Delay(ChunkDelayMs);
         }
 
-        LOG.LogInfo($"Audio shared successfully: {chunks.Count} chunks sent.");
+        LOG.Debug($"Audio shared successfully: {chunks.Count} chunks sent.");
     }
 
     private static List<byte[]> ChunkAudioData(byte[] audioData)
@@ -459,13 +458,14 @@ public sealed class WhispralMimics : MonoBehaviour
         {
             receivedChunksByPlayer[sourcePlayerNickName] = new List<byte[]>();
             expectedChunkCountByPlayer[sourcePlayerNickName] = totalChunks;
-            LOG.LogInfo($"Receiving shared audio from {sourcePlayerNickName}: {totalChunks} chunks at {srcSampleRate} Hz");
+            LOG.Debug(
+                $"Receiving shared audio from {sourcePlayerNickName}: {totalChunks} chunks at {srcSampleRate} Hz");
         }
 
         // Vérifier que le joueur existe dans nos buffers
         if (!receivedChunksByPlayer.TryGetValue(sourcePlayerNickName, out var chunks))
         {
-            LOG.LogWarning($"Received chunk for unknown player: {sourcePlayerNickName}");
+            LOG.Warning($"Received chunk for unknown player: {sourcePlayerNickName}");
             return;
         }
 
@@ -481,7 +481,7 @@ public sealed class WhispralMimics : MonoBehaviour
         var expectedCount = expectedChunkCountByPlayer.GetValueOrDefault(sourcePlayerNickName, 0);
         if (chunks.Count >= expectedCount && chunks.All(c => c != null))
         {
-            LOG.LogInfo($"All chunks received from {sourcePlayerNickName}, saving audio.");
+            LOG.Debug($"All chunks received from {sourcePlayerNickName}, saving audio.");
 
             var combinedData = CombineChunks(chunks);
             SaveReceivedAudioAsync(combinedData, srcSampleRate, sourcePlayerNickName);
@@ -512,11 +512,11 @@ public sealed class WhispralMimics : MonoBehaviour
         try
         {
             await wavFileManager.SaveFromBytesAsync(audioData, srcSampleRate, sourcePlayerNickName);
-            LOG.LogInfo($"Audio from {sourcePlayerNickName} saved successfully.");
+            LOG.Debug($"Audio from {sourcePlayerNickName} saved successfully.");
         }
         catch (Exception ex)
         {
-            LOG.LogError($"Error saving audio from {sourcePlayerNickName}: {ex.Message}");
+            LOG.Error($"Error saving audio from {sourcePlayerNickName}: {ex.Message}");
         }
     }
 
@@ -541,7 +541,7 @@ public sealed class WhispralMimics : MonoBehaviour
         // Vérifier HearYourself
         if (sourcePlayerNickName == localPlayerNickName && !VepMod.ConfigHearYourself.Value)
         {
-            LOG.LogInfo("HearYourself disabled, skipping own voice.");
+            LOG.Debug("HearYourself disabled, skipping own voice.");
             return;
         }
 
@@ -549,11 +549,11 @@ public sealed class WhispralMimics : MonoBehaviour
         var audioData = wavFileManager.GetRandomFile(sourcePlayerNickName);
         if (audioData == null)
         {
-            LOG.LogWarning($"No audio found for player {sourcePlayerNickName}");
+            LOG.Warning($"No audio found for player {sourcePlayerNickName}");
             return;
         }
 
-        LOG.LogInfo($"Playing voice from {sourcePlayerNickName} (filter: {applyFilter})");
+        LOG.Debug($"Playing voice from {sourcePlayerNickName} (filter: {applyFilter})");
         PlayReceivedAudio(audioData, applyFilter, sampleRate);
     }
 
@@ -564,7 +564,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (!PhotonNetwork.IsConnectedAndReady)
         {
-            LOG.LogWarning("Photon not connected, cannot send voice command.");
+            LOG.Warning("Photon not connected, cannot send voice command.");
             return;
         }
 
@@ -612,7 +612,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (applyVoiceFilter)
         {
-            LOG.LogInfo("Applying voice filter.");
+            LOG.Debug("Applying voice filter.");
         }
 
         var processedSamples = ProcessReceivedAudio(audioData, applyVoiceFilter, receivedSampleRate);

@@ -1,9 +1,8 @@
 ﻿#nullable disable
-using BepInEx.Logging;
 using Photon.Pun;
 using UnityEngine;
 using VepMod.Enemies.Whispral;
-using Logger = BepInEx.Logging.Logger;
+using VepMod.VepFramework;
 
 namespace VepMod.Patchs;
 
@@ -11,7 +10,7 @@ public class VepFinder : MonoBehaviour
 {
     private static VepFinder _instance;
     private static bool _initialized;
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.VepFinder");
+    private static readonly VepLogger LOG = VepLogger.Create<VepFinder>();
 
     public static WhispralMimics LocalMimics { get; set; }
 
@@ -24,7 +23,7 @@ public class VepFinder : MonoBehaviour
 
         LocalMimics = null;
         _instance = null;
-        LOG.LogInfo("VepFinder destroyed, clearing cache.");
+        LOG.Info("VepFinder destroyed, clearing cache.");
     }
 
     public static void EnsureInitialized()
@@ -39,6 +38,6 @@ public class VepFinder : MonoBehaviour
         _initialized = true;
         DontDestroyOnLoad(_instance.gameObject);
         var localPlayer = PhotonNetwork.LocalPlayer;
-        LOG.LogInfo($"MimicsFinder initialized for Player {localPlayer?.ActorNumber ?? -1}");
+        LOG.Info($"MimicsFinder initialized for Player {localPlayer?.ActorNumber ?? -1}");
     }
 }

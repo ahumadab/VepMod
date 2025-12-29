@@ -1,16 +1,15 @@
 ﻿#nullable disable
 using System.Collections.Generic;
 using BepInEx.Configuration;
-using BepInEx.Logging;
 using HarmonyLib;
-using Logger = BepInEx.Logging.Logger;
+using VepMod.VepFramework;
 
 namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(EnemyDirector))]
 internal class EnemyDirectorStartPatch
 {
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.EnemyDirectorStartPatch");
+    private static readonly VepLogger LOG = VepLogger.Create<EnemyDirectorStartPatch>(debugEnabled: false);
     private static HashSet<string> _filterEnemies;
     private static bool _setupComplete;
     private static ConfigFile _configFile;
@@ -18,7 +17,7 @@ internal class EnemyDirectorStartPatch
     public static void Initialize(ConfigFile config)
     {
         _configFile = config;
-        LOG.LogInfo("EnemyDirectorStartPatch initialized with ConfigFile.");
+        LOG.Info("EnemyDirectorStartPatch initialized with ConfigFile.");
     }
 
     [HarmonyPatch("Start")]
@@ -51,17 +50,18 @@ internal class EnemyDirectorStartPatch
 
         _setupComplete = true;
         SetupEnemyConfig();
+        LOG.Info("Enemy setup complete.");
     }
 
     private static void SetupEnemyConfig()
     {
-        LOG.LogInfo("Setting up enemy config...");
+        LOG.Info("Setting up enemy config...");
         foreach (var filterEnemy in _filterEnemies)
         {
             filterEnemy.Replace("Enemy - ", "");
             VepMod.EnemyConfigEntries[filterEnemy] = _configFile.Bind("Enemies", filterEnemy, true,
                 "Enables/disables ability for " + filterEnemy + " to mimic player voices.");
-            LOG.LogInfo("Added config entry for enemy: " + filterEnemy);
+            LOG.Debug("Added config entry for enemy: " + filterEnemy);
         }
     }
 }

@@ -2,9 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using BepInEx.Logging;
 using UnityEngine;
-using Logger = BepInEx.Logging.Logger;
+using VepMod.VepFramework;
 using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
@@ -18,7 +17,7 @@ public sealed class WavFileManager
     private const string WavExtension = "*.wav";
     private const string AudioFolderName = "AudioFiles";
     private const string PlayerFolderPrefix = "player_";
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource($"VepMod.{nameof(WavFileManager)}");
+    private static readonly VepLogger LOG = VepLogger.Create<WavFileManager>();
 
     public WavFileManager(int maxSamplesPerPlayer = 10)
     {
@@ -65,6 +64,32 @@ public sealed class WavFileManager
 
     #endregion
 
+    #region Read Operations
+
+    /// <summary>
+    ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
+    /// </summary>
+    public byte[]? GetRandomFile(string playerNickName)
+    {
+        var playerFolder = GetPlayerFolder(playerNickName);
+        if (!Directory.Exists(playerFolder))
+        {
+            return null;
+        }
+
+        var files = Directory.GetFiles(playerFolder, WavExtension);
+        if (files.Length == 0)
+        {
+            LOG.Debug($"No audio files found for player {playerNickName}.");
+            return null;
+        }
+
+        var selectedFile = files[Random.Range(0, files.Length)];
+        return File.ReadAllBytes(selectedFile);
+    }
+
+    #endregion
+
     #region Player Folder Management
 
     /// <summary>
@@ -83,6 +108,7 @@ public sealed class WavFileManager
     {
         if (string.IsNullOrEmpty(playerNickName))
         {
+            LOG.Warning("Player nickname is null or empty. Using 'unknown' as fallback.");
             return "unknown";
         }
 
@@ -128,7 +154,7 @@ public sealed class WavFileManager
         WriteWavHeader(writer, audioData.Length, sampleRate);
         writer.Write(audioBytes);
 
-        LOG.LogInfo($"Audio saved for player {playerNickName}: {Path.GetFileName(filePath)}");
+        LOG.Debug($"Audio saved for player {playerNickName}: {Path.GetFileName(filePath)}");
         return filePath;
     }
 
@@ -149,7 +175,7 @@ public sealed class WavFileManager
         // Les bytes contiennent déjà l'en-tête WAV complet, donc on écrit directement
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
-        LOG.LogInfo($"Audio saved from bytes for player {playerNickName}: {Path.GetFileName(filePath)}");
+        LOG.Debug($"Audio saved from bytes for player {playerNickName}: {Path.GetFileName(filePath)}");
         return filePath;
     }
 
@@ -173,34 +199,9 @@ public sealed class WavFileManager
         {
             var oldestFile = files[0];
             await Task.Run(() => File.Delete(oldestFile));
-            LOG.LogInfo($"Deleted oldest audio file for player {playerNickName}: {Path.GetFileName(oldestFile)}");
+            LOG.Debug($"Deleted oldest audio file for player {playerNickName}: {Path.GetFileName(oldestFile)}");
             files.RemoveAt(0);
         }
-    }
-
-    #endregion
-
-    #region Read Operations
-
-    /// <summary>
-    ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
-    /// </summary>
-    public byte[]? GetRandomFile(string playerNickName)
-    {
-        var playerFolder = GetPlayerFolder(playerNickName);
-        if (!Directory.Exists(playerFolder))
-        {
-            return null;
-        }
-
-        var files = Directory.GetFiles(playerFolder, WavExtension);
-        if (files.Length == 0)
-        {
-            return null;
-        }
-
-        var selectedFile = files[Random.Range(0, files.Length)];
-        return File.ReadAllBytes(selectedFile);
     }
 
     #endregion

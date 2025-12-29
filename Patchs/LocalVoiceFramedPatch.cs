@@ -1,15 +1,15 @@
 ﻿#nullable disable
-using BepInEx.Logging;
 using HarmonyLib;
 using Photon.Pun;
 using Photon.Voice;
+using VepMod.VepFramework;
 
 namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(LocalVoiceFramed<short>), "PushDataAsync")]
 internal class LocalVoiceFramedPatch
 {
-    private static readonly ManualLogSource LOG = Logger.CreateLogSource("VepMod.LocalVoiceFramedPatch");
+    private static readonly VepLogger LOG = VepLogger.Create<LocalVoiceFramedPatch>();
 
     private static void Prefix(short[] buf, LocalVoiceFramed<short> __instance)
     {

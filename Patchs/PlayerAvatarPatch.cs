@@ -1,16 +1,15 @@
 ﻿#nullable disable
-using BepInEx.Logging;
 using HarmonyLib;
 using Photon.Pun;
 using VepMod.Enemies.Whispral;
-using Logger = BepInEx.Logging.Logger;
+using VepMod.VepFramework;
 
 namespace VepMod.Patchs;
 
 [HarmonyPatch(typeof(PlayerAvatar), "Awake")]
 internal class PlayerAvatarPatch
 {
-    private static readonly ManualLogSource log = Logger.CreateLogSource("VepMod");
+    private static readonly VepLogger LOG = VepLogger.Create<PlayerAvatarPatch>();
 
     private static void Postfix(PlayerAvatar __instance)
     {
@@ -23,21 +22,21 @@ internal class PlayerAvatarPatch
         if (!mimics)
         {
             mimics = __instance.gameObject.AddComponent<WhispralMimics>();
-            log.LogInfo($"Added Mimics component to PlayerAvatar: {__instance.name}");
+            LOG.Debug($"Added Mimics component to PlayerAvatar: {__instance.name}");
         }
         else
         {
-            log.LogWarning($"PlayerAvatar: {__instance.name} already has a WhispralMimics component.");
+            LOG.Warning($"PlayerAvatar: {__instance.name} already has a WhispralMimics component.");
         }
 
         var photonView = __instance.GetComponent<PhotonView>();
         if (!photonView || !photonView.IsMine)
         {
-            log.LogWarning("PhotonView is null or not owned by local player.");
+            LOG.Warning("PhotonView is null or not owned by local player.");
             return;
         }
 
         VepFinder.LocalMimics = mimics;
-        log.LogInfo($"Set LocalMimics for local PlayerAvatar: {__instance.name}");
+        LOG.Info($"Set LocalMimics for local PlayerAvatar: {__instance.name}");
     }
 }
