@@ -6,16 +6,21 @@ namespace VepMod.Enemies.Whispral;
 
 public sealed class InvisibleDebuff : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<InvisibleDebuff>(false);
+    private static readonly VepLogger LOG = VepLogger.Create<InvisibleDebuff>();
     private readonly List<PlayerAvatar> hiddenPlayers = new();
     public bool IsActive { get; private set; }
+
+    private void LateUpdate()
+    {
+        LateCheckDeactivateFlashlight();
+    }
 
     public void ApplyDebuff(bool invisible)
     {
         IsActive = invisible;
         if (!SemiFunc.IsMultiplayer())
         {
-            LOG.Warning("Singleplayer mode detected, skipping invisibility application.");
+            LOG.Debug("Singleplayer mode detected, skipping invisibility application.");
             return;
         }
 
@@ -62,17 +67,32 @@ public sealed class InvisibleDebuff : MonoBehaviour
         return false;
     }
 
+    private void LateCheckDeactivateFlashlight()
+    {
+        //Vérifie si le jeu a réactivé les lampes des joueurs cachés (ex: après crouch/tumble) et les re-désactive si nécessaire.
+        if (!IsActive || hiddenPlayers.Count == 0) return;
+        foreach (var player in hiddenPlayers)
+        {
+            if (!player || !player.flashlightController) continue;
+            var flashlight = player.flashlightController;
+            var flashlightMeshEnable = flashlight.mesh && flashlight.mesh.enabled;
+            var flashlightSpotlightEnabled = flashlight.spotlight && flashlight.spotlight.enabled;
+            var haloEnabled = flashlight.halo && flashlight.halo.enabled;
+            var needToDeactivate = flashlightMeshEnable || flashlightSpotlightEnabled || haloEnabled;
+            if (!needToDeactivate) continue;
+            ToggleFlashlight(player, false);
+            LOG.Debug($"Re-deactivated flashlight for Player {player.photonView.Owner.NickName} in LateUpdate.");
+        }
+    }
+
     private static void SetPlayerVisibility(PlayerAvatar player, bool visible)
     {
         // 1. Mesh principal (corps du joueur)
         ToggleMesh(player, visible);
-
         // 2. Nametag au-dessus de la tête
         ToggleNameplate(player, visible);
-
         // 3. Lampe torche (lumière + mesh)
         ToggleFlashlight(player, visible);
-
         // 4. Voice chat (optionnel - pour ne plus entendre les autres)
         ToggleVoiceCom(player, visible);
     }
@@ -80,14 +100,12 @@ public sealed class InvisibleDebuff : MonoBehaviour
     private static void ToggleFlashlight(PlayerAvatar player, bool visible)
     {
         LOG.Debug($"Set flashlight visibility for Player {player.photonView.Owner.NickName} to {visible}");
-        if (player.flashlightController)
+        if (!player.flashlightController) return;
+        player.flashlightController.spotlight.enabled = visible;
+        player.flashlightController.mesh.enabled = visible;
+        if (player.flashlightController.halo)
         {
-            player.flashlightController.spotlight.enabled = visible;
-            player.flashlightController.mesh.enabled = visible;
-            if (player.flashlightController.halo)
-            {
-                player.flashlightController.halo.enabled = visible;
-            }
+            player.flashlightController.halo.enabled = visible;
         }
     }
 
