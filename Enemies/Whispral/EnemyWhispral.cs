@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using Photon.Pun;
 using Unity.VisualScripting;
@@ -765,7 +765,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             Whispral.attachedTimer -= Time.deltaTime;
             var player = Whispral.playerTarget;
-            if (Whispral.attachedTimer <= 0f || player == null || player.isDisabled || player.isCrawling)
+            if (Whispral.attachedTimer <= 0f || player == null || player.isDisabled || player.isTumbling)
             {
                 Fsm.NextStateStateId = State.Detach;
             }
