@@ -233,36 +233,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     }
 
     [PunRPC]
-    private void ApplyInvisibleDebuffRPC(int targetViewID, bool apply, PhotonMessageInfo _info = default)
+    private void WhispralAttachmentRPC(int targetViewID, bool attach, PhotonMessageInfo _info = default)
     {
         if (!SemiFunc.MasterOnlyRPC(_info))
-        {
-            return;
-        }
-
-        // Seul le client ciblé applique le debuff
-        var localPlayer = PlayerAvatar.instance;
-        if (!localPlayer || localPlayer.photonView.ViewID != targetViewID)
-        {
-            return;
-        }
-
-        LOG.Debug($"ApplyInvisibleDebuffRPC received: apply={apply}");
-        var debuff = localPlayer.GetOrAddComponent<InvisibleDebuff>();
-        debuff.ApplyDebuff(apply);
-    }
-
-    [PunRPC]
-    private void ApplyDilatedPupilsDebuffRPC(int targetViewID, bool apply, PhotonMessageInfo _info = default)
-    {
-        if (!SemiFunc.MasterOnlyRPC(_info))
-        {
-            return;
-        }
-
-        // Le joueur affecté n'a pas besoin de voir ses propres pupilles
-        var localPlayer = PlayerAvatar.instance;
-        if (localPlayer && localPlayer.photonView.ViewID == targetViewID)
         {
             return;
         }
@@ -280,13 +253,20 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         if (targetPlayer == null)
         {
-            LOG.Warning($"ApplyDilatedPupilsDebuffRPC: Player with ViewID {targetViewID} not found.");
+            LOG.Warning($"WhispralAttachmentRPC: Player with ViewID {targetViewID} not found.");
             return;
         }
 
-        LOG.Debug($"ApplyDilatedPupilsDebuffRPC received: apply={apply} for player {targetPlayer.playerName}");
-        var pupilDebuff = targetPlayer.GetOrAddComponent<DilatedPupilsDebuff>();
-        pupilDebuff.ApplyDebuff(apply);
+        LOG.Debug($"WhispralAttachmentRPC received: attach={attach} for player {targetPlayer.playerName}");
+        var manager = targetPlayer.GetOrAddComponent<WhispralDebuffManager>();
+        if (attach)
+        {
+            manager.RegisterAttachment();
+        }
+        else
+        {
+            manager.UnregisterAttachment();
+        }
     }
 
     #endregion
@@ -769,19 +749,15 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var player = Whispral.playerTarget;
             if (player == null) return;
 
-            LOG.Debug("Whispral attached to player, sending debuff RPCs.");
+            LOG.Debug("Whispral attached to player, sending debuff RPC.");
             if (SemiFunc.IsMultiplayer())
             {
-                Whispral.photonView.RPC(nameof(ApplyInvisibleDebuffRPC), RpcTarget.All, player.photonView.ViewID, true);
-                Whispral.photonView.RPC(nameof(ApplyDilatedPupilsDebuffRPC), RpcTarget.All, player.photonView.ViewID,
-                    true);
+                Whispral.photonView.RPC(nameof(WhispralAttachmentRPC), RpcTarget.All, player.photonView.ViewID, true);
             }
             else
             {
-                var invisibleDebuff = player.GetOrAddComponent<InvisibleDebuff>();
-                invisibleDebuff.ApplyDebuff(true);
-                var pupilDebuff = player.GetOrAddComponent<DilatedPupilsDebuff>();
-                pupilDebuff.ApplyDebuff(true);
+                var manager = player.GetOrAddComponent<WhispralDebuffManager>();
+                manager.RegisterAttachment();
             }
         }
 
@@ -838,24 +814,17 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var player = Whispral.playerTarget;
             if (player == null) return;
 
-            LOG.Debug("Whispral detached from player, sending debuff RPCs.");
+            LOG.Debug("Whispral detached from player, sending debuff RPC.");
             if (SemiFunc.IsMultiplayer())
             {
-                Whispral.photonView.RPC("ApplyInvisibleDebuffRPC", RpcTarget.All, player.photonView.ViewID, false);
-                Whispral.photonView.RPC("ApplyDilatedPupilsDebuffRPC", RpcTarget.All, player.photonView.ViewID, false);
+                Whispral.photonView.RPC(nameof(WhispralAttachmentRPC), RpcTarget.All, player.photonView.ViewID, false);
             }
             else
             {
-                var invisibleDebuff = player.GetComponent<InvisibleDebuff>();
-                if (invisibleDebuff)
+                var manager = player.GetComponent<WhispralDebuffManager>();
+                if (manager)
                 {
-                    invisibleDebuff.ApplyDebuff(false);
-                }
-
-                var pupilDebuff = player.GetComponent<DilatedPupilsDebuff>();
-                if (pupilDebuff)
-                {
-                    pupilDebuff.ApplyDebuff(false);
+                    manager.UnregisterAttachment();
                 }
             }
         }
