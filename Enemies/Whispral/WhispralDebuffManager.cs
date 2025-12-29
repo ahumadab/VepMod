@@ -11,7 +11,7 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class WhispralDebuffManager : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>();
 
     private PlayerAvatar playerAvatar;
 

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Photon.Pun;
 using Unity.VisualScripting;
@@ -36,7 +36,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         Despawn = 13
     }
 
-    private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispral>(false);
+    private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispral>();
 
     [Header("Core refs")] public Enemy enemy;
 

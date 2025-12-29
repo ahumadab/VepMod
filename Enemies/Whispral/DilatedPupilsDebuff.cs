@@ -12,7 +12,7 @@ public sealed class DilatedPupilsDebuff : MonoBehaviour
     private const float SpringSpeedOut = 5f;
     private const float SpringDampOut = 0.3f;
     private const float RefreshInterval = 0.1f;
-    private static readonly VepLogger LOG = VepLogger.Create<DilatedPupilsDebuff>(debugEnabled: true);
+    private static readonly VepLogger LOG = VepLogger.Create<DilatedPupilsDebuff>();
 
     private PlayerAvatar? playerAvatar;
     private float refreshTimer;
