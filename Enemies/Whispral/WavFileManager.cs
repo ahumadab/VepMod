@@ -185,48 +185,6 @@ public sealed class WavFileManager
     /// <summary>
     ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
     /// </summary>
-    private async Task<byte[]?> GetRandomFileAsync(string playerNickName)
-    {
-        var playerFolder = GetPlayerFolder(playerNickName);
-        if (!Directory.Exists(playerFolder))
-        {
-            return null;
-        }
-
-        var files = Directory.GetFiles(playerFolder, WavExtension);
-        if (files.Length == 0)
-        {
-            return null;
-        }
-
-        var selectedFile = files[Random.Range(0, files.Length)];
-        return await File.ReadAllBytesAsync(selectedFile);
-    }
-
-    /// <summary>
-    ///     Lit un fichier WAV aléatoire parmi tous les joueurs, avec possibilité d'exclusion.
-    /// </summary>
-    public async Task<(byte[] audioData, string playerNickName)?> GetRandomFileFromAnyPlayerAsync(
-        string[]? excludePlayerNickNames = null)
-    {
-        var playerNickNames = GetAllPlayerNickNames()
-            .Where(id => excludePlayerNickNames == null || !excludePlayerNickNames.Contains(id))
-            .ToArray();
-
-        if (playerNickNames.Length == 0)
-        {
-            return null;
-        }
-
-        var randomPlayerNickName = playerNickNames[Random.Range(0, playerNickNames.Length)];
-        var audioData = await GetRandomFileAsync(randomPlayerNickName);
-
-        return audioData != null ? (audioData, randomPlayerNickName) : null;
-    }
-
-    /// <summary>
-    ///     Version synchrone de GetRandomFileAsync pour les contextes où async n'est pas possible.
-    /// </summary>
     public byte[]? GetRandomFile(string playerNickName)
     {
         var playerFolder = GetPlayerFolder(playerNickName);
@@ -243,79 +201,6 @@ public sealed class WavFileManager
 
         var selectedFile = files[Random.Range(0, files.Length)];
         return File.ReadAllBytes(selectedFile);
-    }
-
-    #endregion
-
-    #region Count & Capacity
-
-    /// <summary>
-    ///     Retourne le nombre de fichiers WAV pour un joueur spécifique.
-    /// </summary>
-    private int GetFileCountForPlayer(string playerNickName)
-    {
-        var playerFolder = GetPlayerFolder(playerNickName);
-        if (!Directory.Exists(playerFolder))
-        {
-            return 0;
-        }
-
-        return Directory.GetFiles(playerFolder, WavExtension).Length;
-    }
-
-    /// <summary>
-    ///     Vérifie si le dossier d'un joueur a atteint la limite de fichiers.
-    /// </summary>
-    public bool IsAtCapacityForPlayer(string playerNickName)
-    {
-        return GetFileCountForPlayer(playerNickName) >= MaxSamplesPerPlayer;
-    }
-
-    /// <summary>
-    ///     Retourne le nombre total de fichiers WAV pour tous les joueurs.
-    /// </summary>
-    public int GetTotalFileCount()
-    {
-        return GetAllPlayerNickNames().Sum(GetFileCountForPlayer);
-    }
-
-    #endregion
-
-    #region Clear Operations
-
-    /// <summary>
-    ///     Supprime tous les fichiers WAV pour un joueur spécifique.
-    /// </summary>
-    private async Task ClearPlayerAsync(string playerNickName)
-    {
-        var playerFolder = GetPlayerFolder(playerNickName);
-        if (!Directory.Exists(playerFolder))
-        {
-            return;
-        }
-
-        var files = Directory.GetFiles(playerFolder, WavExtension);
-        var tasks = files.Select(file => Task.Run(() => File.Delete(file))).ToList();
-        if (tasks.Count > 0)
-        {
-            await Task.WhenAll(tasks);
-        }
-
-        LOG.LogInfo($"Audio folder cleared for player {playerNickName}.");
-    }
-
-    /// <summary>
-    ///     Supprime tous les fichiers WAV pour tous les joueurs.
-    /// </summary>
-    public async Task ClearAllAsync()
-    {
-        var playerNickNames = GetAllPlayerNickNames();
-        foreach (var playerNickName in playerNickNames)
-        {
-            await ClearPlayerAsync(playerNickName);
-        }
-
-        LOG.LogInfo("All audio folders cleared.");
     }
 
     #endregion
