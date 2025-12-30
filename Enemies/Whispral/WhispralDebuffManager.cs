@@ -11,7 +11,7 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class WhispralDebuffManager : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>();
+    private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>(true);
 
     private PlayerAvatar playerAvatar;
 
@@ -68,6 +68,10 @@ public sealed class WhispralDebuffManager : MonoBehaviour
             // Le joueur affecté voit les autres comme invisibles
             var invisibleDebuff = gameObject.GetOrAddComponent<InvisibleDebuff>();
             invisibleDebuff.ApplyDebuff(true);
+
+            // Créer des hallucinations des joueurs cachés qui se baladent au hasard
+            var hallucinationDebuff = gameObject.GetOrAddComponent<HallucinationDebuff>();
+            hallucinationDebuff.ApplyDebuff(true, invisibleDebuff);
         }
         else
         {
@@ -87,6 +91,15 @@ public sealed class WhispralDebuffManager : MonoBehaviour
         if (isLocalPlayer)
         {
             var invisibleDebuff = GetComponent<InvisibleDebuff>();
+            var hallucinationDebuff = GetComponent<HallucinationDebuff>();
+
+            // Désactiver les hallucinations en premier
+            if (hallucinationDebuff)
+            {
+                hallucinationDebuff.ApplyDebuff(false, invisibleDebuff);
+            }
+
+            // Puis restaurer la visibilité des vrais joueurs
             if (invisibleDebuff)
             {
                 invisibleDebuff.ApplyDebuff(false);
