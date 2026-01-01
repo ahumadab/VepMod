@@ -11,10 +11,9 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class HallucinationDebuff : MonoBehaviour
 {
-    private const float NavMeshSampleRadius = 10f;
     private const float SpawnDistanceMin = 5f;
     private const float SpawnDistanceMax = 15f;
-    private static readonly VepLogger LOG = VepLogger.Create<HallucinationDebuff>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationDebuff>();
 
     private readonly Dictionary<PlayerAvatar, HallucinationDroid> hallucinations = new();
 

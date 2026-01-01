@@ -71,11 +71,11 @@ public sealed class WhispralMimics : MonoBehaviour
     private const int ChunkSizeBytes = 8192;
     private const int ChunkDelayMs = 125;
 
-    // Lecture audio
+    // Lecture audio (valeurs du prefab Voice du jeu)
     private const float SpatialBlend = 1f;
     private const float DopplerLevel = 0.5f;
-    private const float MinDistance = 1f;
-    private const float MaxDistance = 20f;
+    private const float MinDistance = 5f;
+    private const float MaxDistance = 25f;
 
     #endregion
 
@@ -169,7 +169,6 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
         LOG.Info("PlayerVoiceChat initialized.");
-
         DetectSampleRate();
 
         // Initialiser wavFileManager pour TOUS les joueurs (nécessaire pour recevoir les RPCs)
@@ -676,7 +675,17 @@ public sealed class WhispralMimics : MonoBehaviour
     private void PlayAtTransform(Transform target, AudioClip clip)
     {
         var audioSource = target.gameObject.GetOrAddComponent<AudioSource>();
+        audioSource.enabled = true;
         ConfigureAudioSource(audioSource, clip);
+
+        // Ajouter l'occlusion audio (murs) comme les vrais joueurs
+        var lowPassFilter = target.gameObject.GetOrAddComponent<AudioLowPassFilter>();
+        var lowPassLogic = target.gameObject.GetOrAddComponent<AudioLowPassLogic>();
+        lowPassLogic.ForceStart = true;
+        lowPassLogic.AlwaysActive = true;
+        lowPassLogic.Fetch = true;
+        lowPassLogic.Setup();
+
         audioSource.Play();
 
         StartCoroutine(DestroyAudioSourceAfterPlayback(audioSource, clip.length + 0.1f));
@@ -690,7 +699,19 @@ public sealed class WhispralMimics : MonoBehaviour
         source.dopplerLevel = DopplerLevel;
         source.minDistance = MinDistance;
         source.maxDistance = MaxDistance;
-        source.rolloffMode = AudioRolloffMode.Logarithmic;
+        source.spread = 0f;
+        source.priority = 0;
+        source.bypassEffects = false;
+        source.bypassListenerEffects = false;
+        source.bypassReverbZones = false;
+
+        // Courbe custom du prefab Voice: plein volume jusqu'à 20% de la distance, puis fade vers 0
+        source.rolloffMode = AudioRolloffMode.Custom;
+        source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, new AnimationCurve(
+            new Keyframe(0.2f, 1f),
+            new Keyframe(1f, 0f)
+        ));
+
         source.outputAudioMixerGroup = playerVoiceChat.mixerMicrophoneSound;
     }
 
@@ -720,7 +741,27 @@ public sealed class WhispralMimics : MonoBehaviour
     private static IEnumerator DestroyAudioSourceAfterPlayback(AudioSource source, float delay)
     {
         yield return new WaitForSeconds(delay);
-        Destroy(source);
+
+        if (source == null) yield break;
+
+        var go = source.gameObject;
+
+        // Détruire dans l'ordre inverse des dépendances (attendre 1 frame entre chaque)
+        var lowPassLogic = go.GetComponent<AudioLowPassLogic>();
+        if (lowPassLogic != null)
+        {
+            Destroy(lowPassLogic);
+            yield return null;
+        }
+
+        var lowPassFilter = go.GetComponent<AudioLowPassFilter>();
+        if (lowPassFilter != null)
+        {
+            Destroy(lowPassFilter);
+            yield return null;
+        }
+
+        if (source != null) Destroy(source);
     }
 
     #endregion

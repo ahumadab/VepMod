@@ -19,7 +19,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const float RotationSpeed = 10f;
     private const float WalkSpeed = 2f;
     private const float SprintSpeed = 5f;
-    private const float SprintChance = 0.5f; // 30% de chance de courir
+    private const float SprintChance = 0.5f;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
     private Animator _animator;
