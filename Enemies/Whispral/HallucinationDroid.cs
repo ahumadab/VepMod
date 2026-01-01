@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Animations;
 using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
@@ -9,6 +10,13 @@ namespace VepMod.Enemies.Whispral;
 ///     Hallucination basée sur le prefab LostDroid de WesleysEnemies.
 ///     Garde les visuels, animations et sons, mais simplifie le comportement
 ///     pour juste se balader sans attaquer.
+///
+///     Architecture du prefab LostDroid:
+///     - Root (Enemy - LostDroid) : ne bouge pas
+///       - Enable : conteneur des visuels, doit suivre Controller
+///         - Cube : mesh + Animator
+///       - Rigidbody : physique originale (désactivée)
+///       - Controller : NavMeshAgent ici, C'EST LUI QUI BOUGE
 /// </summary>
 public sealed class HallucinationDroid : MonoBehaviour
 {
@@ -19,12 +27,19 @@ public sealed class HallucinationDroid : MonoBehaviour
     private const float WalkSpeed = 2.0f;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>(true);
+
+    // Le transform "Controller" qui bouge réellement (comme dans le jeu original)
+    private Transform _controllerTransform;
+    private NavMeshAgent _navAgent;
+    private CharacterController _charController;
+
+    // Le transform "Rigidbody" qui doit suivre Controller
+    // (Cube a un ParentConstraint vers Rigidbody, donc si Rigidbody suit Controller, Cube suit aussi)
+    private Transform _rigidbodyTransform;
     private Animator _animator;
 
     private State _currentState = State.Idle;
     private Vector3 _destination;
-
-    private NavMeshAgent _navAgent;
 
     // Paramètres NavMesh sauvegardés du prefab original
     private int _savedAgentTypeID;
@@ -32,11 +47,14 @@ public sealed class HallucinationDroid : MonoBehaviour
     private float _stateTimer;
     private float _debugLogTimer;
 
-    // Rotation manuelle (comme le LostDroid original)
+    // Mouvement manuel avec collision
+    private Vector3 _currentVelocity;
+
+    // Rotation manuelle
     private Quaternion _targetRotation = Quaternion.identity;
     private const float RotationSpeed = 10f;
 
-    // Flags d'animation (lus par LostDroidAnimationController)
+    // Flags d'animation
     public bool IsWalking { get; private set; }
     public bool IsSprinting { get; private set; }
     public bool IsTurning { get; private set; }
@@ -46,6 +64,7 @@ public sealed class HallucinationDroid : MonoBehaviour
     private void Update()
     {
         if (_navAgent == null || !_navAgent.isOnNavMesh) return;
+        if (_charController == null || _controllerTransform == null) return;
 
         _stateTimer -= Time.deltaTime;
 
@@ -59,19 +78,22 @@ public sealed class HallucinationDroid : MonoBehaviour
                 break;
         }
 
-        // Rotation manuelle basée sur la vélocité (comme le LostDroid original)
+        // Mouvement du Controller (pas du root!)
+        UpdateMovement();
+
+        // Rotation du Controller
         UpdateRotation();
+
+        // Synchroniser les visuels (Enable) pour suivre Controller
+        SyncVisualsToController();
 
         // Mise à jour des animations
         UpdateAnimationFlags();
 
-        // Forcer la localPosition de l'Animator à zéro (les animations peuvent la modifier)
-        if (_animator != null && _animator.transform.localPosition != Vector3.zero)
-        {
-            _animator.transform.localPosition = Vector3.zero;
-        }
+        // Synchroniser le NavMeshAgent avec la position du Controller
+        SyncNavAgentPosition();
 
-        // Log périodique pour diagnostiquer le mouvement (toutes les 0.5 secondes)
+        // Log périodique
         _debugLogTimer -= Time.deltaTime;
         if (_debugLogTimer <= 0f)
         {
@@ -81,50 +103,138 @@ public sealed class HallucinationDroid : MonoBehaviour
     }
 
     /// <summary>
-    ///     Rotation manuelle basée sur la vélocité (comme le LostDroid original).
-    ///     Le droid tourne pour faire face à la direction de son mouvement.
+    ///     Mouvement du Controller avec CharacterController pour les collisions.
+    /// </summary>
+    private void UpdateMovement()
+    {
+        if (_currentState != State.Wander || !_navAgent.hasPath)
+        {
+            _currentVelocity = Vector3.zero;
+            return;
+        }
+
+        // Utiliser desiredVelocity du NavMeshAgent
+        var desiredVelocity = _navAgent.desiredVelocity;
+
+        // Smooth vers la vélocité désirée
+        _currentVelocity = Vector3.Lerp(_currentVelocity, desiredVelocity, 5f * Time.deltaTime);
+
+        // Appliquer le mouvement au Controller via CharacterController
+        if (_currentVelocity.magnitude > 0.01f)
+        {
+            var moveVector = _currentVelocity * Time.deltaTime;
+            moveVector.y = -0.5f * Time.deltaTime; // Gravité
+            _charController.Move(moveVector);
+        }
+    }
+
+    /// <summary>
+    ///     Synchronise le transform Rigidbody pour suivre le Controller.
+    ///     Cube a un ParentConstraint vers Rigidbody, donc il suivra automatiquement.
+    /// </summary>
+    private void SyncVisualsToController()
+    {
+        if (_rigidbodyTransform == null || _controllerTransform == null) return;
+
+        // Le Rigidbody doit suivre le Controller (comme EnemyRigidbody.followTarget)
+        _rigidbodyTransform.position = _controllerTransform.position;
+        _rigidbodyTransform.rotation = _controllerTransform.rotation;
+
+        // Forcer l'animator à localPosition zero (les animations peuvent le bouger)
+        if (_animator != null && _animator.transform.localPosition != Vector3.zero)
+        {
+            _animator.transform.localPosition = Vector3.zero;
+        }
+    }
+
+    /// <summary>
+    ///     Synchronise le NavMeshAgent avec la position du Controller.
+    /// </summary>
+    private void SyncNavAgentPosition()
+    {
+        if (_navAgent == null || _controllerTransform == null) return;
+
+        // Utiliser la position du Controller, pas du root
+        var controllerPos = _controllerTransform.position;
+
+        if (NavMesh.SamplePosition(controllerPos, out var hit, 2f, _savedAreaMask))
+        {
+            _navAgent.nextPosition = hit.position;
+
+            var deviation = Vector3.Distance(controllerPos, hit.position);
+            if (deviation > 0.5f)
+            {
+                LOG.Debug($"Controller deviation from NavMesh: {deviation:F2}m");
+                if (_currentState == State.Wander && _navAgent.hasPath)
+                {
+                    _navAgent.SetDestination(_destination);
+                }
+            }
+        }
+        else
+        {
+            LOG.Warning($"Controller position {controllerPos} is off NavMesh!");
+            EnterIdleState();
+        }
+    }
+
+    /// <summary>
+    ///     Rotation du Controller basée sur la vélocité.
     /// </summary>
     private void UpdateRotation()
     {
-        // Seulement tourner si on bouge (vélocité significative)
-        if (_navAgent.velocity.magnitude > 0.1f)
+        if (_controllerTransform == null) return;
+
+        if (_currentVelocity.magnitude > 0.1f)
         {
-            // La cible de rotation est la direction de la vélocité (comme le LostDroid original)
-            var velocityDirection = _navAgent.velocity.normalized;
-            _targetRotation = Quaternion.LookRotation(velocityDirection);
-            // Garder seulement la rotation Y (pas de tilt)
-            _targetRotation = Quaternion.Euler(0f, _targetRotation.eulerAngles.y, 0f);
+            var velocityDirection = _currentVelocity.normalized;
+            velocityDirection.y = 0f;
+            if (velocityDirection.sqrMagnitude > 0.01f)
+            {
+                _targetRotation = Quaternion.LookRotation(velocityDirection);
+            }
         }
 
-        // Rotation smooth vers la cible (équivalent du SpringQuaternion du jeu)
-        transform.rotation = Quaternion.Slerp(transform.rotation, _targetRotation, RotationSpeed * Time.deltaTime);
+        // Appliquer la rotation au Controller
+        _controllerTransform.rotation = Quaternion.Slerp(
+            _controllerTransform.rotation,
+            _targetRotation,
+            RotationSpeed * Time.deltaTime);
     }
 
     private void LogPositionSync()
     {
         LOG.Debug($"=== MOVEMENT DEBUG (State={_currentState}) ===");
-        LOG.Debug($"Position: {transform.position}, Rotation: {transform.eulerAngles.y:F1}°");
-        LOG.Debug($"Velocity: {_navAgent.velocity} (magnitude: {_navAgent.velocity.magnitude:F2})");
+        LOG.Debug($"Root Position: {transform.position}");
 
-        // Calculer l'angle entre la direction du droid et sa vélocité
-        if (_navAgent.velocity.magnitude > 0.1f)
+        if (_controllerTransform != null)
         {
-            var velocityDir = _navAgent.velocity.normalized;
-            var forwardDir = transform.forward;
-            var angleDiff = Vector3.SignedAngle(forwardDir, velocityDir, Vector3.up);
-            LOG.Debug($"Forward vs Velocity angle: {angleDiff:F1}° (sliding si > 45°)");
+            LOG.Debug($"Controller Position: {_controllerTransform.position}, Rotation: {_controllerTransform.eulerAngles.y:F1}°");
         }
 
-        LOG.Debug($"Destination: {_destination}, RemainingDistance: {_navAgent.remainingDistance:F2}");
-        LOG.Debug($"HasPath: {_navAgent.hasPath}, PathPending: {_navAgent.pathPending}, PathStatus: {_navAgent.pathStatus}");
-
-        if (_navAgent.hasPath && _navAgent.path.corners.Length > 0)
+        if (_rigidbodyTransform != null)
         {
-            LOG.Debug($"Path corners: {_navAgent.path.corners.Length}, Next corner: {_navAgent.steeringTarget}");
+            LOG.Debug($"Rigidbody Transform Position: {_rigidbodyTransform.position}");
+        }
+
+        if (_animator != null)
+        {
+            LOG.Debug($"Animator (Cube) Position: {_animator.transform.position}, localPos: {_animator.transform.localPosition}");
+        }
+
+        LOG.Debug($"Velocity: {_currentVelocity} (magnitude: {_currentVelocity.magnitude:F2})");
+
+        if (_charController != null)
+        {
+            LOG.Debug($"CharController grounded: {_charController.isGrounded}");
+        }
+
+        LOG.Debug($"Destination: {_destination}");
+        if (_controllerTransform != null)
+        {
+            LOG.Debug($"Distance to dest: {Vector3.Distance(_controllerTransform.position, _destination):F2}");
         }
     }
-
-
 
     private void OnDestroy()
     {
@@ -142,7 +252,6 @@ public sealed class HallucinationDroid : MonoBehaviour
             return null;
         }
 
-        // Instancier le prefab
         var instance = Instantiate(LostDroidPrefabLoader.LostDroidPrefab, spawnPosition, Quaternion.identity);
         if (instance == null)
         {
@@ -152,7 +261,6 @@ public sealed class HallucinationDroid : MonoBehaviour
 
         instance.name = $"HallucinationDroid_{sourcePlayer.playerName}";
 
-        // Configurer comme hallucination
         var hallucination = instance.AddComponent<HallucinationDroid>();
         hallucination.Initialize(sourcePlayer);
 
@@ -161,7 +269,6 @@ public sealed class HallucinationDroid : MonoBehaviour
 
     private void DisableEnemyComponents()
     {
-        // Liste des composants à détruire complètement (réseau et IA qui peuvent interférer)
         var componentsToDestroy = new List<Component>();
         var componentsToDisable = new List<MonoBehaviour>();
 
@@ -178,22 +285,21 @@ public sealed class HallucinationDroid : MonoBehaviour
             if (component is Renderer) continue;
             if (component is MeshFilter) continue;
             if (component is SkinnedMeshRenderer) continue;
+            // IMPORTANT: Garder le NavMeshAgent sur Controller!
+            if (component is NavMeshAgent) continue;
 
-            // Détruire les composants Photon qui peuvent causer des téléportations
-            if (fullTypeName.Contains("Photon") || typeName.Contains("Photon") ||
-                typeName.Contains("PhotonView") || typeName.Contains("PhotonTransformView") ||
-                typeName.Contains("PhotonRigidbodyView") || typeName.Contains("PhotonAnimatorView"))
+            // Détruire les composants Photon
+            if (fullTypeName.Contains("Photon") || typeName.Contains("Photon"))
             {
                 componentsToDestroy.Add(component);
                 LOG.Debug($"Marking for destruction (Photon): {typeName}");
                 continue;
             }
 
-            // Détruire les composants Enemy/AI qui peuvent interférer
+            // Détruire les composants Enemy/AI (sauf NavMeshAgent)
             if (fullTypeName.Contains("Enemy") || fullTypeName.Contains("LostDroid") ||
                 typeName.Contains("Enemy") || typeName.Contains("LostDroid") ||
-                typeName == "EnemyParent" || typeName == "Enemy" ||
-                (typeName.Contains("Controller") && !typeName.Contains("Animator")))
+                typeName == "EnemyParent" || typeName == "Enemy")
             {
                 componentsToDestroy.Add(component);
                 LOG.Debug($"Marking for destruction (Enemy/AI): {typeName}");
@@ -207,10 +313,9 @@ public sealed class HallucinationDroid : MonoBehaviour
             }
         }
 
-        // Détruire les composants marqués en plusieurs passes (pour gérer les dépendances)
-        var maxPasses = 5;
+        // Détruire en plusieurs passes
         var destroyedCount = 0;
-        for (var pass = 0; pass < maxPasses; pass++)
+        for (var pass = 0; pass < 5; pass++)
         {
             var destroyedThisPass = 0;
             foreach (var component in componentsToDestroy)
@@ -225,15 +330,14 @@ public sealed class HallucinationDroid : MonoBehaviour
                     }
                     catch
                     {
-                        // Échec à cause d'une dépendance, on réessaiera à la prochaine passe
+                        // Réessayer à la prochaine passe
                     }
                 }
             }
-
-            if (destroyedThisPass == 0) break; // Plus rien à détruire
+            if (destroyedThisPass == 0) break;
         }
 
-        // Désactiver les autres composants
+        // Désactiver les autres
         foreach (var mb in componentsToDisable)
         {
             if (mb != null && mb != this)
@@ -242,44 +346,44 @@ public sealed class HallucinationDroid : MonoBehaviour
             }
         }
 
-        // Configurer le Rigidbody pour ne pas interférer
-        var rb = GetComponent<Rigidbody>();
-        if (rb != null)
+        // Désactiver tous les Rigidbody
+        foreach (var rb in GetComponentsInChildren<Rigidbody>())
         {
             rb.isKinematic = true;
             rb.useGravity = false;
             rb.velocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
-            rb.interpolation = RigidbodyInterpolation.None;
         }
 
-        // Garder les colliders mais les mettre en trigger
+        // Mettre les colliders en trigger (sauf celui du CharacterController qu'on va créer)
         foreach (var col in GetComponentsInChildren<Collider>())
         {
             col.isTrigger = true;
         }
 
-        LOG.Debug(
-            $"Component cleanup complete: {destroyedCount}/{componentsToDestroy.Count} destroyed, {componentsToDisable.Count} disabled");
+        LOG.Debug($"Component cleanup: {destroyedCount} destroyed, {componentsToDisable.Count} disabled");
     }
 
     private void Initialize(PlayerAvatar sourcePlayer)
     {
         SourcePlayer = sourcePlayer;
 
-        // IMPORTANT: Sauvegarder les paramètres NavMesh AVANT de détruire les composants
+        // Trouver les transforms importants AVANT de toucher aux composants
+        FindCriticalTransforms();
+
+        // Sauvegarder les paramètres NavMesh
         SaveNavMeshSettings();
 
         // Désactiver les composants du système Enemy
         DisableEnemyComponents();
 
-        // Configurer la navigation
+        // Configurer la navigation sur le Controller
         SetupNavigation();
 
-        // Récupérer les composants d'animation
+        // Récupérer l'animator
         SetupAnimation();
 
-        // Logger la hiérarchie pour diagnostic
+        // Logger la hiérarchie
         LogHierarchyDebug();
 
         // Démarrer en idle
@@ -288,30 +392,74 @@ public sealed class HallucinationDroid : MonoBehaviour
         LOG.Debug($"HallucinationDroid initialized for {sourcePlayer.playerName}");
     }
 
+    /// <summary>
+    ///     Trouve les transforms critiques: Controller (mouvement) et Enable (visuels).
+    /// </summary>
+    private void FindCriticalTransforms()
+    {
+        // Chercher le Controller (c'est là que le NavMeshAgent original est)
+        _controllerTransform = transform.Find("Controller");
+        if (_controllerTransform != null)
+        {
+            LOG.Debug($"Found Controller transform at {_controllerTransform.position}");
+        }
+        else
+        {
+            // Chercher récursivement
+            foreach (Transform child in GetComponentsInChildren<Transform>())
+            {
+                if (child.name == "Controller")
+                {
+                    _controllerTransform = child;
+                    LOG.Debug($"Found Controller transform (recursive) at {_controllerTransform.position}");
+                    break;
+                }
+            }
+        }
+
+        if (_controllerTransform == null)
+        {
+            LOG.Warning("Controller transform not found! Creating one...");
+            var controllerGO = new GameObject("Controller");
+            controllerGO.transform.SetParent(transform);
+            controllerGO.transform.localPosition = Vector3.zero;
+            _controllerTransform = controllerGO.transform;
+        }
+
+        // Chercher Rigidbody transform (Cube a un ParentConstraint vers lui)
+        _rigidbodyTransform = transform.Find("Rigidbody");
+        if (_rigidbodyTransform != null)
+        {
+            LOG.Debug($"Found Rigidbody transform at {_rigidbodyTransform.position}");
+        }
+        else
+        {
+            foreach (Transform child in GetComponentsInChildren<Transform>())
+            {
+                if (child.name == "Rigidbody")
+                {
+                    _rigidbodyTransform = child;
+                    LOG.Debug($"Found Rigidbody transform (recursive) at {_rigidbodyTransform.position}");
+                    break;
+                }
+            }
+        }
+
+        if (_rigidbodyTransform == null)
+        {
+            LOG.Warning("Rigidbody transform not found!");
+        }
+    }
+
     private void LogHierarchyDebug()
     {
         LOG.Debug("=== HIERARCHY DEBUG ===");
-        LOG.Debug($"Root GameObject: {gameObject.name} at {transform.position}");
+        LOG.Debug($"Root: {gameObject.name} at {transform.position}");
+        LOG.Debug($"Controller: {(_controllerTransform != null ? _controllerTransform.name : "NULL")} at {(_controllerTransform != null ? _controllerTransform.position.ToString() : "N/A")}");
+        LOG.Debug($"Rigidbody: {(_rigidbodyTransform != null ? _rigidbodyTransform.name : "NULL")} at {(_rigidbodyTransform != null ? _rigidbodyTransform.position.ToString() : "N/A")}");
+        LOG.Debug($"Animator: {(_animator != null ? _animator.gameObject.name : "NULL")}");
 
-        // Logger tous les enfants avec leur position
         LogChildrenRecursive(transform, 0);
-
-        // Logger spécifiquement l'Animator
-        if (_animator != null)
-        {
-            LOG.Debug($"Animator is on: {_animator.gameObject.name}");
-            LOG.Debug($"  Animator world pos: {_animator.transform.position}");
-            LOG.Debug($"  Animator local pos: {_animator.transform.localPosition}");
-            LOG.Debug($"  Parent of Animator: {(_animator.transform.parent != null ? _animator.transform.parent.name : "NONE")}");
-        }
-
-        // Logger les renderers
-        var renderers = GetComponentsInChildren<Renderer>();
-        foreach (var r in renderers)
-        {
-            LOG.Debug($"Renderer: {r.gameObject.name} at world pos {r.transform.position}, local pos {r.transform.localPosition}");
-        }
-
         LOG.Debug("=== END HIERARCHY DEBUG ===");
     }
 
@@ -322,82 +470,119 @@ public sealed class HallucinationDroid : MonoBehaviour
         {
             var hasRenderer = child.GetComponent<Renderer>() != null;
             var hasAnimator = child.GetComponent<Animator>() != null;
-            var flags = (hasRenderer ? "[R]" : "") + (hasAnimator ? "[A]" : "");
-            LOG.Debug($"{indent}- {child.name} {flags} localPos={child.localPosition}");
+            var hasNavAgent = child.GetComponent<NavMeshAgent>() != null;
+            var hasCharCtrl = child.GetComponent<CharacterController>() != null;
+            var flags = (hasRenderer ? "[R]" : "") + (hasAnimator ? "[A]" : "") +
+                        (hasNavAgent ? "[Nav]" : "") + (hasCharCtrl ? "[CC]" : "");
+            LOG.Debug($"{indent}- {child.name} {flags} pos={child.position}");
             LogChildrenRecursive(child, depth + 1);
         }
     }
 
     private void SaveNavMeshSettings()
     {
-        // Chercher le NavMeshAgent sur l'objet ou ses enfants
-        var existingAgent = GetComponentInChildren<NavMeshAgent>();
+        // Chercher le NavMeshAgent existant (devrait être sur Controller)
+        NavMeshAgent existingAgent = null;
+
+        if (_controllerTransform != null)
+        {
+            existingAgent = _controllerTransform.GetComponent<NavMeshAgent>();
+        }
+
+        if (existingAgent == null)
+        {
+            existingAgent = GetComponentInChildren<NavMeshAgent>();
+        }
+
         if (existingAgent != null)
         {
             _savedAgentTypeID = existingAgent.agentTypeID;
             _savedAreaMask = existingAgent.areaMask;
-            LOG.Debug($"Saved NavMeshAgent settings: agentTypeID={_savedAgentTypeID}, areaMask={_savedAreaMask}");
+            LOG.Debug($"Saved NavMeshAgent settings from {existingAgent.gameObject.name}: agentTypeID={_savedAgentTypeID}, areaMask={_savedAreaMask}");
         }
         else
         {
-            // Utiliser les valeurs du prefab LostDroid (extrait du fichier YAML Unity)
-            // m_AgentTypeID: -334000983 est le type d'agent utilisé par les monstres du jeu
             _savedAgentTypeID = -334000983;
-            _savedAreaMask = 1; // m_WalkableMask: 1
-            LOG.Debug(
-                $"Using hardcoded LostDroid NavMesh settings: agentTypeID={_savedAgentTypeID}, areaMask={_savedAreaMask}");
+            _savedAreaMask = 1;
+            LOG.Debug($"Using hardcoded LostDroid NavMesh settings");
         }
     }
 
     private void SetupAnimation()
     {
-        // Récupérer l'Animator
         _animator = GetComponentInChildren<Animator>();
 
         if (_animator != null)
         {
             _animator.enabled = true;
-            // Désactiver le root motion pour que l'Animator ne contrôle pas la position
             _animator.applyRootMotion = false;
-            LOG.Debug($"Animator found and enabled: {_animator.gameObject.name}");
-            LOG.Debug(
-                $"  RuntimeAnimatorController: {(_animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "NULL")}");
-            LOG.Debug("  Root Motion disabled");
+            LOG.Debug($"Animator found on {_animator.gameObject.name}, root motion disabled");
+
+            // Vérifier le ParentConstraint sur Cube
+            var parentConstraint = _animator.GetComponent<ParentConstraint>();
+            if (parentConstraint != null)
+            {
+                LOG.Debug($"ParentConstraint found on {_animator.gameObject.name}");
+                LOG.Debug($"  constraintActive: {parentConstraint.constraintActive}");
+                LOG.Debug($"  sourceCount: {parentConstraint.sourceCount}");
+
+                // S'assurer que le constraint est actif
+                if (!parentConstraint.constraintActive)
+                {
+                    parentConstraint.constraintActive = true;
+                    LOG.Debug("  -> Activated ParentConstraint");
+                }
+
+                // Logger les sources
+                for (int i = 0; i < parentConstraint.sourceCount; i++)
+                {
+                    var source = parentConstraint.GetSource(i);
+                    LOG.Debug($"  Source {i}: {(source.sourceTransform != null ? source.sourceTransform.name : "NULL")}, weight={source.weight}");
+                }
+            }
+            else
+            {
+                LOG.Warning($"No ParentConstraint found on {_animator.gameObject.name}!");
+            }
         }
         else
         {
-            LOG.Warning("No Animator found on LostDroid prefab");
+            LOG.Warning("No Animator found");
         }
     }
 
     private void SetupNavigation()
     {
-        // Détruire tout NavMeshAgent existant (a déjà été copié dans SaveNavMeshSettings)
-        _navAgent = GetComponent<NavMeshAgent>();
-        if (_navAgent != null)
+        if (_controllerTransform == null)
         {
-            DestroyImmediate(_navAgent);
-            _navAgent = null;
+            LOG.Error("Cannot setup navigation: Controller transform is null!");
+            return;
         }
 
-        LOG.Debug($"Using saved NavMesh settings: agentTypeID={_savedAgentTypeID}, areaMask={_savedAreaMask}");
+        // Récupérer ou créer le NavMeshAgent sur le Controller
+        _navAgent = _controllerTransform.GetComponent<NavMeshAgent>();
 
-        // Trouver une position valide sur le NavMesh avec le bon type d'agent
-        var validPosition = transform.position;
+        if (_navAgent == null)
+        {
+            LOG.Debug("No NavMeshAgent on Controller, creating one...");
+            _navAgent = _controllerTransform.gameObject.AddComponent<NavMeshAgent>();
+        }
+
+        // Trouver une position valide sur le NavMesh
+        var startPos = _controllerTransform.position;
+        var validPosition = startPos;
         var foundNavMesh = false;
 
-        // Créer un filtre avec le bon type d'agent
         var filter = new NavMeshQueryFilter
         {
             agentTypeID = _savedAgentTypeID,
             areaMask = _savedAreaMask
         };
 
-        // Essayer plusieurs distances de sample
         float[] sampleDistances = { 5f, 10f, 20f, 50f };
         foreach (var distance in sampleDistances)
         {
-            if (NavMesh.SamplePosition(transform.position, out var hit, distance, filter))
+            if (NavMesh.SamplePosition(startPos, out var hit, distance, filter))
             {
                 validPosition = hit.position;
                 foundNavMesh = true;
@@ -408,60 +593,65 @@ public sealed class HallucinationDroid : MonoBehaviour
 
         if (!foundNavMesh)
         {
-            LOG.Warning($"No NavMesh found near position {transform.position} for agentTypeID {_savedAgentTypeID}");
+            LOG.Warning($"No NavMesh found near {startPos}");
             return;
         }
 
-        // Définir la position AVANT de créer l'agent
-        transform.position = validPosition;
-
-        // Créer un nouvel agent
-        _navAgent = gameObject.AddComponent<NavMeshAgent>();
-
-        // Désactiver temporairement pour configurer
+        // Désactiver pour configurer
         _navAgent.enabled = false;
 
-        // CRITIQUE: Utiliser le même type d'agent que les monstres du jeu
+        // Configurer
         _navAgent.agentTypeID = _savedAgentTypeID;
         _navAgent.areaMask = _savedAreaMask;
-
-        // Configurer les paramètres pour un mouvement fluide
         _navAgent.speed = WalkSpeed;
-        _navAgent.acceleration = 2f;
+        _navAgent.acceleration = 8f;
         _navAgent.angularSpeed = 120f;
         _navAgent.stoppingDistance = 0.5f;
         _navAgent.autoBraking = true;
         _navAgent.autoRepath = true;
 
-        // Position gérée par Unity, rotation gérée manuellement (comme le LostDroid original)
-        _navAgent.updatePosition = true;
-        _navAgent.updateRotation = false; // On gère la rotation nous-mêmes
+        // IMPORTANT: Le NavMeshAgent ne contrôle PAS la position - on utilise CharacterController
+        _navAgent.updatePosition = false;
+        _navAgent.updateRotation = false;
 
-        // Paramètres de collision
-        _navAgent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
-        _navAgent.avoidancePriority = 10;
-        _navAgent.autoTraverseOffMeshLink = false; // Désactivé pour éviter les téléportations via OffMeshLinks
-
-        // Taille de l'agent
+        _navAgent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
         _navAgent.radius = 0.7f;
         _navAgent.height = 2f;
         _navAgent.baseOffset = 0f;
 
-        // Warp à la position valide, puis activer
+        // Positionner le Controller sur le NavMesh
+        _controllerTransform.position = validPosition;
         _navAgent.Warp(validPosition);
         _navAgent.enabled = true;
 
-        LOG.Debug(
-            $"NavMeshAgent configured: agentTypeID={_savedAgentTypeID}, speed={_navAgent.speed}, radius={_navAgent.radius}");
+        // Créer le CharacterController sur le Controller
+        SetupCharacterController();
 
-        if (_navAgent.isOnNavMesh)
+        LOG.Debug($"NavMeshAgent configured on Controller, isOnNavMesh={_navAgent.isOnNavMesh}");
+    }
+
+    private void SetupCharacterController()
+    {
+        if (_controllerTransform == null) return;
+
+        // Supprimer tout CharacterController existant sur Controller
+        var existingCC = _controllerTransform.GetComponent<CharacterController>();
+        if (existingCC != null)
         {
-            LOG.Debug("NavMeshAgent successfully placed on NavMesh");
+            DestroyImmediate(existingCC);
         }
-        else
-        {
-            LOG.Warning("NavMeshAgent still not on NavMesh after Warp");
-        }
+
+        // Créer le CharacterController sur le Controller
+        _charController = _controllerTransform.gameObject.AddComponent<CharacterController>();
+        _charController.height = 2f;
+        _charController.radius = 0.5f;
+        _charController.center = new Vector3(0f, 1f, 0f);
+        _charController.slopeLimit = 45f;
+        _charController.stepOffset = 0.3f;
+        _charController.skinWidth = 0.08f;
+        _charController.minMoveDistance = 0.001f;
+
+        LOG.Debug($"CharacterController created on Controller");
     }
 
     private enum State
@@ -500,7 +690,7 @@ public sealed class HallucinationDroid : MonoBehaviour
 
         IsWalking = true;
         IsSprinting = false;
-        LOG.Debug($"EnterWanderState: Walking to {_destination}, hasPath={_navAgent.hasPath}, pathPending={_navAgent.pathPending}");
+        LOG.Debug($"EnterWanderState: Walking to {_destination}");
     }
 
     private void UpdateIdleState()
@@ -514,22 +704,25 @@ public sealed class HallucinationDroid : MonoBehaviour
 
     private void UpdateWanderState()
     {
-        // Attendre que le path soit calculé
         if (_navAgent.pathPending) return;
 
-        // Vérifier si on a atteint la destination (pas de timer - on attend vraiment d'arriver)
-        if (!_navAgent.hasPath || _navAgent.remainingDistance <= _navAgent.stoppingDistance)
+        // Utiliser la position du Controller pour calculer la distance
+        var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
+        var distanceToDestination = Vector3.Distance(controllerPos, _destination);
+
+        if (!_navAgent.hasPath || distanceToDestination <= _navAgent.stoppingDistance)
         {
-            LOG.Debug($"Destination reached! remainingDistance={_navAgent.remainingDistance:F2}, stoppingDistance={_navAgent.stoppingDistance}");
+            LOG.Debug($"Destination reached! distance={distanceToDestination:F2}");
             EnterIdleState();
         }
     }
 
     private bool TrySetRandomDestination()
     {
-        // Chercher un point proche (5-15m) pour éviter les longs trajets qui traversent des murs
-        var levelPoint = SemiFunc.LevelPointGet(transform.position, 5f, 15f)
-                         ?? SemiFunc.LevelPointGet(transform.position, 0f, 20f);
+        var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
+
+        var levelPoint = SemiFunc.LevelPointGet(controllerPos, 5f, 15f)
+                         ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null)
         {
@@ -539,15 +732,12 @@ public sealed class HallucinationDroid : MonoBehaviour
 
         var targetPos = levelPoint.transform.position;
 
-        // Utiliser le bon areaMask pour sampler la position
         if (!NavMesh.SamplePosition(targetPos, out var hit, 5f, _savedAreaMask))
         {
             LOG.Debug($"TrySetRandomDestination: NavMesh.SamplePosition failed at {targetPos}");
             return false;
         }
 
-        // Vérifier que la destination est sur un sol valide (comme le LostDroid original ligne 1242)
-        // Cela empêche le droid de se diriger vers des positions hors de la map
         if (!Physics.Raycast(hit.position + Vector3.up, Vector3.down, 5f, LayerMask.GetMask("Default")))
         {
             LOG.Debug($"TrySetRandomDestination: Position {hit.position} is not on valid ground");
@@ -556,16 +746,15 @@ public sealed class HallucinationDroid : MonoBehaviour
 
         _destination = hit.position;
 
-        // Vérifier que le chemin est valide avant de commencer à marcher
         var path = new NavMeshPath();
         if (!_navAgent.CalculatePath(_destination, path) || path.status != NavMeshPathStatus.PathComplete)
         {
-            LOG.Debug($"TrySetRandomDestination: Path to {_destination} is not complete (status={path.status})");
+            LOG.Debug($"TrySetRandomDestination: Path to {_destination} is not complete");
             return false;
         }
 
         _navAgent.SetPath(path);
-        LOG.Debug($"TrySetRandomDestination: Set destination to {_destination}, distance={Vector3.Distance(transform.position, _destination):F1}m");
+        LOG.Debug($"TrySetRandomDestination: Set destination to {_destination}");
         return true;
     }
 
@@ -575,11 +764,9 @@ public sealed class HallucinationDroid : MonoBehaviour
 
     private void UpdateAnimationFlags()
     {
-        // Mettre à jour le turning basé sur l'angle entre rotation actuelle et cible
-        // (comme TurnDroid() dans le LostDroid original - seuil de 7°)
-        if (_currentState == State.Wander)
+        if (_currentState == State.Wander && _controllerTransform != null)
         {
-            var angle = Quaternion.Angle(transform.rotation, _targetRotation);
+            var angle = Quaternion.Angle(_controllerTransform.rotation, _targetRotation);
             IsTurning = angle > 7f;
         }
         else
@@ -587,7 +774,6 @@ public sealed class HallucinationDroid : MonoBehaviour
             IsTurning = false;
         }
 
-        // Appliquer les flags à l'animator directement
         if (_animator != null)
         {
             _animator.SetBool("isWalking", IsWalking);
