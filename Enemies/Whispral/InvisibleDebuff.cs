@@ -6,9 +6,15 @@ namespace VepMod.Enemies.Whispral;
 
 public sealed class InvisibleDebuff : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<InvisibleDebuff>();
+    private static readonly VepLogger LOG = VepLogger.Create<InvisibleDebuff>(true);
     private readonly List<PlayerAvatar> hiddenPlayers = new();
     public bool IsActive { get; private set; }
+
+    /// <summary>
+    ///     Liste des joueurs actuellement cachés par ce debuff.
+    ///     Utilisé par HallucinationDebuff pour créer les hallucinations.
+    /// </summary>
+    public IReadOnlyList<PlayerAvatar> HiddenPlayers => hiddenPlayers;
 
     private void LateUpdate()
     {

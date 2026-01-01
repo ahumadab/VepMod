@@ -692,7 +692,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private static float GetRandomVoiceDelay()
         {
-            return Random.Range(VepMod.ConfigVoiceMinDelay.Value, VepMod.ConfigVoiceMaxDelay.Value);
+            var minInclusive = VepMod.ConfigVoiceMinDelay?.Value ?? 3f;
+            var maxInclusive = VepMod.ConfigVoiceMaxDelay?.Value ?? 8f;
+            return Random.Range(minInclusive, maxInclusive);
         }
 
         private void SendVoiceCommand()

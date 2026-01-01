@@ -21,6 +21,11 @@ public sealed class VepLogger
         return new VepLogger(typeof(T).Name, debugEnabled);
     }
 
+    public static VepLogger Create(string className, bool debugEnabled = false)
+    {
+        return new VepLogger(className, debugEnabled);
+    }
+
     public void Debug(string message)
     {
         if (DebugEnabled)
