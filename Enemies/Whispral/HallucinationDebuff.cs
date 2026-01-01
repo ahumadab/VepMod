@@ -22,6 +22,22 @@ public sealed class HallucinationDebuff : MonoBehaviour
 
     public bool IsActive { get; private set; }
 
+    /// <summary>
+    ///     Retourne le HallucinationDroid correspondant au nom du joueur, ou null.
+    /// </summary>
+    public HallucinationDroid GetDroidByPlayerName(string playerName)
+    {
+        foreach (var kvp in hallucinations)
+        {
+            if (kvp.Key && kvp.Value && kvp.Key.playerName == playerName)
+            {
+                return kvp.Value;
+            }
+        }
+
+        return null;
+    }
+
     private void Update()
     {
         if (!IsActive || invisibleDebuff == null) return;

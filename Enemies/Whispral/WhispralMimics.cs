@@ -545,7 +545,20 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        // Récupérer un son LOCALEMENT depuis les fichiers stockés
+        // Vérifier si on a une hallucination active pour ce joueur
+        var hallucinationDebuff = localPlayer.GetComponent<HallucinationDebuff>();
+        if (hallucinationDebuff != null && hallucinationDebuff.IsActive)
+        {
+            var droid = hallucinationDebuff.GetDroidByPlayerName(sourcePlayerNickName);
+            if (droid != null)
+            {
+                LOG.Debug($"Playing voice from {sourcePlayerNickName} on hallucination droid");
+                droid.PlayVoice(applyFilter);
+                return;
+            }
+        }
+
+        // Fallback: jouer sur les ennemis normaux
         var audioData = wavFileManager.GetRandomFile(sourcePlayerNickName);
         if (audioData == null)
         {
@@ -553,7 +566,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        LOG.Debug($"Playing voice from {sourcePlayerNickName} (filter: {applyFilter})");
+        LOG.Debug($"Playing voice from {sourcePlayerNickName} on enemies (filter: {applyFilter})");
         PlayReceivedAudio(audioData, applyFilter, sampleRate);
     }
 
@@ -633,6 +646,40 @@ public sealed class WhispralMimics : MonoBehaviour
 
             StartCoroutine(DestroyAudioSourceAfterPlayback(audioSource, clip.length + 0.1f));
         }
+    }
+
+    /// <summary>
+    ///     Joue un son à la position d'un Transform spécifique (pour les hallucinations).
+    /// </summary>
+    public void PlayAudioAtTransform(Transform target, string sourcePlayerNickName, bool applyFilter)
+    {
+        if (target == null)
+        {
+            LOG.Warning("PlayAudioAtTransform: target is null");
+            return;
+        }
+
+        var audioData = wavFileManager?.GetRandomFile(sourcePlayerNickName);
+        if (audioData == null)
+        {
+            LOG.Debug($"No audio found for player {sourcePlayerNickName}");
+            return;
+        }
+
+        var processedSamples = ProcessReceivedAudio(audioData, applyFilter, sampleRate);
+        var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, sampleRate, false);
+        audioClip.SetData(processedSamples, 0);
+
+        PlayAtTransform(target, audioClip);
+    }
+
+    private void PlayAtTransform(Transform target, AudioClip clip)
+    {
+        var audioSource = target.gameObject.GetOrAddComponent<AudioSource>();
+        ConfigureAudioSource(audioSource, clip);
+        audioSource.Play();
+
+        StartCoroutine(DestroyAudioSourceAfterPlayback(audioSource, clip.length + 0.1f));
     }
 
     private void ConfigureAudioSource(AudioSource source, AudioClip clip)

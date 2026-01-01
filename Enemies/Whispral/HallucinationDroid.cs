@@ -41,6 +41,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     public bool IsTurning { get; private set; }
     public bool HasChangedMovementState { get; set; }
     public PlayerAvatar SourcePlayer { get; private set; }
+    public Transform ControllerTransform => _controllerTransform;
 
     protected override StateId DefaultState => StateId.Idle;
 
@@ -225,6 +226,28 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         {
             _navAgent.speed = speed;
         }
+    }
+
+    /// <summary>
+    ///     Joue le son enregistré du joueur source à la position du Controller.
+    ///     Utilise le WhispralMimics du joueur LOCAL (qui a les fichiers audio stockés).
+    /// </summary>
+    public void PlayVoice(bool applyFilter = false)
+    {
+        if (SourcePlayer == null || _controllerTransform == null) return;
+
+        // Utiliser le WhispralMimics du joueur local (pas du source player)
+        var localPlayer = PlayerAvatar.instance;
+        if (localPlayer == null) return;
+
+        var mimics = localPlayer.GetComponent<WhispralMimics>();
+        if (mimics == null)
+        {
+            LOG.Warning("WhispralMimics not found on local player");
+            return;
+        }
+
+        mimics.PlayAudioAtTransform(_controllerTransform, SourcePlayer.playerName, applyFilter);
     }
 
     #endregion
