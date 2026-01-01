@@ -17,6 +17,9 @@ namespace VepMod.Enemies.Whispral;
 public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroid, HallucinationDroid.StateId>
 {
     private const float RotationSpeed = 10f;
+    private const float WalkSpeed = 2f;
+    private const float SprintSpeed = 5f;
+    private const float SprintChance = 0.5f; // 30% de chance de courir
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
     private Animator _animator;
@@ -64,7 +67,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void UpdateAnimationFlags()
     {
-        if (fsm?.CurrentStateStateId == StateId.Wander && _controllerTransform != null)
+        var currentState = fsm?.CurrentStateStateId;
+        if ((currentState == StateId.Wander || currentState == StateId.Sprint) && _controllerTransform != null)
         {
             var angle = Quaternion.Angle(_controllerTransform.rotation, _targetRotation);
             IsTurning = angle > 7f;
@@ -89,7 +93,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void UpdateMovement()
     {
-        if (fsm?.CurrentStateStateId != StateId.Wander || !_navAgent.hasPath)
+        var currentState = fsm?.CurrentStateStateId;
+        if ((currentState != StateId.Wander && currentState != StateId.Sprint) || !_navAgent.hasPath)
         {
             _currentVelocity = Vector3.zero;
             return;
@@ -128,8 +133,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         {
             _navAgent.nextPosition = hit.position;
 
+            var currentState = fsm?.CurrentStateStateId;
             if (Vector3.Distance(controllerPos, hit.position) > 0.5f &&
-                fsm?.CurrentStateStateId == StateId.Wander && _navAgent.hasPath)
+                (currentState == StateId.Wander || currentState == StateId.Sprint) && _navAgent.hasPath)
             {
                 _navAgent.SetDestination(_destination);
             }
@@ -212,6 +218,14 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         return !_navAgent.hasPath || distance <= _navAgent.stoppingDistance;
     }
 
+    public void SetSpeed(float speed)
+    {
+        if (_navAgent != null)
+        {
+            _navAgent.speed = speed;
+        }
+    }
+
     #endregion
 
     #region Factory & Initialization
@@ -258,6 +272,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         fsm = new StateMachine(this, DefaultState);
         fsm.AddState(StateId.Idle, new IdleState());
         fsm.AddState(StateId.Wander, new WanderState());
+        fsm.AddState(StateId.Sprint, new SprintState());
     }
 
     private void FindCriticalTransforms()
@@ -521,7 +536,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     public enum StateId
     {
         Idle,
-        Wander
+        Wander,
+        Sprint
     }
 
     private class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
@@ -535,9 +551,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         {
             base.OnStateEnter(previous);
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
-
-            Machine.Owner.IsWalking = false;
-            Machine.Owner.IsSprinting = false;
             Machine.Owner.ResetPath();
         }
 
@@ -547,7 +560,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
             if (TimeElapsed >= _duration)
             {
-                Machine.NextStateStateId = StateId.Wander;
+                // Chance aléatoire de courir au lieu de marcher
+                Machine.NextStateStateId = Random.value < SprintChance ? StateId.Sprint : StateId.Wander;
             }
         }
     }
@@ -570,7 +584,52 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
                 return;
             }
 
+            Machine.Owner.SetSpeed(WalkSpeed);
             Machine.Owner.IsWalking = true;
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            Machine.Owner.IsWalking = false;
+        }
+
+        public override void OnStateUpdate()
+        {
+            base.OnStateUpdate();
+
+            if (Machine.Owner.HasReachedDestination() || TimeElapsed >= _duration)
+            {
+                Machine.NextStateStateId = StateId.Idle;
+            }
+        }
+    }
+
+    private class SprintState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    {
+        private const float MinSprintTime = 3f;
+        private const float MaxSprintTime = 8f;
+
+        private float _duration;
+
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+            _duration = Random.Range(MinSprintTime, MaxSprintTime);
+
+            if (!Machine.Owner.TrySetRandomDestination())
+            {
+                Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            Machine.Owner.SetSpeed(SprintSpeed);
+            Machine.Owner.IsSprinting = true;
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
             Machine.Owner.IsSprinting = false;
         }
 
