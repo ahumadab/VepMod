@@ -39,6 +39,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     public bool IsWalking { get; set; }
     public bool IsSprinting { get; set; }
     public bool IsTurning { get; private set; }
+    public bool HasChangedMovementState { get; set; }
     public PlayerAvatar SourcePlayer { get; private set; }
 
     protected override StateId DefaultState => StateId.Idle;
@@ -552,6 +553,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             base.OnStateEnter(previous);
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
             Machine.Owner.ResetPath();
+            Machine.Owner.HasChangedMovementState = false;
         }
 
         public override void OnStateUpdate()
@@ -566,17 +568,25 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         }
     }
 
-    private class WanderState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private abstract class MovementState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
-        private const float MinRoamTime = 5f;
-        private const float MaxRoamTime = 15f;
+        private const float SwitchCheckInterval = 1f;
+        private const float SwitchChance = 0.2f;
 
         private float _duration;
+        private float _nextSwitchCheck;
+
+        protected abstract float MinDuration { get; }
+        protected abstract float MaxDuration { get; }
+        protected abstract float Speed { get; }
+        protected abstract StateId SwitchTargetState { get; }
+        protected abstract void SetMovementFlag(bool value);
 
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
-            _duration = Random.Range(MinRoamTime, MaxRoamTime);
+            _duration = Random.Range(MinDuration, MaxDuration);
+            _nextSwitchCheck = SwitchCheckInterval;
 
             if (!Machine.Owner.TrySetRandomDestination())
             {
@@ -584,14 +594,14 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
                 return;
             }
 
-            Machine.Owner.SetSpeed(WalkSpeed);
-            Machine.Owner.IsWalking = true;
+            Machine.Owner.SetSpeed(Speed);
+            SetMovementFlag(true);
         }
 
         public override void OnStateExit(StateId next)
         {
             base.OnStateExit(next);
-            Machine.Owner.IsWalking = false;
+            SetMovementFlag(false);
         }
 
         public override void OnStateUpdate()
@@ -601,47 +611,38 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             if (Machine.Owner.HasReachedDestination() || TimeElapsed >= _duration)
             {
                 Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            // 20% de chance de changer d'état (une seule fois)
+            if (!Machine.Owner.HasChangedMovementState && TimeElapsed >= _nextSwitchCheck)
+            {
+                _nextSwitchCheck += SwitchCheckInterval;
+                if (Random.value < SwitchChance)
+                {
+                    Machine.Owner.HasChangedMovementState = true;
+                    Machine.NextStateStateId = SwitchTargetState;
+                }
             }
         }
     }
 
-    private class SprintState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private class WanderState : MovementState
     {
-        private const float MinSprintTime = 3f;
-        private const float MaxSprintTime = 8f;
+        protected override float MinDuration => 5f;
+        protected override float MaxDuration => 15f;
+        protected override float Speed => WalkSpeed;
+        protected override StateId SwitchTargetState => StateId.Sprint;
+        protected override void SetMovementFlag(bool value) => Machine.Owner.IsWalking = value;
+    }
 
-        private float _duration;
-
-        public override void OnStateEnter(StateId previous)
-        {
-            base.OnStateEnter(previous);
-            _duration = Random.Range(MinSprintTime, MaxSprintTime);
-
-            if (!Machine.Owner.TrySetRandomDestination())
-            {
-                Machine.NextStateStateId = StateId.Idle;
-                return;
-            }
-
-            Machine.Owner.SetSpeed(SprintSpeed);
-            Machine.Owner.IsSprinting = true;
-        }
-
-        public override void OnStateExit(StateId next)
-        {
-            base.OnStateExit(next);
-            Machine.Owner.IsSprinting = false;
-        }
-
-        public override void OnStateUpdate()
-        {
-            base.OnStateUpdate();
-
-            if (Machine.Owner.HasReachedDestination() || TimeElapsed >= _duration)
-            {
-                Machine.NextStateStateId = StateId.Idle;
-            }
-        }
+    private class SprintState : MovementState
+    {
+        protected override float MinDuration => 3f;
+        protected override float MaxDuration => 8f;
+        protected override float Speed => SprintSpeed;
+        protected override StateId SwitchTargetState => StateId.Wander;
+        protected override void SetMovementFlag(bool value) => Machine.Owner.IsSprinting = value;
     }
 
     #endregion
