@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -19,10 +18,9 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroid, HallucinationDroid.StateId>
 {
-    private const float RotationSpeed = 10f;
-    private const float WalkSpeed = 2f;
-    private const float SprintSpeed = 5f;
-    private const float SprintChance = 0.5f;
+    internal const float WalkSpeed = 2f;
+    internal const float SprintSpeed = 5f;
+    internal const float SprintChance = 0.5f;
 
     private const float NameplateHeight = 1.9f;
 
@@ -44,42 +42,40 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>(true);
     private readonly Materials.MaterialTrigger _materialTrigger = new();
-    private float _angryTimer;
+
+    // Components
     private Animator _animator;
     private CharacterController _charController;
-
-    private Vector3 _currentVelocity;
-
-    private Vector3 _destination;
+    private DroidMovementController _movement;
+    private NavMeshAgent _navAgent;
+    private Transform _rigidbodyTransform;
 
     // Angry eyes - eyelid GameObjects and rotation transforms
+    private float _angryTimer;
     private GameObject _eyelidsLeft;
     private GameObject _eyelidsRight;
     private Transform _headTopTransform;
     private bool _isAngry;
-    private bool _isPrecomputingDestination;
     private Transform _leftLowerEyelidRotationX;
     private Transform _leftLowerEyelidRotationZ;
     private Transform _leftUpperEyelidRotationX;
     private Transform _leftUpperEyelidRotationZ;
-
-    private WorldSpaceUIPlayerName _nameplate;
-    private NavMeshAgent _navAgent;
-
-    // Destination pré-calculée pour éviter les freezes
-    private Vector3? _precomputedDestination;
     private Transform _rightLowerEyelidRotationX;
     private Transform _rightLowerEyelidRotationZ;
     private Transform _rightUpperEyelidRotationX;
     private Transform _rightUpperEyelidRotationZ;
-    private Transform _rigidbodyTransform;
-    private float[] _sampleData;
+    private bool _wasPlayerLooking;
 
+    // Nameplate
+    private WorldSpaceUIPlayerName _nameplate;
+
+    // Talking animation
+    private float[] _sampleData;
+    private AudioSource _talkingAudioSource;
+
+    // NavMesh settings (saved for initialization)
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
-    private AudioSource _talkingAudioSource;
-    private Quaternion _targetRotation = Quaternion.identity;
-    private bool _wasPlayerLooking;
 
     public bool IsWalking { get; set; }
     public bool IsSprinting { get; set; }
@@ -87,6 +83,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     public bool HasChangedMovementState { get; set; }
     public PlayerAvatar SourcePlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
+    public DroidMovementController Movement => _movement;
 
     protected override StateId DefaultState => StateId.Idle;
 
@@ -97,17 +94,21 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     protected override void Update()
     {
-        if (_navAgent == null || !_navAgent.isOnNavMesh) return;
-        if (_charController == null || ControllerTransform == null) return;
+        if (_movement == null || _navAgent == null || !_navAgent.isOnNavMesh) return;
+        if (ControllerTransform == null) return;
 
         // Update FSM
         fsm?.Update();
 
-        UpdateMovement();
-        UpdateRotation();
-        SyncVisualsToController();
+        // Update movement
+        var currentState = fsm?.CurrentStateStateId;
+        var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
+
+        _movement.UpdateMovement(isMovementState);
+        _movement.UpdateRotation();
+        _movement.SyncVisualsToController(_animator?.transform);
         UpdateAnimationFlags();
-        SyncNavAgentPosition();
+        _movement.SyncNavAgentPosition(isMovementState);
     }
 
 
@@ -118,9 +119,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         var currentState = fsm?.CurrentStateStateId;
         var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
 
-        if (isMovementState && ControllerTransform != null)
+        if (isMovementState && ControllerTransform != null && _movement != null)
         {
-            var angle = Quaternion.Angle(ControllerTransform.rotation, _targetRotation);
+            var angle = Quaternion.Angle(ControllerTransform.rotation, _movement.TargetRotation);
             IsTurning = angle > 7f;
         }
         else
@@ -276,312 +277,31 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     #endregion
 
-    #region Movement
+    #region Movement (delegates to DroidMovementController)
 
-    private void UpdateMovement()
-    {
-        var currentState = fsm?.CurrentStateStateId;
-        var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
+    public bool TrySetRandomDestination() => _movement != null && _movement.TrySetRandomDestination();
 
-        if (!isMovementState || !_navAgent.hasPath)
-        {
-            _currentVelocity = Vector3.zero;
-            return;
-        }
+    public void StartPrecomputeDestination() => _movement?.StartPrecomputeDestination();
 
-        _currentVelocity = Vector3.Lerp(_currentVelocity, _navAgent.desiredVelocity, 5f * Time.deltaTime);
+    public bool HasPrecomputedDestination => _movement?.HasPrecomputedDestination ?? false;
 
-        if (_currentVelocity.magnitude > 0.01f)
-        {
-            var moveVector = _currentVelocity * Time.deltaTime;
-            moveVector.y = -0.5f * Time.deltaTime;
-            _charController.Move(moveVector);
-        }
-    }
+    public void ResetPath() => _movement?.ResetPath();
 
-    private void SyncVisualsToController()
-    {
-        if (_rigidbodyTransform == null || ControllerTransform == null) return;
+    public bool HasReachedDestination() => _movement?.HasReachedDestination() ?? true;
 
-        var yOffset = new Vector3(0f, 0.25f, 0f); // A GARDER, Necessaire pour bien ajuster les visuels
-        _rigidbodyTransform.position = ControllerTransform.position + yOffset;
-        _rigidbodyTransform.rotation = ControllerTransform.rotation;
+    public float GetDistanceToPlayer() => _movement?.GetDistanceToPlayer() ?? float.MaxValue;
 
-        if (_animator != null && _animator.transform.localPosition != Vector3.zero)
-        {
-            _animator.transform.localPosition = Vector3.zero;
-        }
-    }
+    public bool TrySetDestinationToPlayer() => _movement != null && _movement.TrySetDestinationToPlayer();
 
-    private void SyncNavAgentPosition()
-    {
-        if (_navAgent == null || ControllerTransform == null) return;
+    public bool TrySetFleeDestination() => _movement != null && _movement.TrySetFleeDestination(StalkFleeDistance);
 
-        var controllerPos = ControllerTransform.position;
+    public void LookAtPlayer() => _movement?.LookAtPlayer();
 
-        if (NavMesh.SamplePosition(controllerPos, out var hit, 2f, _savedAreaMask))
-        {
-            _navAgent.nextPosition = hit.position;
+    public void SetSpeed(float speed) => _movement?.SetSpeed(speed);
 
-            var currentState = fsm?.CurrentStateStateId;
-            var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
+    #endregion
 
-            if (Vector3.Distance(controllerPos, hit.position) > 0.5f && isMovementState && _navAgent.hasPath)
-            {
-                _navAgent.SetDestination(_destination);
-            }
-        }
-        else
-        {
-            LOG.Warning($"Controller off NavMesh at {controllerPos}");
-            fsm.NextStateStateId = StateId.Idle;
-        }
-    }
-
-    private void UpdateRotation()
-    {
-        if (ControllerTransform == null) return;
-
-        if (_currentVelocity.magnitude > 0.1f)
-        {
-            var velocityDirection = _currentVelocity.normalized;
-            velocityDirection.y = 0f;
-            if (velocityDirection.sqrMagnitude > 0.01f)
-            {
-                _targetRotation = Quaternion.LookRotation(velocityDirection);
-            }
-        }
-
-        ControllerTransform.rotation = Quaternion.Slerp(
-            ControllerTransform.rotation,
-            _targetRotation,
-            RotationSpeed * Time.deltaTime);
-    }
-
-    public bool TrySetRandomDestination()
-    {
-        // Utiliser la destination pré-calculée si disponible
-        if (_precomputedDestination.HasValue)
-        {
-            return TrySetDestination(_precomputedDestination.Value);
-        }
-
-        // Fallback synchrone (peut causer un freeze)
-        LOG.Warning("No precomputed destination, falling back to sync search");
-        return TrySetDestinationSync();
-    }
-
-    /// <summary>
-    ///     Démarre le pré-calcul d'une destination en coroutine.
-    ///     Appelé pendant l'état Idle pour préparer le prochain déplacement.
-    /// </summary>
-    public void StartPrecomputeDestination()
-    {
-        if (_isPrecomputingDestination || _precomputedDestination.HasValue) return;
-        StartCoroutine(PrecomputeDestinationCoroutine());
-    }
-
-    /// <summary>
-    ///     Indique si une destination pré-calculée est disponible.
-    /// </summary>
-    public bool HasPrecomputedDestination => _precomputedDestination.HasValue;
-
-    private IEnumerator PrecomputeDestinationCoroutine()
-    {
-        _isPrecomputingDestination = true;
-
-        // Frame 1: Trouver un LevelPoint
-        var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
-        var levelPoint = SemiFunc.LevelPointGet(controllerPos, WhispralDebuffManager.SpawnDistanceMin,
-                             WhispralDebuffManager.SpawnDistanceMax)
-                         ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
-
-        if (levelPoint == null)
-        {
-            _isPrecomputingDestination = false;
-            yield break;
-        }
-
-        yield return null; // Attendre une frame
-
-        // Frame 2: Valider sur le NavMesh
-        var targetPos = levelPoint.transform.position;
-        if (!NavMesh.SamplePosition(targetPos, out var hit, 5f, _savedAreaMask))
-        {
-            _isPrecomputingDestination = false;
-            yield break;
-        }
-
-        yield return null; // Attendre une frame
-
-        // Frame 3: Vérifier le raycast et calculer le path
-        if (!Physics.Raycast(hit.position + Vector3.up, Vector3.down, 5f, LayerMask.GetMask("Default")))
-        {
-            _isPrecomputingDestination = false;
-            yield break;
-        }
-
-        // Vérifier que le path est valide
-        var path = new NavMeshPath();
-        if (_navAgent != null && _navAgent.isOnNavMesh &&
-            _navAgent.CalculatePath(hit.position, path) &&
-            path.status == NavMeshPathStatus.PathComplete)
-        {
-            _precomputedDestination = hit.position;
-        }
-
-        _isPrecomputingDestination = false;
-    }
-
-    private bool TrySetDestination(Vector3 destination)
-    {
-        _precomputedDestination = null; // Consommer la destination
-
-        if (_navAgent == null || !_navAgent.isOnNavMesh) return false;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _destination = destination;
-        _navAgent.SetPath(path);
-        return true;
-    }
-
-    private bool TrySetDestinationSync()
-    {
-        var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
-
-        var levelPoint = SemiFunc.LevelPointGet(controllerPos, 5f, 15f)
-                         ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
-
-        if (levelPoint == null) return false;
-
-        var targetPos = levelPoint.transform.position;
-
-        if (!NavMesh.SamplePosition(targetPos, out var hit, 5f, _savedAreaMask))
-        {
-            return false;
-        }
-
-        if (!Physics.Raycast(hit.position + Vector3.up, Vector3.down, 5f, LayerMask.GetMask("Default")))
-        {
-            return false;
-        }
-
-        _destination = hit.position;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(_destination, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _navAgent.SetPath(path);
-        return true;
-    }
-
-    public void ResetPath()
-    {
-        if (_navAgent != null && _navAgent.isOnNavMesh)
-        {
-            _navAgent.ResetPath();
-        }
-    }
-
-    public bool HasReachedDestination()
-    {
-        if (_navAgent.pathPending) return false;
-
-        var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
-        var distance = Vector3.Distance(controllerPos, _destination);
-
-        return !_navAgent.hasPath || distance <= _navAgent.stoppingDistance;
-    }
-
-    /// <summary>
-    ///     Retourne la distance entre le droid et le joueur local affecté.
-    /// </summary>
-    public float GetDistanceToPlayer()
-    {
-        var localPlayer = PlayerAvatar.instance;
-        if (localPlayer == null || ControllerTransform == null) return float.MaxValue;
-        return Vector3.Distance(ControllerTransform.position, localPlayer.transform.position);
-    }
-
-    /// <summary>
-    ///     Définit la destination vers le joueur local.
-    /// </summary>
-    public bool TrySetDestinationToPlayer()
-    {
-        var localPlayer = PlayerAvatar.instance;
-        if (localPlayer == null || _navAgent == null || !_navAgent.isOnNavMesh) return false;
-
-        var playerPos = localPlayer.transform.position;
-        if (!NavMesh.SamplePosition(playerPos, out var hit, 5f, _savedAreaMask)) return false;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _destination = hit.position;
-        _navAgent.SetPath(path);
-        return true;
-    }
-
-    /// <summary>
-    ///     Définit une destination pour fuir le joueur.
-    /// </summary>
-    public bool TrySetFleeDestination()
-    {
-        var localPlayer = PlayerAvatar.instance;
-        if (localPlayer == null || ControllerTransform == null) return false;
-
-        // Direction opposée au joueur
-        var directionAway = (ControllerTransform.position - localPlayer.transform.position).normalized;
-        var fleeTarget = ControllerTransform.position + directionAway * StalkFleeDistance;
-
-        if (!NavMesh.SamplePosition(fleeTarget, out var hit, 10f, _savedAreaMask)) return false;
-
-        var path = new NavMeshPath();
-        if (_navAgent == null || !_navAgent.isOnNavMesh) return false;
-        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _destination = hit.position;
-        _navAgent.SetPath(path);
-        return true;
-    }
-
-    /// <summary>
-    ///     Fait tourner le droid pour regarder le joueur.
-    /// </summary>
-    public void LookAtPlayer()
-    {
-        var localPlayer = PlayerAvatar.instance;
-        if (localPlayer == null || ControllerTransform == null) return;
-
-        var direction = (localPlayer.transform.position - ControllerTransform.position).normalized;
-        direction.y = 0f;
-        if (direction.sqrMagnitude > 0.01f)
-        {
-            _targetRotation = Quaternion.LookRotation(direction);
-        }
-    }
-
-    public void SetSpeed(float speed)
-    {
-        if (_navAgent != null)
-        {
-            _navAgent.speed = speed;
-        }
-    }
+    #region Audio
 
     /// <summary>
     ///     Joue le son enregistré du joueur source à la position du Controller.
@@ -591,8 +311,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     {
         if (SourcePlayer == null || ControllerTransform == null) return;
 
-        // Utiliser le WhispralMimics du joueur local (pas du source player)
-        var localPlayer = PlayerAvatar.instance;
+        var localPlayer = DroidHelpers.GetLocalPlayer();
         if (localPlayer == null) return;
 
         var mimics = localPlayer.GetComponent<WhispralMimics>();
@@ -640,6 +359,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         SaveNavMeshSettings();
         DisableEnemyComponents();
         SetupNavigation();
+        SetupMovementController();
         SetupAnimation();
         ApplyPlayerColor();
         CreateNameplate();
@@ -648,6 +368,20 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         InitializeFSM();
 
         LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
+    }
+
+    private void SetupMovementController()
+    {
+        if (ControllerTransform == null) return;
+
+        _movement = gameObject.AddComponent<DroidMovementController>();
+        _movement.Initialize(ControllerTransform, _rigidbodyTransform, _navAgent, _charController, _savedAreaMask);
+        _movement.OnNavMeshError += HandleNavMeshError;
+    }
+
+    private void HandleNavMeshError()
+    {
+        fsm.NextStateStateId = StateId.Idle;
     }
 
     private void LateUpdate()
@@ -659,6 +393,11 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void OnDestroy()
     {
+        if (_movement != null)
+        {
+            _movement.OnNavMeshError -= HandleNavMeshError;
+        }
+
         if (_nameplate != null)
         {
             Destroy(_nameplate.gameObject);
