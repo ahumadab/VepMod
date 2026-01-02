@@ -27,6 +27,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const int SampleDataLength = 256;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
+    private readonly Materials.MaterialTrigger _materialTrigger = new();
     private Animator _animator;
     private CharacterController _charController;
 
@@ -38,10 +39,10 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
     private float[] _sampleData;
-    private AudioSource _talkingAudioSource;
 
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
+    private AudioSource _talkingAudioSource;
     private Quaternion _targetRotation = Quaternion.identity;
 
     public bool IsWalking { get; set; }
@@ -376,6 +377,25 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         LOG.Warning("ANIM HEAD TOP not found for talking animation");
     }
 
+    /// <summary>
+    ///     Appelé par les animation events pour jouer un son de pas.
+    /// </summary>
+    public void PlayMediumFootstep()
+    {
+        if (ControllerTransform == null) return;
+        LOG.Debug($"PlayMediumFootstep -> calling droid at {ControllerTransform.position}");
+        // Position légèrement au-dessus du sol pour que le raycast trouve le matériau
+        var footPosition = ControllerTransform.position + Vector3.up * 0.1f;
+        Materials.Instance.Impulse(
+            footPosition,
+            Vector3.down,
+            Materials.SoundType.Medium,
+            true,
+            true,
+            _materialTrigger,
+            Materials.HostType.OtherPlayer);
+    }
+
     private void CreateNameplate()
     {
         if (SourcePlayer == null || WorldSpaceUIParent.instance == null) return;
@@ -639,6 +659,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             {
                 parentConstraint.constraintActive = true;
             }
+
+            // Ajouter le relais pour les animation events (footsteps, etc.)
+            _animator.gameObject.AddComponent<HallucinationAnimEvents>();
         }
         else
         {
