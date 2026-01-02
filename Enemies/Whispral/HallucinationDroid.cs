@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -35,8 +36,12 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private Vector3 _destination;
     private Transform _headTopTransform;
+    private bool _isPrecomputingDestination;
     private WorldSpaceUIPlayerName _nameplate;
     private NavMeshAgent _navAgent;
+
+    // Destination pré-calculée pour éviter les freezes
+    private Vector3? _precomputedDestination;
     private Transform _rigidbodyTransform;
     private float[] _sampleData;
 
@@ -180,6 +185,98 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     }
 
     public bool TrySetRandomDestination()
+    {
+        // Utiliser la destination pré-calculée si disponible
+        if (_precomputedDestination.HasValue)
+        {
+            return TrySetDestination(_precomputedDestination.Value);
+        }
+
+        // Fallback synchrone (peut causer un freeze)
+        LOG.Warning("No precomputed destination, falling back to sync search");
+        return TrySetDestinationSync();
+    }
+
+    /// <summary>
+    ///     Démarre le pré-calcul d'une destination en coroutine.
+    ///     Appelé pendant l'état Idle pour préparer le prochain déplacement.
+    /// </summary>
+    public void StartPrecomputeDestination()
+    {
+        if (_isPrecomputingDestination || _precomputedDestination.HasValue) return;
+        StartCoroutine(PrecomputeDestinationCoroutine());
+    }
+
+    /// <summary>
+    ///     Indique si une destination pré-calculée est disponible.
+    /// </summary>
+    public bool HasPrecomputedDestination => _precomputedDestination.HasValue;
+
+    private IEnumerator PrecomputeDestinationCoroutine()
+    {
+        _isPrecomputingDestination = true;
+
+        // Frame 1: Trouver un LevelPoint
+        var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
+        var levelPoint = SemiFunc.LevelPointGet(controllerPos, WhispralDebuffManager.SpawnDistanceMin,
+                             WhispralDebuffManager.SpawnDistanceMax)
+                         ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
+
+        if (levelPoint == null)
+        {
+            _isPrecomputingDestination = false;
+            yield break;
+        }
+
+        yield return null; // Attendre une frame
+
+        // Frame 2: Valider sur le NavMesh
+        var targetPos = levelPoint.transform.position;
+        if (!NavMesh.SamplePosition(targetPos, out var hit, 5f, _savedAreaMask))
+        {
+            _isPrecomputingDestination = false;
+            yield break;
+        }
+
+        yield return null; // Attendre une frame
+
+        // Frame 3: Vérifier le raycast et calculer le path
+        if (!Physics.Raycast(hit.position + Vector3.up, Vector3.down, 5f, LayerMask.GetMask("Default")))
+        {
+            _isPrecomputingDestination = false;
+            yield break;
+        }
+
+        // Vérifier que le path est valide
+        var path = new NavMeshPath();
+        if (_navAgent != null && _navAgent.isOnNavMesh &&
+            _navAgent.CalculatePath(hit.position, path) &&
+            path.status == NavMeshPathStatus.PathComplete)
+        {
+            _precomputedDestination = hit.position;
+        }
+
+        _isPrecomputingDestination = false;
+    }
+
+    private bool TrySetDestination(Vector3 destination)
+    {
+        _precomputedDestination = null; // Consommer la destination
+
+        if (_navAgent == null || !_navAgent.isOnNavMesh) return false;
+
+        var path = new NavMeshPath();
+        if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
+        {
+            return false;
+        }
+
+        _destination = destination;
+        _navAgent.SetPath(path);
+        return true;
+    }
+
+    private bool TrySetDestinationSync()
     {
         var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
 
@@ -774,20 +871,37 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     {
         private const float MinIdleTime = 10f;
         private const float MaxIdleTime = 15f;
+        private const float PrecomputeRetryInterval = 1f;
 
         private float _duration;
+        private float _precomputeTimer;
 
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
+            _precomputeTimer = 0f;
             Machine.Owner.ResetPath();
             Machine.Owner.HasChangedMovementState = false;
+
+            // Démarrer le pré-calcul immédiatement
+            Machine.Owner.StartPrecomputeDestination();
         }
 
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
+
+            // Réessayer le pré-calcul si pas encore de destination
+            if (!Machine.Owner.HasPrecomputedDestination)
+            {
+                _precomputeTimer -= Time.deltaTime;
+                if (_precomputeTimer <= 0f)
+                {
+                    Machine.Owner.StartPrecomputeDestination();
+                    _precomputeTimer = PrecomputeRetryInterval;
+                }
+            }
 
             if (TimeElapsed >= _duration)
             {
