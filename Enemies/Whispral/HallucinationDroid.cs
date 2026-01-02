@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Animations;
@@ -22,16 +21,16 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const float SprintSpeed = 5f;
     private const float SprintChance = 0.5f;
 
-    private const float NameplateHeight = 1f;
+    private const float NameplateHeight = 1.5f;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
     private Animator _animator;
     private CharacterController _charController;
-    private WorldSpaceUIPlayerName _nameplate;
 
     private Vector3 _currentVelocity;
 
     private Vector3 _destination;
+    private WorldSpaceUIPlayerName _nameplate;
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
 
@@ -340,10 +339,14 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         var isVisible = !Physics.Raycast(cameraPos, direction.normalized, distance,
             LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
 
-        // Fade in/out selon la visibilité
+        // Alpha basé sur la distance (1 proche, 0 à 30m+)
+        const float maxDistance = 8f;
+        var distanceAlpha = Mathf.Clamp01(1f - distance / maxDistance);
+        var targetAlpha = isVisible ? distanceAlpha : 0f;
+
+        // Lerp smooth
         var currentColor = _nameplate.text.color;
-        var targetAlpha = isVisible && distance < 20f ? 0.5f : 0f;
-        var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * 10f);
+        var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * 5f);
         _nameplate.text.color = new Color(1f, 1f, 1f, newAlpha);
 
         // Mettre à jour la position
