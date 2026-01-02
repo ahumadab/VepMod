@@ -116,11 +116,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void UpdateAnimationFlags()
     {
         var currentState = fsm?.CurrentStateStateId;
-        var isMovementState = currentState == StateId.Wander ||
-                              currentState == StateId.Sprint ||
-                              currentState == StateId.StalkApproach ||
-                              currentState == StateId.StalkStare ||
-                              currentState == StateId.StalkFlee;
+        var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
 
         if (isMovementState && ControllerTransform != null)
         {
@@ -285,11 +281,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void UpdateMovement()
     {
         var currentState = fsm?.CurrentStateStateId;
-        var isMovementState = currentState == StateId.Wander ||
-                              currentState == StateId.Sprint ||
-                              currentState == StateId.StalkApproach ||
-                              currentState == StateId.StalkStare ||
-                              currentState == StateId.StalkFlee;
+        var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
 
         if (!isMovementState || !_navAgent.hasPath)
         {
@@ -332,11 +324,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             _navAgent.nextPosition = hit.position;
 
             var currentState = fsm?.CurrentStateStateId;
-            var isMovementState = currentState == StateId.Wander ||
-                                  currentState == StateId.Sprint ||
-                                  currentState == StateId.StalkApproach ||
-                                  currentState == StateId.StalkStare ||
-                                  currentState == StateId.StalkFlee;
+            var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
 
             if (Vector3.Distance(controllerPos, hit.position) > 0.5f && isMovementState && _navAgent.hasPath)
             {
@@ -1416,17 +1404,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             _animator = Machine.Owner._animator;
             if (_animator != null)
             {
-                // Trouver le clip
-                _clip = null;
-                foreach (var clip in _animator.runtimeAnimatorController.animationClips)
-                {
-                    if (clip.name == ClipName)
-                    {
-                        _clip = clip;
-                        break;
-                    }
-                }
-
+                _clip = DroidHelpers.GetAnimationClip(_animator, ClipName);
                 if (_clip != null)
                 {
                     _targetObject = _animator.gameObject;
@@ -1638,16 +1616,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             }
 
             // Trouver le clip
-            _clip = null;
-            foreach (var clip in _animator.runtimeAnimatorController.animationClips)
-            {
-                if (clip.name == ClipName)
-                {
-                    _clip = clip;
-                    break;
-                }
-            }
-
+            _clip = DroidHelpers.GetAnimationClip(_animator, ClipName);
             if (_clip == null)
             {
                 LOG.Warning($"CheckMapState: Clip '{ClipName}' not found!");
