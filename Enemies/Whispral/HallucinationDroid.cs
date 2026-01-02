@@ -23,6 +23,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private const float NameplateHeight = 1.9f;
 
+    private const float TalkRotationMaxAngle = 25f;
+    private const int SampleDataLength = 256;
+
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
     private Animator _animator;
     private CharacterController _charController;
@@ -30,9 +33,12 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private Vector3 _currentVelocity;
 
     private Vector3 _destination;
+    private Transform _headTopTransform;
     private WorldSpaceUIPlayerName _nameplate;
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
+    private float[] _sampleData;
+    private AudioSource _talkingAudioSource;
 
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
@@ -291,6 +297,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         SetupAnimation();
         ApplyPlayerColor();
         CreateNameplate();
+        FindHeadTransform();
         InitializeFSM();
 
         LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
@@ -299,6 +306,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void LateUpdate()
     {
         UpdateNameplate();
+        UpdateTalkingAnimation();
     }
 
     private void OnDestroy()
@@ -307,6 +315,65 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         {
             Destroy(_nameplate.gameObject);
         }
+    }
+
+    private void UpdateTalkingAnimation()
+    {
+        if (_headTopTransform == null) return;
+
+        var targetRotation = 0f;
+
+        // Vérifier si on a un AudioSource actif sur le controller
+        if (_talkingAudioSource == null && ControllerTransform != null)
+        {
+            _talkingAudioSource = ControllerTransform.GetComponent<AudioSource>();
+        }
+
+        if (_talkingAudioSource != null && _talkingAudioSource.isPlaying)
+        {
+            // Analyser le volume audio
+            _sampleData ??= new float[SampleDataLength];
+            _talkingAudioSource.GetOutputData(_sampleData, 0);
+
+            var loudness = 0f;
+            foreach (var sample in _sampleData)
+            {
+                loudness += Mathf.Abs(sample);
+            }
+
+            loudness /= SampleDataLength;
+
+            // Calculer la rotation basée sur le volume (négatif = ouvrir vers le haut)
+            if (loudness > 0.01f)
+            {
+                targetRotation = Mathf.Lerp(0f, -TalkRotationMaxAngle, loudness * 10f);
+            }
+        }
+        else
+        {
+            _talkingAudioSource = null;
+        }
+
+        // Appliquer la rotation avec lerp smooth
+        _headTopTransform.localRotation = Quaternion.Slerp(
+            _headTopTransform.localRotation,
+            Quaternion.Euler(targetRotation, 0f, 0f),
+            Time.deltaTime * 20f);
+    }
+
+    private void FindHeadTransform()
+    {
+        // Chercher ANIM HEAD TOP dans la hiérarchie
+        foreach (var child in GetComponentsInChildren<Transform>(true))
+        {
+            if (child.name == "code_head_top")
+            {
+                _headTopTransform = child;
+                return;
+            }
+        }
+
+        LOG.Warning("ANIM HEAD TOP not found for talking animation");
     }
 
     private void CreateNameplate()
