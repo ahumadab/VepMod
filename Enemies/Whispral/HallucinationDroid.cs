@@ -21,7 +21,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const float SprintSpeed = 5f;
     private const float SprintChance = 0.5f;
 
-    private const float NameplateHeight = 1.5f;
+    private const float NameplateHeight = 1.9f;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
     private Animator _animator;
@@ -118,7 +118,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     {
         if (_rigidbodyTransform == null || ControllerTransform == null) return;
 
-        _rigidbodyTransform.position = ControllerTransform.position;
+        var yOffset = new Vector3(0f, 0.25f, 0f); // A GARDER, Necessaire pour bien ajuster les visuels
+        _rigidbodyTransform.position = ControllerTransform.position + yOffset;
         _rigidbodyTransform.rotation = ControllerTransform.rotation;
 
         if (_animator != null && _animator.transform.localPosition != Vector3.zero)
