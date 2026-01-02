@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VepMod.Enemies.Whispral;
 using VepMod.Patchs;
 
 namespace VepMod;
@@ -41,6 +42,15 @@ public class VepMod : BaseUnityPlugin
 
         _harmony.PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
+
+        // Précharger le prefab LostDroid de manière asynchrone pour éviter les freezes
+        StartCoroutine(LostDroidPrefabLoader.PreloadAsync(success =>
+        {
+            if (success)
+                Logger.LogInfo("LostDroid prefab preloaded successfully.");
+            else
+                Logger.LogWarning("LostDroid prefab preload failed - hallucinations may not work.");
+        }));
     }
 
     public void OnSceneLoaded(Scene scene, LoadSceneMode mode)

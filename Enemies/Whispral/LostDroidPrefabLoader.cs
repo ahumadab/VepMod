@@ -1,151 +1,176 @@
+using System;
+using System.Collections;
 using System.IO;
 using System.Reflection;
 using REPOLib.Objects.Sdk;
 using UnityEngine;
 using VepMod.VepFramework;
+using Object = UnityEngine.Object;
 
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     Charge le prefab LostDroid depuis l'AssetBundle de WesleysEnemies.
+///     Supporte le chargement asynchrone pour éviter les freezes.
 /// </summary>
 public static class LostDroidPrefabLoader
 {
-    private static readonly VepLogger LOG = VepLogger.Create("LostDroidPrefabLoader", debugEnabled: true);
+    private static readonly VepLogger LOG = VepLogger.Create("LostDroidPrefabLoader");
 
     private static AssetBundle _wesleysBundle;
-    private static GameObject _lostDroidPrefab;
-    private static bool _loadAttempted;
 
     /// <summary>
     ///     Le prefab LostDroid chargé, ou null si non disponible.
     /// </summary>
-    public static GameObject LostDroidPrefab
-    {
-        get
-        {
-            if (!_loadAttempted)
-            {
-                TryLoadPrefab();
-            }
-            return _lostDroidPrefab;
-        }
-    }
+    public static GameObject LostDroidPrefab { get; private set; }
 
     /// <summary>
     ///     Indique si le prefab est disponible.
     /// </summary>
     public static bool IsAvailable => LostDroidPrefab != null;
 
-    private static void TryLoadPrefab()
-    {
-        _loadAttempted = true;
+    /// <summary>
+    ///     Indique si le chargement est en cours.
+    /// </summary>
+    public static bool IsLoading { get; private set; }
 
-        // Chercher l'AssetBundle de WesleysEnemies
+    /// <summary>
+    ///     Indique si le chargement est terminé (succès ou échec).
+    /// </summary>
+    public static bool LoadCompleted { get; private set; }
+
+    /// <summary>
+    ///     Démarre le préchargement asynchrone du prefab.
+    ///     Doit être appelé au démarrage du mod via une coroutine.
+    /// </summary>
+    public static IEnumerator PreloadAsync(Action<bool>? onComplete = null)
+    {
+        if (LoadCompleted || IsLoading)
+        {
+            onComplete?.Invoke(IsAvailable);
+            yield break;
+        }
+
+        IsLoading = true;
+        LOG.Info("Starting async preload of LostDroid prefab...");
+
+        // Chercher le chemin du bundle
         var bundlePath = FindWesleysBundlePath();
         if (string.IsNullOrEmpty(bundlePath))
         {
             LOG.Warning("WesleysEnemies AssetBundle not found - LostDroid hallucinations disabled");
-            return;
+            FinishLoading(false, onComplete);
+            yield break;
         }
 
-        // Charger l'AssetBundle
-        _wesleysBundle = AssetBundle.LoadFromFile(bundlePath);
+        // Charger l'AssetBundle de manière asynchrone
+        var bundleRequest = AssetBundle.LoadFromFileAsync(bundlePath);
+        yield return bundleRequest;
+
+        _wesleysBundle = bundleRequest.assetBundle;
         if (_wesleysBundle == null)
         {
             LOG.Error($"Failed to load AssetBundle from {bundlePath}");
-            return;
+            FinishLoading(false, onComplete);
+            yield break;
         }
 
-        // Essayer plusieurs méthodes pour charger le prefab
+        // Essayer de charger le prefab directement
+        var assetRequest = _wesleysBundle.LoadAssetAsync<GameObject>("LostDroid");
+        yield return assetRequest;
 
-        // Méthode 1: Charger directement le prefab par son nom
-        _lostDroidPrefab = _wesleysBundle.LoadAsset<GameObject>("LostDroid");
-        if (_lostDroidPrefab != null)
+        if (assetRequest.asset != null)
         {
+            LostDroidPrefab = assetRequest.asset as GameObject;
             LOG.Info($"LostDroid prefab loaded directly from bundle: {bundlePath}");
-            return;
+            FinishLoading(true, onComplete);
+            yield break;
         }
 
-        // Méthode 2: Lister tous les assets et trouver le prefab
+        // Méthode 2: Chercher dans tous les assets
         var allAssetNames = _wesleysBundle.GetAllAssetNames();
         LOG.Debug($"Bundle contains {allAssetNames.Length} assets");
+
         foreach (var assetName in allAssetNames)
         {
-            LOG.Debug($"  Asset: {assetName}");
             if (assetName.ToLower().Contains("lostdroid") && assetName.EndsWith(".prefab"))
             {
-                _lostDroidPrefab = _wesleysBundle.LoadAsset<GameObject>(assetName);
-                if (_lostDroidPrefab != null)
+                var prefabRequest = _wesleysBundle.LoadAssetAsync<GameObject>(assetName);
+                yield return prefabRequest;
+
+                if (prefabRequest.asset != null)
                 {
+                    LostDroidPrefab = prefabRequest.asset as GameObject;
                     LOG.Info($"LostDroid prefab loaded from: {assetName}");
-                    return;
+                    FinishLoading(true, onComplete);
+                    yield break;
                 }
             }
         }
 
         // Méthode 3: Via EnemyContent
-        var enemyContent = _wesleysBundle.LoadAsset<EnemyContent>("EnemyContentLostDroid");
-        if (enemyContent != null)
+        var contentRequest = _wesleysBundle.LoadAssetAsync<EnemyContent>("EnemyContentLostDroid");
+        yield return contentRequest;
+
+        if (contentRequest.asset is EnemyContent enemyContent)
         {
-            _lostDroidPrefab = GetPrefabFromContent(enemyContent);
-            if (_lostDroidPrefab != null)
+            LostDroidPrefab = GetPrefabFromContent(enemyContent);
+            if (LostDroidPrefab != null)
             {
                 LOG.Info($"LostDroid prefab loaded via EnemyContent from {bundlePath}");
-                return;
+                FinishLoading(true, onComplete);
+                yield break;
             }
         }
 
         LOG.Error("Failed to load LostDroid prefab from bundle - all methods exhausted");
+        FinishLoading(false, onComplete);
+    }
+
+    private static void FinishLoading(bool success, Action<bool>? onComplete)
+    {
+        IsLoading = false;
+        LoadCompleted = true;
+        onComplete?.Invoke(success);
     }
 
     private static GameObject GetPrefabFromContent(EnemyContent content)
     {
-        // Essayer les noms de propriétés/champs courants
         var type = content.GetType();
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-        LOG.Debug($"Inspecting EnemyContent type: {type.FullName}");
-
-        // Chercher une propriété ou un champ de type GameObject
         foreach (var prop in type.GetProperties(flags))
         {
-            LOG.Debug($"  Property: {prop.Name} ({prop.PropertyType.Name})");
-            if (prop.PropertyType == typeof(GameObject) || prop.PropertyType.IsSubclassOf(typeof(UnityEngine.Object)))
+            if (prop.PropertyType == typeof(GameObject) || prop.PropertyType.IsSubclassOf(typeof(Object)))
             {
                 try
                 {
-                    var value = prop.GetValue(content);
-                    if (value is GameObject go && go != null)
+                    if (prop.GetValue(content) is GameObject go && go != null)
                     {
-                        LOG.Debug($"Found prefab via property: {prop.Name}");
                         return go;
                     }
                 }
-                catch (System.Exception e)
+                catch
                 {
-                    LOG.Debug($"  Error reading property {prop.Name}: {e.Message}");
+                    // Ignore
                 }
             }
         }
 
         foreach (var field in type.GetFields(flags))
         {
-            LOG.Debug($"  Field: {field.Name} ({field.FieldType.Name})");
-            if (field.FieldType == typeof(GameObject) || field.FieldType.IsSubclassOf(typeof(UnityEngine.Object)))
+            if (field.FieldType == typeof(GameObject) || field.FieldType.IsSubclassOf(typeof(Object)))
             {
                 try
                 {
-                    var value = field.GetValue(content);
-                    if (value is GameObject go && go != null)
+                    if (field.GetValue(content) is GameObject go && go != null)
                     {
-                        LOG.Debug($"Found prefab via field: {field.Name}");
                         return go;
                     }
                 }
-                catch (System.Exception e)
+                catch
                 {
-                    LOG.Debug($"  Error reading field {field.Name}: {e.Message}");
+                    // Ignore
                 }
             }
         }
@@ -155,66 +180,43 @@ public static class LostDroidPrefabLoader
 
     private static string FindWesleysBundlePath()
     {
-        // Nom du fichier AssetBundle
         const string bundleFileName = "wesleysenemies_enemyprefabs";
 
-        // 1. Chercher à partir du dossier de notre DLL (fonctionne avec Thunderstore Mod Manager)
+        // 1. Chercher à partir du dossier de notre DLL
         var assemblyLocation = Assembly.GetExecutingAssembly().Location;
         if (!string.IsNullOrEmpty(assemblyLocation))
         {
             var assemblyDir = Path.GetDirectoryName(assemblyLocation);
             if (!string.IsNullOrEmpty(assemblyDir))
             {
-                // Remonter jusqu'au dossier plugins (notre DLL est dans plugins/Unknown-VepMod/)
                 var pluginsDir = Path.GetDirectoryName(assemblyDir);
                 if (pluginsDir != null && Directory.Exists(pluginsDir))
                 {
-                    LOG.Debug($"Searching for bundle in plugins dir: {pluginsDir}");
                     var files = Directory.GetFiles(pluginsDir, bundleFileName, SearchOption.AllDirectories);
-                    if (files.Length > 0)
-                    {
-                        LOG.Debug($"Found WesleysEnemies bundle at: {files[0]}");
-                        return files[0];
-                    }
+                    if (files.Length > 0) return files[0];
                 }
 
-                // Chercher aussi directement dans le dossier de l'assembly
-                LOG.Debug($"Searching for bundle in assembly dir: {assemblyDir}");
                 var localFiles = Directory.GetFiles(assemblyDir, bundleFileName, SearchOption.AllDirectories);
-                if (localFiles.Length > 0)
-                {
-                    LOG.Debug($"Found WesleysEnemies bundle at: {localFiles[0]}");
-                    return localFiles[0];
-                }
+                if (localFiles.Length > 0) return localFiles[0];
             }
         }
 
-        // 2. Chercher dans les dossiers de plugins BepInEx relatif au jeu
+        // 2. Chercher dans BepInEx/plugins
         var bepInExPath = Path.Combine(Application.dataPath, "..", "BepInEx", "plugins");
         if (Directory.Exists(bepInExPath))
         {
-            LOG.Debug($"Searching for bundle in game BepInEx: {bepInExPath}");
             var files = Directory.GetFiles(bepInExPath, bundleFileName, SearchOption.AllDirectories);
-            if (files.Length > 0)
-            {
-                LOG.Debug($"Found WesleysEnemies bundle at: {files[0]}");
-                return files[0];
-            }
+            if (files.Length > 0) return files[0];
         }
 
-        // 3. Chercher dans le dossier parent du jeu (fallback)
+        // 3. Fallback
         var parentPath = Path.Combine(Application.dataPath, "..");
         if (Directory.Exists(parentPath))
         {
             var allFiles = Directory.GetFiles(parentPath, bundleFileName, SearchOption.AllDirectories);
-            if (allFiles.Length > 0)
-            {
-                LOG.Debug($"Found WesleysEnemies bundle at: {allFiles[0]}");
-                return allFiles[0];
-            }
+            if (allFiles.Length > 0) return allFiles[0];
         }
 
-        LOG.Warning("Bundle search paths exhausted, WesleysEnemies not found");
         return null;
     }
 
@@ -228,7 +230,9 @@ public static class LostDroidPrefabLoader
             _wesleysBundle.Unload(false);
             _wesleysBundle = null;
         }
-        _lostDroidPrefab = null;
-        _loadAttempted = false;
+
+        LostDroidPrefab = null;
+        IsLoading = false;
+        LoadCompleted = false;
     }
 }
