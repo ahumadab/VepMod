@@ -30,9 +30,17 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const int SampleDataLength = 256;
 
     // Angry eyes settings
-    private const float LookAtAngle = 60f; // Angle de vision du joueur
+    private const float LookAtAngle = 50f; // Angle de vision du joueur
     private const float LookAtMaxDistance = 30f; // Distance max de détection
     private const float AngryEyesCooldown = 0.6f; // Temps avant d'annuler l'emote après être vu
+
+    // Stalk settings
+    private const float StalkMinDistance = 15f; // Distance min pour déclencher le stalk
+    private const float StalkChance = 0.2f; // Chance de stalk quand trop loin
+    private const float StalkArrivalDistance = 5f; // Distance pour commencer à fixer le joueur
+    private const float StalkMinKeepDistance = 3f; // Distance minimum à maintenir du joueur
+    private const float StalkFleeDistance = 20f; // Distance de fuite
+    private const float StalkStareBeforeFlee = 2f; // Temps à fixer le joueur après être vu avant de fuir
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>(true);
     private readonly Materials.MaterialTrigger _materialTrigger = new();
@@ -108,7 +116,13 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void UpdateAnimationFlags()
     {
         var currentState = fsm?.CurrentStateStateId;
-        if ((currentState == StateId.Wander || currentState == StateId.Sprint) && ControllerTransform != null)
+        var isMovementState = currentState == StateId.Wander ||
+                              currentState == StateId.Sprint ||
+                              currentState == StateId.StalkApproach ||
+                              currentState == StateId.StalkStare ||
+                              currentState == StateId.StalkFlee;
+
+        if (isMovementState && ControllerTransform != null)
         {
             var angle = Quaternion.Angle(ControllerTransform.rotation, _targetRotation);
             IsTurning = angle > 7f;
@@ -271,7 +285,13 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void UpdateMovement()
     {
         var currentState = fsm?.CurrentStateStateId;
-        if ((currentState != StateId.Wander && currentState != StateId.Sprint) || !_navAgent.hasPath)
+        var isMovementState = currentState == StateId.Wander ||
+                              currentState == StateId.Sprint ||
+                              currentState == StateId.StalkApproach ||
+                              currentState == StateId.StalkStare ||
+                              currentState == StateId.StalkFlee;
+
+        if (!isMovementState || !_navAgent.hasPath)
         {
             _currentVelocity = Vector3.zero;
             return;
@@ -312,8 +332,13 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             _navAgent.nextPosition = hit.position;
 
             var currentState = fsm?.CurrentStateStateId;
-            if (Vector3.Distance(controllerPos, hit.position) > 0.5f &&
-                (currentState == StateId.Wander || currentState == StateId.Sprint) && _navAgent.hasPath)
+            var isMovementState = currentState == StateId.Wander ||
+                                  currentState == StateId.Sprint ||
+                                  currentState == StateId.StalkApproach ||
+                                  currentState == StateId.StalkStare ||
+                                  currentState == StateId.StalkFlee;
+
+            if (Vector3.Distance(controllerPos, hit.position) > 0.5f && isMovementState && _navAgent.hasPath)
             {
                 _navAgent.SetDestination(_destination);
             }
@@ -486,6 +511,80 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         var distance = Vector3.Distance(controllerPos, _destination);
 
         return !_navAgent.hasPath || distance <= _navAgent.stoppingDistance;
+    }
+
+    /// <summary>
+    ///     Retourne la distance entre le droid et le joueur local affecté.
+    /// </summary>
+    public float GetDistanceToPlayer()
+    {
+        var localPlayer = PlayerAvatar.instance;
+        if (localPlayer == null || ControllerTransform == null) return float.MaxValue;
+        return Vector3.Distance(ControllerTransform.position, localPlayer.transform.position);
+    }
+
+    /// <summary>
+    ///     Définit la destination vers le joueur local.
+    /// </summary>
+    public bool TrySetDestinationToPlayer()
+    {
+        var localPlayer = PlayerAvatar.instance;
+        if (localPlayer == null || _navAgent == null || !_navAgent.isOnNavMesh) return false;
+
+        var playerPos = localPlayer.transform.position;
+        if (!NavMesh.SamplePosition(playerPos, out var hit, 5f, _savedAreaMask)) return false;
+
+        var path = new NavMeshPath();
+        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
+        {
+            return false;
+        }
+
+        _destination = hit.position;
+        _navAgent.SetPath(path);
+        return true;
+    }
+
+    /// <summary>
+    ///     Définit une destination pour fuir le joueur.
+    /// </summary>
+    public bool TrySetFleeDestination()
+    {
+        var localPlayer = PlayerAvatar.instance;
+        if (localPlayer == null || ControllerTransform == null) return false;
+
+        // Direction opposée au joueur
+        var directionAway = (ControllerTransform.position - localPlayer.transform.position).normalized;
+        var fleeTarget = ControllerTransform.position + directionAway * StalkFleeDistance;
+
+        if (!NavMesh.SamplePosition(fleeTarget, out var hit, 10f, _savedAreaMask)) return false;
+
+        var path = new NavMeshPath();
+        if (_navAgent == null || !_navAgent.isOnNavMesh) return false;
+        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
+        {
+            return false;
+        }
+
+        _destination = hit.position;
+        _navAgent.SetPath(path);
+        return true;
+    }
+
+    /// <summary>
+    ///     Fait tourner le droid pour regarder le joueur.
+    /// </summary>
+    public void LookAtPlayer()
+    {
+        var localPlayer = PlayerAvatar.instance;
+        if (localPlayer == null || ControllerTransform == null) return;
+
+        var direction = (localPlayer.transform.position - ControllerTransform.position).normalized;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.01f)
+        {
+            _targetRotation = Quaternion.LookRotation(direction);
+        }
     }
 
     public void SetSpeed(float speed)
@@ -1006,6 +1105,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         fsm.AddState(StateId.Wander, new WanderState());
         fsm.AddState(StateId.Sprint, new SprintState());
         fsm.AddState(StateId.CheckMap, new CheckMapState());
+        fsm.AddState(StateId.StalkApproach, new StalkApproachState());
+        fsm.AddState(StateId.StalkStare, new StalkStareState());
+        fsm.AddState(StateId.StalkFlee, new StalkFleeState());
     }
 
     private void FindCriticalTransforms()
@@ -1274,7 +1376,10 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         Idle,
         Wander,
         Sprint,
-        CheckMap
+        CheckMap,
+        StalkApproach,
+        StalkStare,
+        StalkFlee
     }
 
     private class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
@@ -1287,7 +1392,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         private const float MinIdleTime = 10f;
         private const float MaxIdleTime = 15f;
         private const float PrecomputeRetryInterval = 1f;
-        private const float CheckMapChance = 0.15f;
+        private const float CheckMapChance = 0.3f;
 
         private Animator _animator;
         private bool _animatorTakenOver;
@@ -1372,19 +1477,23 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
             if (TimeElapsed >= _duration)
             {
-                // Choisir le prochain état
+                // Vérifier si on peut stalk (joueur trop loin)
+                var distanceToPlayer = Machine.Owner.GetDistanceToPlayer();
+                if (distanceToPlayer > StalkMinDistance && Random.value < StalkChance)
+                {
+                    Machine.NextStateStateId = StateId.StalkApproach;
+                    return;
+                }
+
+                // Choisir le prochain état normal
                 var roll = Random.value;
                 if (roll < CheckMapChance)
                 {
                     Machine.NextStateStateId = StateId.CheckMap;
                 }
-                else if (roll < CheckMapChance + SprintChance)
-                {
-                    Machine.NextStateStateId = StateId.Sprint;
-                }
                 else
                 {
-                    Machine.NextStateStateId = StateId.Wander;
+                    Machine.NextStateStateId = Random.value < SprintChance ? StateId.Sprint : StateId.Wander;
                 }
             }
         }
@@ -1422,7 +1531,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             _nextSwitchCheck = SwitchCheckInterval;
 
             // Si on vient d'un autre état de mouvement (Wander ↔ Sprint), garder la même destination
-            var isMovementSwitch = previous == StateId.Wander || previous == StateId.Sprint;
+            var isMovementSwitch = previous is StateId.Wander or StateId.Sprint;
             if (!isMovementSwitch)
             {
                 // Nouvelle destination nécessaire (depuis Idle)
@@ -1649,6 +1758,215 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             Raise,
             Look,
             Lower
+        }
+    }
+
+    /// <summary>
+    ///     État de stalk : le droid court vers le joueur.
+    /// </summary>
+    private class StalkApproachState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    {
+        private const float MaxApproachTime = 30f;
+        private const float DestinationUpdateInterval = 1f;
+        private float _nextDestinationUpdate;
+
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+            LOG.Debug("=== STALK: Approach started - running towards player ===");
+
+            Machine.Owner.IsSprinting = true;
+            Machine.Owner.SetSpeed(SprintSpeed);
+            _nextDestinationUpdate = 0f;
+
+            if (!Machine.Owner.TrySetDestinationToPlayer())
+            {
+                LOG.Debug("STALK: Failed to set destination to player, aborting");
+                Machine.NextStateStateId = StateId.Idle;
+            }
+        }
+
+        public override void OnStateUpdate()
+        {
+            base.OnStateUpdate();
+
+            var distance = Machine.Owner.GetDistanceToPlayer();
+            var reachedNavDest = Machine.Owner.HasReachedDestination();
+
+            // Timeout
+            if (TimeElapsed >= MaxApproachTime)
+            {
+                LOG.Debug($"STALK: Approach timeout, dist={distance:F1}m, aborting");
+                Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            // Vérifier si on est arrivé près du joueur
+            if (distance <= StalkArrivalDistance)
+            {
+                LOG.Debug($"STALK: Arrived near player (distance={distance:F1}m)");
+                Machine.NextStateStateId = StateId.StalkStare;
+                return;
+            }
+
+            // Si on a atteint la destination nav mais pas le joueur, passer en stare quand même
+            // (le joueur est probablement inaccessible directement)
+            if (reachedNavDest)
+            {
+                LOG.Debug($"STALK: Reached nav destination but player still at {distance:F1}m, starting stare anyway");
+                Machine.NextStateStateId = StateId.StalkStare;
+                return;
+            }
+
+            // Mettre à jour la destination périodiquement (le joueur bouge)
+            _nextDestinationUpdate -= Time.deltaTime;
+            if (_nextDestinationUpdate <= 0f)
+            {
+                Machine.Owner.TrySetDestinationToPlayer();
+                _nextDestinationUpdate = DestinationUpdateInterval;
+            }
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            Machine.Owner.IsSprinting = false;
+            Machine.Owner.ResetPath();
+        }
+    }
+
+    /// <summary>
+    ///     État de stalk : le droid fixe le joueur tout en s'approchant.
+    ///     Si le joueur le regarde, il maintient le regard X secondes puis fuit.
+    /// </summary>
+    private class StalkStareState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    {
+        private const float MaxStareTime = 30f;
+        private const float DestinationUpdateInterval = 0.5f;
+
+        private float _fleeCountdown;
+        private bool _hasBeenSeen;
+        private float _nextDestinationUpdate;
+
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+            LOG.Debug("=== STALK: Staring at player ===");
+
+            _hasBeenSeen = false;
+            _fleeCountdown = StalkStareBeforeFlee;
+            _nextDestinationUpdate = 0f;
+
+            // Commencer à marcher lentement vers le joueur
+            Machine.Owner.IsWalking = true;
+            Machine.Owner.IsSprinting = false;
+            Machine.Owner.SetSpeed(WalkSpeed);
+        }
+
+        public override void OnStateUpdate()
+        {
+            base.OnStateUpdate();
+
+            // Toujours regarder le joueur
+            Machine.Owner.LookAtPlayer();
+
+            var distance = Machine.Owner.GetDistanceToPlayer();
+            var isPlayerLooking = Machine.Owner.IsPlayerLookingAtMe();
+
+            // Le joueur nous a vu !
+            if (isPlayerLooking && !_hasBeenSeen)
+            {
+                _hasBeenSeen = true;
+                LOG.Debug("=== STALK: Player sees me! Maintaining eye contact... ===");
+
+                // Arrêter de bouger, fixer le joueur
+                Machine.Owner.IsWalking = false;
+                Machine.Owner.ResetPath();
+            }
+
+            // Si on a été vu, countdown avant de fuir
+            if (_hasBeenSeen)
+            {
+                _fleeCountdown -= Time.deltaTime;
+                if (_fleeCountdown <= 0f)
+                {
+                    LOG.Debug("=== STALK: Eye contact over, fleeing! ===");
+                    Machine.NextStateStateId = StateId.StalkFlee;
+                    return;
+                }
+            }
+            else
+            {
+                // Pas encore vu : continuer à s'approcher (mais maintenir distance min)
+                if (distance > StalkMinKeepDistance)
+                {
+                    _nextDestinationUpdate -= Time.deltaTime;
+                    if (_nextDestinationUpdate <= 0f)
+                    {
+                        Machine.Owner.TrySetDestinationToPlayer();
+                        _nextDestinationUpdate = DestinationUpdateInterval;
+                    }
+                }
+                else
+                {
+                    // Trop proche, arrêter
+                    Machine.Owner.ResetPath();
+                }
+            }
+
+            // Timeout global
+            if (TimeElapsed >= MaxStareTime)
+            {
+                LOG.Debug("STALK: Stare timeout, fleeing");
+                Machine.NextStateStateId = StateId.StalkFlee;
+            }
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            Machine.Owner.IsWalking = false;
+        }
+    }
+
+    /// <summary>
+    ///     État de stalk : le droid fuit le joueur.
+    /// </summary>
+    private class StalkFleeState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    {
+        private const float MaxFleeTime = 10f;
+
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+            LOG.Debug("=== STALK: Fleeing from player! ===");
+
+            Machine.Owner.IsSprinting = true;
+            Machine.Owner.SetSpeed(SprintSpeed);
+
+            if (!Machine.Owner.TrySetFleeDestination())
+            {
+                LOG.Debug("STALK: Failed to set flee destination, going to idle");
+                Machine.NextStateStateId = StateId.Idle;
+            }
+        }
+
+        public override void OnStateUpdate()
+        {
+            base.OnStateUpdate();
+
+            // Vérifier si on a atteint la destination ou timeout
+            if (Machine.Owner.HasReachedDestination() || TimeElapsed >= MaxFleeTime)
+            {
+                LOG.Debug("=== STALK: Flee complete, returning to idle ===");
+                Machine.NextStateStateId = StateId.Idle;
+            }
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            Machine.Owner.IsSprinting = false;
         }
     }
 
