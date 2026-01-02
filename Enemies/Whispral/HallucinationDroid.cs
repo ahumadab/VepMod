@@ -25,7 +25,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private Animator _animator;
     private CharacterController _charController;
 
-    private Transform _controllerTransform;
     private Vector3 _currentVelocity;
 
     private Vector3 _destination;
@@ -41,7 +40,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     public bool IsTurning { get; private set; }
     public bool HasChangedMovementState { get; set; }
     public PlayerAvatar SourcePlayer { get; private set; }
-    public Transform ControllerTransform => _controllerTransform;
+    public Transform ControllerTransform { get; private set; }
 
     protected override StateId DefaultState => StateId.Idle;
 
@@ -53,7 +52,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     protected override void Update()
     {
         if (_navAgent == null || !_navAgent.isOnNavMesh) return;
-        if (_charController == null || _controllerTransform == null) return;
+        if (_charController == null || ControllerTransform == null) return;
 
         // Update FSM
         fsm?.Update();
@@ -70,9 +69,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void UpdateAnimationFlags()
     {
         var currentState = fsm?.CurrentStateStateId;
-        if ((currentState == StateId.Wander || currentState == StateId.Sprint) && _controllerTransform != null)
+        if ((currentState == StateId.Wander || currentState == StateId.Sprint) && ControllerTransform != null)
         {
-            var angle = Quaternion.Angle(_controllerTransform.rotation, _targetRotation);
+            var angle = Quaternion.Angle(ControllerTransform.rotation, _targetRotation);
             IsTurning = angle > 7f;
         }
         else
@@ -114,10 +113,10 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void SyncVisualsToController()
     {
-        if (_rigidbodyTransform == null || _controllerTransform == null) return;
+        if (_rigidbodyTransform == null || ControllerTransform == null) return;
 
-        _rigidbodyTransform.position = _controllerTransform.position;
-        _rigidbodyTransform.rotation = _controllerTransform.rotation;
+        _rigidbodyTransform.position = ControllerTransform.position;
+        _rigidbodyTransform.rotation = ControllerTransform.rotation;
 
         if (_animator != null && _animator.transform.localPosition != Vector3.zero)
         {
@@ -127,9 +126,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void SyncNavAgentPosition()
     {
-        if (_navAgent == null || _controllerTransform == null) return;
+        if (_navAgent == null || ControllerTransform == null) return;
 
-        var controllerPos = _controllerTransform.position;
+        var controllerPos = ControllerTransform.position;
 
         if (NavMesh.SamplePosition(controllerPos, out var hit, 2f, _savedAreaMask))
         {
@@ -151,7 +150,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void UpdateRotation()
     {
-        if (_controllerTransform == null) return;
+        if (ControllerTransform == null) return;
 
         if (_currentVelocity.magnitude > 0.1f)
         {
@@ -163,15 +162,15 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             }
         }
 
-        _controllerTransform.rotation = Quaternion.Slerp(
-            _controllerTransform.rotation,
+        ControllerTransform.rotation = Quaternion.Slerp(
+            ControllerTransform.rotation,
             _targetRotation,
             RotationSpeed * Time.deltaTime);
     }
 
     public bool TrySetRandomDestination()
     {
-        var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
+        var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
 
         var levelPoint = SemiFunc.LevelPointGet(controllerPos, 5f, 15f)
                          ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
@@ -214,7 +213,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     {
         if (_navAgent.pathPending) return false;
 
-        var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
+        var controllerPos = ControllerTransform != null ? ControllerTransform.position : transform.position;
         var distance = Vector3.Distance(controllerPos, _destination);
 
         return !_navAgent.hasPath || distance <= _navAgent.stoppingDistance;
@@ -234,7 +233,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     /// </summary>
     public void PlayVoice(bool applyFilter = false)
     {
-        if (SourcePlayer == null || _controllerTransform == null) return;
+        if (SourcePlayer == null || ControllerTransform == null) return;
 
         // Utiliser le WhispralMimics du joueur local (pas du source player)
         var localPlayer = PlayerAvatar.instance;
@@ -247,7 +246,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             return;
         }
 
-        mimics.PlayAudioAtTransform(_controllerTransform, SourcePlayer.playerName, applyFilter);
+        mimics.PlayAudioAtTransform(ControllerTransform, SourcePlayer.playerName, applyFilter);
     }
 
     #endregion
@@ -286,9 +285,55 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         DisableEnemyComponents();
         SetupNavigation();
         SetupAnimation();
+        ApplyPlayerColor();
         InitializeFSM();
 
-        LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {_controllerTransform?.position}");
+        LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
+    }
+
+    private void ApplyPlayerColor()
+    {
+        if (SourcePlayer == null) return;
+
+        var colorIndex = StatsManager.instance.GetPlayerColor(SourcePlayer.steamID);
+        if (colorIndex < 0 || colorIndex >= AssetManager.instance.playerColors.Count) return;
+
+        var color = AssetManager.instance.playerColors[colorIndex];
+
+        // Trouver le Cube qui contient les visuels
+        var cube = transform.Find("Rigidbody/Cube") ?? transform.Find("Cube");
+        if (cube == null)
+        {
+            foreach (var child in GetComponentsInChildren<Transform>())
+            {
+                if (child.name == "Cube")
+                {
+                    cube = child;
+                    break;
+                }
+            }
+        }
+
+        if (cube == null)
+        {
+            LOG.Warning("Cube transform not found for color application");
+            return;
+        }
+
+        // Appliquer la couleur à tous les renderers (sauf yeux, pupilles et health shadow)
+        foreach (var renderer in cube.GetComponentsInChildren<Renderer>())
+        {
+            var name = renderer.gameObject.name;
+            if (name.Contains("eye") || name.Contains("pupil") || name.Contains("mesh_health"))
+            {
+                continue;
+            }
+
+            foreach (var material in renderer.materials)
+            {
+                material.SetColor("_AlbedoColor", color);
+            }
+        }
     }
 
     private void InitializeFSM()
@@ -301,26 +346,26 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void FindCriticalTransforms()
     {
-        _controllerTransform = transform.Find("Controller");
-        if (_controllerTransform == null)
+        ControllerTransform = transform.Find("Controller");
+        if (ControllerTransform == null)
         {
             foreach (var child in GetComponentsInChildren<Transform>())
             {
                 if (child.name == "Controller")
                 {
-                    _controllerTransform = child;
+                    ControllerTransform = child;
                     break;
                 }
             }
         }
 
-        if (_controllerTransform == null)
+        if (ControllerTransform == null)
         {
             LOG.Warning("Controller transform not found, creating one");
             var controllerGO = new GameObject("Controller");
             controllerGO.transform.SetParent(transform);
             controllerGO.transform.localPosition = Vector3.zero;
-            _controllerTransform = controllerGO.transform;
+            ControllerTransform = controllerGO.transform;
         }
 
         _rigidbodyTransform = transform.Find("Rigidbody");
@@ -346,9 +391,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     {
         NavMeshAgent existingAgent = null;
 
-        if (_controllerTransform != null)
+        if (ControllerTransform != null)
         {
-            existingAgent = _controllerTransform.GetComponent<NavMeshAgent>();
+            existingAgent = ControllerTransform.GetComponent<NavMeshAgent>();
         }
 
         if (existingAgent == null)
@@ -465,19 +510,19 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void SetupNavigation()
     {
-        if (_controllerTransform == null)
+        if (ControllerTransform == null)
         {
             LOG.Error("Cannot setup navigation: Controller is null");
             return;
         }
 
-        _navAgent = _controllerTransform.GetComponent<NavMeshAgent>();
+        _navAgent = ControllerTransform.GetComponent<NavMeshAgent>();
         if (_navAgent == null)
         {
-            _navAgent = _controllerTransform.gameObject.AddComponent<NavMeshAgent>();
+            _navAgent = ControllerTransform.gameObject.AddComponent<NavMeshAgent>();
         }
 
-        var startPos = _controllerTransform.position;
+        var startPos = ControllerTransform.position;
         var validPosition = startPos;
         var foundNavMesh = false;
 
@@ -526,7 +571,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         _navAgent.autoTraverseOffMeshLink = true;
         _navAgent.autoRepath = true;
 
-        _controllerTransform.position = validPosition;
+        ControllerTransform.position = validPosition;
         _navAgent.Warp(validPosition);
         _navAgent.enabled = true;
 
@@ -535,15 +580,15 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void SetupCharacterController()
     {
-        if (_controllerTransform == null) return;
+        if (ControllerTransform == null) return;
 
-        var existingCC = _controllerTransform.GetComponent<CharacterController>();
+        var existingCC = ControllerTransform.GetComponent<CharacterController>();
         if (existingCC != null)
         {
             DestroyImmediate(existingCC);
         }
 
-        _charController = _controllerTransform.gameObject.AddComponent<CharacterController>();
+        _charController = ControllerTransform.gameObject.AddComponent<CharacterController>();
         _charController.height = 2f;
         _charController.radius = 0.5f;
         _charController.center = new Vector3(0f, 1f, 0f);
@@ -656,7 +701,11 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         protected override float MaxDuration => 15f;
         protected override float Speed => WalkSpeed;
         protected override StateId SwitchTargetState => StateId.Sprint;
-        protected override void SetMovementFlag(bool value) => Machine.Owner.IsWalking = value;
+
+        protected override void SetMovementFlag(bool value)
+        {
+            Machine.Owner.IsWalking = value;
+        }
     }
 
     private class SprintState : MovementState
@@ -665,7 +714,11 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         protected override float MaxDuration => 8f;
         protected override float Speed => SprintSpeed;
         protected override StateId SwitchTargetState => StateId.Wander;
-        protected override void SetMovementFlag(bool value) => Machine.Owner.IsSprinting = value;
+
+        protected override void SetMovementFlag(bool value)
+        {
+            Machine.Owner.IsSprinting = value;
+        }
     }
 
     #endregion
