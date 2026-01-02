@@ -871,10 +871,21 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
+        private const string ClipName = "LostDroidStand";
+        private const float IdleLoopStart = 0f;
+        private const float IdleLoopEnd = 4.5f;
+        private const float BlendDelay = 0.3f; // Temps pour laisser l'Animator faire le blend
+
         private const float MinIdleTime = 10f;
         private const float MaxIdleTime = 15f;
         private const float PrecomputeRetryInterval = 1f;
-        private const float CheckMapChance = 0.15f; // 15% de chance de regarder la map
+        private const float CheckMapChance = 0.15f;
+
+        private Animator _animator;
+        private AnimationClip _clip;
+        private GameObject _targetObject;
+        private float _currentTime;
+        private bool _animatorTakenOver;
 
         private float _duration;
         private float _precomputeTimer;
@@ -884,8 +895,30 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             base.OnStateEnter(previous);
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
             _precomputeTimer = 0f;
+            _animatorTakenOver = false;
             Machine.Owner.ResetPath();
             Machine.Owner.HasChangedMovementState = false;
+
+            // Setup animation (mais on ne désactive pas l'Animator tout de suite)
+            _animator = Machine.Owner._animator;
+            if (_animator != null)
+            {
+                // Trouver le clip
+                _clip = null;
+                foreach (var clip in _animator.runtimeAnimatorController.animationClips)
+                {
+                    if (clip.name == ClipName)
+                    {
+                        _clip = clip;
+                        break;
+                    }
+                }
+
+                if (_clip != null)
+                {
+                    _targetObject = _animator.gameObject;
+                }
+            }
 
             // Démarrer le pré-calcul immédiatement
             Machine.Owner.StartPrecomputeDestination();
@@ -894,6 +927,28 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
+
+            // Attendre le blend avant de prendre le contrôle
+            if (!_animatorTakenOver && _clip != null && _targetObject != null)
+            {
+                if (TimeElapsed >= BlendDelay)
+                {
+                    _animator.enabled = false;
+                    _currentTime = IdleLoopStart;
+                    _animatorTakenOver = true;
+                }
+            }
+
+            // Jouer l'animation idle en boucle (seulement après avoir pris le contrôle)
+            if (_animatorTakenOver && _clip != null && _targetObject != null)
+            {
+                _currentTime += Time.deltaTime;
+                if (_currentTime >= IdleLoopEnd)
+                {
+                    _currentTime = IdleLoopStart;
+                }
+                _clip.SampleAnimation(_targetObject, _currentTime);
+            }
 
             // Réessayer le pré-calcul si pas encore de destination
             if (!Machine.Owner.HasPrecomputedDestination)
@@ -922,6 +977,17 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
                 {
                     Machine.NextStateStateId = StateId.Wander;
                 }
+            }
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+
+            // Réactiver l'Animator sauf si on va vers CheckMap (qui gère son propre contrôle)
+            if (_animator != null && next != StateId.CheckMap)
+            {
+                _animator.enabled = true;
             }
         }
     }
