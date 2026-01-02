@@ -386,6 +386,34 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 Whispral.UpdateStateRPC(Fsm.NextStateStateId);
             }
         }
+
+        /// <summary>
+        ///     Nettoie les debuffs si on était attaché au joueur.
+        ///     À appeler quand on quitte l'état Attached/PrepareAttach sans passer par Detach.
+        /// </summary>
+        protected void CleanupAttachmentIfNeeded(State previous)
+        {
+            if (previous is not (State.Attached or State.PrepareAttach)) return;
+
+            var player = Whispral.playerTarget;
+            if (player == null) return;
+
+            LOG.Debug($"Whispral interrupted while attached (-> {Fsm.CurrentStateStateId}), cleaning up debuffs.");
+            if (SemiFunc.IsMultiplayer())
+            {
+                Whispral.photonView.RPC(nameof(WhispralAttachmentRPC), RpcTarget.All, player.photonView.ViewID, false);
+            }
+            else
+            {
+                var manager = player.GetComponent<WhispralDebuffManager>();
+                if (manager)
+                {
+                    manager.UnregisterAttachment();
+                }
+            }
+
+            Whispral.attachAnchor = null;
+        }
     }
 
     private sealed class SpawnState : WhispralStateBase
@@ -912,6 +940,12 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     private class StunState : WhispralStateBase
     {
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            CleanupAttachmentIfNeeded(previous);
+        }
+
         public override void OnStateUpdate()
         {
             if (!Enemy.IsStunned())
@@ -947,6 +981,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
+            CleanupAttachmentIfNeeded(previous);
             Enemy.EnemyParent.Despawn();
             Fsm.NextStateStateId = State.Spawn;
         }
