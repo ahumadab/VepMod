@@ -1389,10 +1389,10 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         private const float IdleLoopEnd = 4.5f;
         private const float BlendDelay = 0.3f; // Temps pour laisser l'Animator faire le blend
 
-        private const float MinIdleTime = 10f;
-        private const float MaxIdleTime = 15f;
+        private const float MinIdleTime = 2f;
+        private const float MaxIdleTime = 4f;
         private const float PrecomputeRetryInterval = 1f;
-        private const float CheckMapChance = 0.3f;
+        private const float CheckMapChance = 0.25f;
 
         private Animator _animator;
         private bool _animatorTakenOver;
@@ -1613,8 +1613,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         private const float LowerEndTime = 7.15f;
 
         // Durée de la phase de regard (configurable)
-        private const float MinLookDuration = 3f;
-        private const float MaxLookDuration = 8f;
+        private const float MinLookDuration = 0.5f;
+        private const float MaxLookDuration = 3f;
 
         private Animator _animator;
         private AnimationClip _clip;
