@@ -11,31 +11,14 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class HallucinationDebuff : MonoBehaviour
 {
-    private const float SpawnDistanceMin = 5f;
-    private const float SpawnDistanceMax = 15f;
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDebuff>();
 
     private readonly Dictionary<PlayerAvatar, HallucinationDroid> hallucinations = new();
+    private WhispralDebuffManager debuffManager;
 
     private InvisibleDebuff invisibleDebuff;
 
     public bool IsActive { get; private set; }
-
-    /// <summary>
-    ///     Retourne le HallucinationDroid correspondant au nom du joueur, ou null.
-    /// </summary>
-    public HallucinationDroid GetDroidByPlayerName(string playerName)
-    {
-        foreach (var kvp in hallucinations)
-        {
-            if (kvp.Key && kvp.Value && kvp.Key.playerName == playerName)
-            {
-                return kvp.Value;
-            }
-        }
-
-        return null;
-    }
 
     private void Update()
     {
@@ -63,6 +46,7 @@ public sealed class HallucinationDebuff : MonoBehaviour
 
         IsActive = active;
         invisibleDebuff = sourceDebuff;
+        debuffManager = GetComponent<WhispralDebuffManager>();
 
         if (active)
         {
@@ -72,6 +56,22 @@ public sealed class HallucinationDebuff : MonoBehaviour
         {
             DestroyAllHallucinations();
         }
+    }
+
+    /// <summary>
+    ///     Retourne le HallucinationDroid correspondant au nom du joueur, ou null.
+    /// </summary>
+    public HallucinationDroid GetDroidByPlayerName(string playerName)
+    {
+        foreach (var kvp in hallucinations)
+        {
+            if (kvp.Key && kvp.Value && kvp.Key.playerName == playerName)
+            {
+                return kvp.Value;
+            }
+        }
+
+        return null;
     }
 
     private void CreateHallucination(PlayerAvatar sourcePlayer)
@@ -85,8 +85,8 @@ public sealed class HallucinationDebuff : MonoBehaviour
             return;
         }
 
-        // Trouver une position de spawn aléatoire sur le NavMesh
-        var spawnPos = FindRandomSpawnPosition();
+        // Utiliser une position pré-calculée ou fallback sync
+        var spawnPos = FindSpawnPosition();
         if (!spawnPos.HasValue)
         {
             LOG.Warning($"Could not find spawn position for hallucination of {sourcePlayer.playerName}");
@@ -149,12 +149,25 @@ public sealed class HallucinationDebuff : MonoBehaviour
         hallucinations.Remove(player);
     }
 
-    private Vector3? FindRandomSpawnPosition()
+    private Vector3? FindSpawnPosition()
     {
+        // Utiliser une position pré-calculée si disponible (pas de freeze)
+        if (debuffManager != null)
+        {
+            var precomputed = debuffManager.GetPrecomputedSpawnPosition();
+            if (precomputed.HasValue)
+            {
+                LOG.Debug($"Using precomputed spawn position: {precomputed.Value}");
+                return precomputed.Value;
+            }
+        }
+
+        // Fallback: recherche synchrone (peut causer un freeze)
+        LOG.Warning("No precomputed position available, falling back to sync search");
         var playerPos = PlayerAvatar.instance?.transform.position ?? transform.position;
 
-        // Utiliser les LevelPoints qui sont garantis d'être sur le NavMesh (comme les ennemis)
-        var levelPoint = SemiFunc.LevelPointGet(playerPos, SpawnDistanceMin, SpawnDistanceMax)
+        var levelPoint = SemiFunc.LevelPointGet(playerPos, WhispralDebuffManager.SpawnDistanceMin,
+                             WhispralDebuffManager.SpawnDistanceMax)
                          ?? SemiFunc.LevelPointGet(playerPos, 0f, 999f);
 
         if (!levelPoint)
@@ -163,8 +176,6 @@ public sealed class HallucinationDebuff : MonoBehaviour
             return null;
         }
 
-        // Utiliser directement la position du LevelPoint (elle est garantie d'être valide)
-        LOG.Debug($"Using LevelPoint position: {levelPoint.transform.position}");
         return levelPoint.transform.position;
     }
 
