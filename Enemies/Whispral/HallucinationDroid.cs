@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Animations;
@@ -21,9 +22,12 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const float SprintSpeed = 5f;
     private const float SprintChance = 0.5f;
 
+    private const float NameplateHeight = 1f;
+
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
     private Animator _animator;
     private CharacterController _charController;
+    private WorldSpaceUIPlayerName _nameplate;
 
     private Vector3 _currentVelocity;
 
@@ -286,9 +290,72 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         SetupNavigation();
         SetupAnimation();
         ApplyPlayerColor();
+        CreateNameplate();
         InitializeFSM();
 
         LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
+    }
+
+    private void LateUpdate()
+    {
+        UpdateNameplate();
+    }
+
+    private void OnDestroy()
+    {
+        if (_nameplate != null)
+        {
+            Destroy(_nameplate.gameObject);
+        }
+    }
+
+    private void CreateNameplate()
+    {
+        if (SourcePlayer == null || WorldSpaceUIParent.instance == null) return;
+
+        var prefab = WorldSpaceUIParent.instance.playerNamePrefab;
+        if (prefab == null) return;
+
+        var nameplateGO = Instantiate(prefab, WorldSpaceUIParent.instance.transform);
+        _nameplate = nameplateGO.GetComponent<WorldSpaceUIPlayerName>();
+
+        if (_nameplate != null)
+        {
+            // Assigner le SourcePlayer pour éviter la destruction automatique
+            _nameplate.playerAvatar = SourcePlayer;
+            _nameplate.text.text = SourcePlayer.playerName;
+        }
+    }
+
+    private void UpdateNameplate()
+    {
+        if (_nameplate == null || ControllerTransform == null || Camera.main == null) return;
+
+        var worldPos = ControllerTransform.position + Vector3.up * NameplateHeight;
+        var cameraPos = Camera.main.transform.position;
+        var distance = Vector3.Distance(worldPos, cameraPos);
+
+        // Vérifier si le droid est visible (pas de mur entre la caméra et le droid)
+        var direction = worldPos - cameraPos;
+        var isVisible = !Physics.Raycast(cameraPos, direction.normalized, distance,
+            LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
+
+        // Fade in/out selon la visibilité
+        var currentColor = _nameplate.text.color;
+        var targetAlpha = isVisible && distance < 20f ? 0.5f : 0f;
+        var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * 10f);
+        _nameplate.text.color = new Color(1f, 1f, 1f, newAlpha);
+
+        // Mettre à jour la position
+        var screenPos = SemiFunc.UIWorldToCanvasPosition(worldPos);
+        var rect = _nameplate.GetComponent<RectTransform>();
+        if (rect != null)
+        {
+            rect.anchoredPosition = screenPos;
+        }
+
+        // Ajuster la taille selon la distance
+        _nameplate.text.fontSize = Mathf.Clamp(20f - distance, 8f, 20f);
     }
 
     private void ApplyPlayerColor()
