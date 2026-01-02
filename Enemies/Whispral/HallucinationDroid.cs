@@ -27,7 +27,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private const float TalkRotationMaxAngle = 25f;
     private const int SampleDataLength = 256;
 
-    private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>();
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>(true);
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private Animator _animator;
     private CharacterController _charController;
@@ -597,6 +597,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         fsm.AddState(StateId.Idle, new IdleState());
         fsm.AddState(StateId.Wander, new WanderState());
         fsm.AddState(StateId.Sprint, new SprintState());
+        fsm.AddState(StateId.CheckMap, new CheckMapState());
     }
 
     private void FindCriticalTransforms()
@@ -864,7 +865,8 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     {
         Idle,
         Wander,
-        Sprint
+        Sprint,
+        CheckMap
     }
 
     private class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
@@ -872,6 +874,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         private const float MinIdleTime = 10f;
         private const float MaxIdleTime = 15f;
         private const float PrecomputeRetryInterval = 1f;
+        private const float CheckMapChance = 0.15f; // 15% de chance de regarder la map
 
         private float _duration;
         private float _precomputeTimer;
@@ -905,8 +908,20 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
             if (TimeElapsed >= _duration)
             {
-                // Chance aléatoire de courir au lieu de marcher
-                Machine.NextStateStateId = Random.value < SprintChance ? StateId.Sprint : StateId.Wander;
+                // Choisir le prochain état
+                var roll = Random.value;
+                if (roll < CheckMapChance)
+                {
+                    Machine.NextStateStateId = StateId.CheckMap;
+                }
+                else if (roll < CheckMapChance + SprintChance)
+                {
+                    Machine.NextStateStateId = StateId.Sprint;
+                }
+                else
+                {
+                    Machine.NextStateStateId = StateId.Wander;
+                }
             }
         }
     }
@@ -1000,6 +1015,165 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         protected override void SetMovementFlag(bool value)
         {
             Machine.Owner.IsSprinting = value;
+        }
+    }
+
+    private class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    {
+        private const string ClipName = "LostDroidStand";
+
+        // Timestamps en secondes (basés sur les keyframes de l'animation)
+        private const float RaiseStartTime = 4.65f;
+        private const float LookStartTime = 5.5f;
+        private const float LookEndTime = 6.9333334f;
+        private const float LowerEndTime = 7.15f;
+
+        // Durée de la phase de regard (configurable)
+        private const float MinLookDuration = 3f;
+        private const float MaxLookDuration = 8f;
+
+        private Animator _animator;
+        private AnimationClip _clip;
+
+        private Phase _currentPhase;
+        private float _currentTime;
+        private float _lookDuration;
+        private float _lookTimer;
+        private GameObject _targetObject;
+
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+
+            _animator = Machine.Owner._animator;
+            if (_animator == null)
+            {
+                LOG.Warning("CheckMapState: Animator is null!");
+                Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            // Trouver le clip
+            _clip = null;
+            foreach (var clip in _animator.runtimeAnimatorController.animationClips)
+            {
+                if (clip.name == ClipName)
+                {
+                    _clip = clip;
+                    break;
+                }
+            }
+
+            if (_clip == null)
+            {
+                LOG.Warning($"CheckMapState: Clip '{ClipName}' not found!");
+                Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            _targetObject = _animator.gameObject;
+
+            // Désactiver les flags de mouvement
+            Machine.Owner.IsWalking = false;
+            Machine.Owner.IsSprinting = false;
+            Machine.Owner.ResetPath();
+
+            // Désactiver l'Animator pour prendre le contrôle direct
+            _animator.enabled = false;
+
+            // Configurer la durée de regard
+            _lookDuration = Random.Range(MinLookDuration, MaxLookDuration);
+            _lookTimer = 0f;
+
+            // Démarrer la phase de lever
+            _currentPhase = Phase.Raise;
+            _currentTime = RaiseStartTime;
+
+            LOG.Debug($"CheckMapState: ENTER - Clip length={_clip.length}s, starting at {_currentTime}s");
+            LOG.Debug(
+                $"CheckMapState: Thresholds - Raise={RaiseStartTime}s, Look={LookStartTime}s-{LookEndTime}s, Lower={LowerEndTime}s");
+            LOG.Debug($"CheckMapState: LookDuration={_lookDuration:F1}s");
+
+            // Appliquer la première frame
+            _clip.SampleAnimation(_targetObject, _currentTime);
+        }
+
+        public override void OnStateUpdate()
+        {
+            base.OnStateUpdate();
+
+            if (_clip == null || _targetObject == null)
+            {
+                Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            // Avancer le temps
+            _currentTime += Time.deltaTime;
+
+            switch (_currentPhase)
+            {
+                case Phase.Raise:
+                    if (_currentTime >= LookStartTime)
+                    {
+                        LOG.Debug("CheckMapState: Transitioning to Phase.Look");
+                        _currentPhase = Phase.Look;
+                        _lookTimer = 0f;
+                    }
+
+                    break;
+
+                case Phase.Look:
+                    _lookTimer += Time.deltaTime;
+
+                    if (_currentTime >= LookEndTime)
+                    {
+                        if (_lookTimer < _lookDuration)
+                        {
+                            // Boucler
+                            _currentTime = LookStartTime;
+                        }
+                        else
+                        {
+                            LOG.Debug("CheckMapState: Transitioning to Phase.Lower");
+                            _currentPhase = Phase.Lower;
+                        }
+                    }
+
+                    break;
+
+                case Phase.Lower:
+                    if (_currentTime >= LowerEndTime)
+                    {
+                        LOG.Debug("CheckMapState: Animation complete, returning to Idle");
+                        Machine.NextStateStateId = StateId.Idle;
+                        return;
+                    }
+
+                    break;
+            }
+
+            // Appliquer l'animation
+            _clip.SampleAnimation(_targetObject, _currentTime);
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            LOG.Debug($"CheckMapState: EXIT -> {next}");
+
+            // Réactiver l'Animator
+            if (_animator != null)
+            {
+                _animator.enabled = true;
+            }
+        }
+
+        private enum Phase
+        {
+            Raise,
+            Look,
+            Lower
         }
     }
 
