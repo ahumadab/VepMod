@@ -931,12 +931,19 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             _duration = Random.Range(MinDuration, MaxDuration);
             _nextSwitchCheck = SwitchCheckInterval;
 
-            if (!Machine.Owner.TrySetRandomDestination())
+            // Si on vient d'un autre état de mouvement (Wander ↔ Sprint), garder la même destination
+            var isMovementSwitch = previous == StateId.Wander || previous == StateId.Sprint;
+            if (!isMovementSwitch)
             {
-                Machine.NextStateStateId = StateId.Idle;
-                return;
+                // Nouvelle destination nécessaire (depuis Idle)
+                if (!Machine.Owner.TrySetRandomDestination())
+                {
+                    Machine.NextStateStateId = StateId.Idle;
+                    return;
+                }
             }
 
+            // Juste changer la vitesse
             Machine.Owner.SetSpeed(Speed);
             SetMovementFlag(true);
         }
