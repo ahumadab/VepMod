@@ -24,14 +24,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private const float NameplateHeight = 1.9f;
 
-    private const float TalkRotationMaxAngle = 25f;
-    private const int SampleDataLength = 256;
-
-    // Angry eyes settings
-    private const float LookAtAngle = 50f; // Angle de vision du joueur
-    private const float LookAtMaxDistance = 30f; // Distance max de détection
-    private const float AngryEyesCooldown = 0.6f; // Temps avant d'annuler l'emote après être vu
-
     // Stalk settings
     private const float StalkMinDistance = 15f; // Distance min pour déclencher le stalk
     private const float StalkChance = 0.2f; // Chance de stalk quand trop loin
@@ -45,33 +37,14 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     // Components
     private Animator _animator;
+    private DroidAnimationController _animController;
     private CharacterController _charController;
     private DroidMovementController _movement;
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
 
-    // Angry eyes - eyelid GameObjects and rotation transforms
-    private float _angryTimer;
-    private GameObject _eyelidsLeft;
-    private GameObject _eyelidsRight;
-    private Transform _headTopTransform;
-    private bool _isAngry;
-    private Transform _leftLowerEyelidRotationX;
-    private Transform _leftLowerEyelidRotationZ;
-    private Transform _leftUpperEyelidRotationX;
-    private Transform _leftUpperEyelidRotationZ;
-    private Transform _rightLowerEyelidRotationX;
-    private Transform _rightLowerEyelidRotationZ;
-    private Transform _rightUpperEyelidRotationX;
-    private Transform _rightUpperEyelidRotationZ;
-    private bool _wasPlayerLooking;
-
     // Nameplate
     private WorldSpaceUIPlayerName _nameplate;
-
-    // Talking animation
-    private float[] _sampleData;
-    private AudioSource _talkingAudioSource;
 
     // NavMesh settings (saved for initialization)
     private int _savedAgentTypeID;
@@ -84,6 +57,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     public PlayerAvatar SourcePlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
     public DroidMovementController Movement => _movement;
+    public bool IsPlayerLookingAtMe => _animController?.IsPlayerLookingAtMe ?? false;
 
     protected override StateId DefaultState => StateId.Idle;
 
@@ -135,143 +109,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             _animator.SetBool("isSprinting", IsSprinting);
             _animator.SetBool("isTurning", IsTurning);
             _animator.SetBool("stun", false);
-        }
-    }
-
-    /// <summary>
-    ///     Vérifie si le joueur local regarde en direction du droid.
-    /// </summary>
-    private bool IsPlayerLookingAtMe()
-    {
-        var camera = Camera.main;
-        if (camera == null || ControllerTransform == null) return false;
-
-        var droidPosition = ControllerTransform.position + Vector3.up; // Centre du droid
-        var cameraPosition = camera.transform.position;
-
-        // Check distance
-        var distance = Vector3.Distance(cameraPosition, droidPosition);
-        if (distance > LookAtMaxDistance) return false;
-
-        // Check angle
-        var directionToDroid = (droidPosition - cameraPosition).normalized;
-        var dot = Vector3.Dot(camera.transform.forward, directionToDroid);
-        var threshold = Mathf.Cos(LookAtAngle * Mathf.Deg2Rad);
-
-        return dot >= threshold;
-    }
-
-    // Angry expression values
-    private static class AngryExpression
-    {
-        public const float UpperLidAngleLeft = -34f;
-        public const float UpperLidAngleRight = 34f;
-        public const float UpperLidClosed = 83f;
-        public const float LowerLidClosed = -83f;
-    }
-
-    /// <summary>
-    ///     Met à jour l'état des yeux fâchés.
-    ///     - Le droid montre les paupières fâchées quand le joueur ne le regarde pas
-    ///     - Il les cache X secondes après avoir été vu
-    /// </summary>
-    private void UpdateAngryEyes()
-    {
-        if (_eyelidsLeft == null || _eyelidsRight == null) return;
-        if (_leftUpperEyelidRotationX == null || _rightUpperEyelidRotationX == null) return;
-
-        var isPlayerLooking = IsPlayerLookingAtMe();
-
-        // Transition de "pas regardé" à "regardé"
-        if (isPlayerLooking && !_wasPlayerLooking)
-        {
-            _angryTimer = AngryEyesCooldown;
-        }
-
-        _wasPlayerLooking = isPlayerLooking;
-
-        // Gestion du timer et de l'état angry
-        if (isPlayerLooking)
-        {
-            _angryTimer -= Time.deltaTime;
-            if (_angryTimer <= 0f)
-            {
-                _isAngry = false;
-            }
-        }
-        else
-        {
-            _isAngry = true;
-        }
-
-        // Activer les paupières quand on devient angry
-        if (_isAngry && !_eyelidsLeft.activeSelf)
-        {
-            _eyelidsLeft.SetActive(true);
-            _eyelidsRight.SetActive(true);
-        }
-
-        // Valeurs cibles
-        var targetUpperClosed = _isAngry ? AngryExpression.UpperLidClosed : 0f;
-        var targetLowerClosed = _isAngry ? AngryExpression.LowerLidClosed : 0f;
-        var targetLeftAngle = _isAngry ? AngryExpression.UpperLidAngleLeft : 0f;
-        var targetRightAngle = _isAngry ? AngryExpression.UpperLidAngleRight : 0f;
-
-        var lerpSpeed = Time.deltaTime * 8f;
-
-        // Animer les paupières supérieures
-        _leftUpperEyelidRotationX.localRotation = Quaternion.Slerp(
-            _leftUpperEyelidRotationX.localRotation,
-            Quaternion.Euler(targetUpperClosed, 0f, 0f),
-            lerpSpeed);
-
-        _rightUpperEyelidRotationX.localRotation = Quaternion.Slerp(
-            _rightUpperEyelidRotationX.localRotation,
-            Quaternion.Euler(targetUpperClosed, 0f, 0f),
-            lerpSpeed);
-
-        if (_leftUpperEyelidRotationZ != null)
-        {
-            _leftUpperEyelidRotationZ.localRotation = Quaternion.Slerp(
-                _leftUpperEyelidRotationZ.localRotation,
-                Quaternion.Euler(0f, 0f, targetLeftAngle),
-                lerpSpeed);
-        }
-
-        if (_rightUpperEyelidRotationZ != null)
-        {
-            _rightUpperEyelidRotationZ.localRotation = Quaternion.Slerp(
-                _rightUpperEyelidRotationZ.localRotation,
-                Quaternion.Euler(0f, 0f, targetRightAngle),
-                lerpSpeed);
-        }
-
-        // Animer les paupières inférieures
-        if (_leftLowerEyelidRotationX != null)
-        {
-            _leftLowerEyelidRotationX.localRotation = Quaternion.Slerp(
-                _leftLowerEyelidRotationX.localRotation,
-                Quaternion.Euler(targetLowerClosed, 0f, 0f),
-                lerpSpeed);
-        }
-
-        if (_rightLowerEyelidRotationX != null)
-        {
-            _rightLowerEyelidRotationX.localRotation = Quaternion.Slerp(
-                _rightLowerEyelidRotationX.localRotation,
-                Quaternion.Euler(targetLowerClosed, 0f, 0f),
-                lerpSpeed);
-        }
-
-        // Désactiver les paupières quand l'animation est terminée (retour à la normale)
-        if (!_isAngry && _eyelidsLeft.activeSelf)
-        {
-            var currentAngle = Mathf.Abs(_leftUpperEyelidRotationX.localEulerAngles.x);
-            if (currentAngle is < 10f or > 350f) // Proche de 0
-            {
-                _eyelidsLeft.SetActive(false);
-                _eyelidsRight.SetActive(false);
-            }
         }
     }
 
@@ -360,11 +197,10 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         DisableEnemyComponents();
         SetupNavigation();
         SetupMovementController();
-        SetupAnimation();
+        SetupAnimator();
+        SetupAnimationController();
         ApplyPlayerColor();
         CreateNameplate();
-        FindHeadTransform();
-        FindEyeTransforms();
         InitializeFSM();
 
         LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
@@ -384,11 +220,71 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         fsm.NextStateStateId = StateId.Idle;
     }
 
+    private void SetupAnimationController()
+    {
+        _animController = gameObject.AddComponent<DroidAnimationController>();
+        _animController.Initialize(ControllerTransform);
+
+        // Setup head transform for talking animation
+        var headTopTransform = DroidHelpers.FindChildByName(transform, "code_head_top");
+        if (headTopTransform != null)
+        {
+            _animController.SetupTalking(headTopTransform);
+        }
+
+        // Setup eyelids for angry eyes
+        SetupEyelidsForAnimController();
+    }
+
+    private void SetupEyelidsForAnimController()
+    {
+        try
+        {
+            var eyeLeft = DroidHelpers.FindChildByName(transform, "ANIM EYE LEFT");
+            var eyeRight = DroidHelpers.FindChildByName(transform, "ANIM EYE RIGHT");
+
+            if (eyeLeft == null || eyeRight == null)
+            {
+                LOG.Warning("ANIM EYE LEFT/RIGHT not found for angry eyes effect");
+                return;
+            }
+
+            var playerSource = FindEyelidSource();
+            if (playerSource == null)
+            {
+                LOG.Warning("No PlayerAvatar found to copy eyelid structure");
+                return;
+            }
+
+            var codeEyeLeft = DroidHelpers.FindChildByName(transform, "code_eye_left") ?? eyeLeft;
+            var codeEyeRight = DroidHelpers.FindChildByName(transform, "code_eye_right") ?? eyeRight;
+
+            var eyelidsLeft = SetupEyeFromPlayer(codeEyeLeft, playerSource, "LEFT",
+                out var leftUpperX, out var leftUpperZ, out var leftLowerX, out _);
+
+            var eyelidsRight = SetupEyeFromPlayer(codeEyeRight, playerSource, "RIGHT",
+                out var rightUpperX, out var rightUpperZ, out var rightLowerX, out _);
+
+            if (eyelidsLeft != null) eyelidsLeft.SetActive(false);
+            if (eyelidsRight != null) eyelidsRight.SetActive(false);
+
+            _animController.SetupEyelids(
+                eyelidsLeft, eyelidsRight,
+                leftUpperX, leftUpperZ, leftLowerX,
+                rightUpperX, rightUpperZ, rightLowerX);
+
+            LOG.Info($"Angry eyes setup: left={eyelidsLeft != null}, right={eyelidsRight != null}");
+        }
+        catch (Exception ex)
+        {
+            LOG.Error($"SetupEyelidsForAnimController: Exception - {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
     private void LateUpdate()
     {
         UpdateNameplate();
-        UpdateTalkingAnimation();
-        UpdateAngryEyes();
+        _animController?.UpdateAnimations();
     }
 
     private void OnDestroy()
@@ -401,150 +297,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         if (_nameplate != null)
         {
             Destroy(_nameplate.gameObject);
-        }
-    }
-
-    private void UpdateTalkingAnimation()
-    {
-        if (_headTopTransform == null) return;
-
-        var targetRotation = 0f;
-
-        // Vérifier si on a un AudioSource actif sur le controller
-        if (_talkingAudioSource == null && ControllerTransform != null)
-        {
-            _talkingAudioSource = ControllerTransform.GetComponent<AudioSource>();
-        }
-
-        if (_talkingAudioSource != null && _talkingAudioSource.isPlaying)
-        {
-            // Analyser le volume audio
-            _sampleData ??= new float[SampleDataLength];
-            _talkingAudioSource.GetOutputData(_sampleData, 0);
-
-            var loudness = 0f;
-            foreach (var sample in _sampleData)
-            {
-                loudness += Mathf.Abs(sample);
-            }
-
-            loudness /= SampleDataLength;
-
-            // Calculer la rotation basée sur le volume (négatif = ouvrir vers le haut)
-            if (loudness > 0.01f)
-            {
-                targetRotation = Mathf.Lerp(0f, -TalkRotationMaxAngle, loudness * 10f);
-            }
-        }
-        else
-        {
-            _talkingAudioSource = null;
-        }
-
-        // Appliquer la rotation avec lerp smooth
-        _headTopTransform.localRotation = Quaternion.Slerp(
-            _headTopTransform.localRotation,
-            Quaternion.Euler(targetRotation, 0f, 0f),
-            Time.deltaTime * 20f);
-    }
-
-    private void FindHeadTransform()
-    {
-        // Chercher ANIM HEAD TOP dans la hiérarchie
-        foreach (var child in GetComponentsInChildren<Transform>(true))
-        {
-            if (child.name == "code_head_top")
-            {
-                _headTopTransform = child;
-                return;
-            }
-        }
-
-        LOG.Warning("ANIM HEAD TOP not found for talking animation");
-    }
-
-    private void FindEyeTransforms()
-    {
-        try
-        {
-            Transform eyeLeft = null;
-            Transform eyeRight = null;
-
-            // Chercher ANIM EYE LEFT et ANIM EYE RIGHT sur le droid
-            foreach (var child in GetComponentsInChildren<Transform>(true))
-            {
-                switch (child.name)
-                {
-                    case "ANIM EYE LEFT":
-                        eyeLeft = child;
-                        break;
-                    case "ANIM EYE RIGHT":
-                        eyeRight = child;
-                        break;
-                }
-
-                if (eyeLeft != null && eyeRight != null) break;
-            }
-
-            if (eyeLeft == null || eyeRight == null)
-            {
-                LOG.Warning("ANIM EYE LEFT/RIGHT not found for angry eyes effect");
-                return;
-            }
-
-            // Trouver un PlayerAvatar pour copier la structure des paupières
-            var playerSource = FindEyelidSource();
-
-            if (playerSource == null)
-            {
-                LOG.Warning("No PlayerAvatar found to copy eyelid structure");
-                return;
-            }
-
-            // Trouver code_eye_left et code_eye_right sur le droid (où attacher les paupières)
-            Transform codeEyeLeft = null;
-            Transform codeEyeRight = null;
-            foreach (var child in GetComponentsInChildren<Transform>(true))
-            {
-                switch (child.name)
-                {
-                    case "code_eye_left":
-                        codeEyeLeft = child;
-                        break;
-                    case "code_eye_right":
-                        codeEyeRight = child;
-                        break;
-                }
-
-                if (codeEyeLeft != null && codeEyeRight != null) break;
-            }
-
-            // Fallback sur ANIM EYE si code_eye non trouvé
-            var eyelidParentLeft = codeEyeLeft ?? eyeLeft;
-            var eyelidParentRight = codeEyeRight ?? eyeRight;
-
-            // Setup pour les deux yeux
-            _eyelidsLeft = SetupEyeFromPlayer(eyelidParentLeft, playerSource, "LEFT",
-                out _leftUpperEyelidRotationX,
-                out _leftUpperEyelidRotationZ,
-                out _leftLowerEyelidRotationX,
-                out _leftLowerEyelidRotationZ);
-
-            _eyelidsRight = SetupEyeFromPlayer(eyelidParentRight, playerSource, "RIGHT",
-                out _rightUpperEyelidRotationX,
-                out _rightUpperEyelidRotationZ,
-                out _rightLowerEyelidRotationX,
-                out _rightLowerEyelidRotationZ);
-
-            // Désactiver par défaut (seront activées quand angry)
-            if (_eyelidsLeft != null) _eyelidsLeft.SetActive(false);
-            if (_eyelidsRight != null) _eyelidsRight.SetActive(false);
-
-            LOG.Info($"Angry eyes setup: left={_eyelidsLeft != null}, right={_eyelidsRight != null}");
-        }
-        catch (Exception ex)
-        {
-            LOG.Error($"FindEyeTransforms: Exception - {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -980,7 +732,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         }
     }
 
-    private void SetupAnimation()
+    private void SetupAnimator()
     {
         _animator = GetComponentInChildren<Animator>();
 
@@ -1579,7 +1331,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             Machine.Owner.LookAtPlayer();
 
             var distance = Machine.Owner.GetDistanceToPlayer();
-            var isPlayerLooking = Machine.Owner.IsPlayerLookingAtMe();
+            var isPlayerLooking = Machine.Owner.IsPlayerLookingAtMe;
 
             // Le joueur nous a vu !
             if (isPlayerLooking && !_hasBeenSeen)
