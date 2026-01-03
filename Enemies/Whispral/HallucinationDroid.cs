@@ -15,7 +15,7 @@ namespace VepMod.Enemies.Whispral;
 ///     - Rigidbody: transform suivi par Cube via ParentConstraint
 ///     - Cube: visuels + Animator
 /// </summary>
-public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroid, HallucinationDroid.StateId>
+public sealed partial class HallucinationDroid : StateMachineComponent<HallucinationDroid, HallucinationDroid.StateId>
 {
     internal const float WalkSpeed = 2f;
     internal const float SprintSpeed = 5f;
@@ -29,7 +29,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     internal const float StalkFleeDistance = 20f;
     internal const float StalkStareBeforeFlee = 2f;
 
-    private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>(true);
     private readonly Materials.MaterialTrigger _materialTrigger = new();
 
     // Components (animator is internal for FSM states)
@@ -523,13 +522,13 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private void InitializeFSM()
     {
         fsm = new StateMachine(this, DefaultState);
-        fsm.AddState(StateId.Idle, new HallucinationDroidStates.IdleState());
-        fsm.AddState(StateId.Wander, new HallucinationDroidStates.WanderState());
-        fsm.AddState(StateId.Sprint, new HallucinationDroidStates.SprintState());
-        fsm.AddState(StateId.CheckMap, new HallucinationDroidStates.CheckMapState());
-        fsm.AddState(StateId.StalkApproach, new HallucinationDroidStates.StalkApproachState());
-        fsm.AddState(StateId.StalkStare, new HallucinationDroidStates.StalkStareState());
-        fsm.AddState(StateId.StalkFlee, new HallucinationDroidStates.StalkFleeState());
+        fsm.AddState(StateId.Idle, new IdleState());
+        fsm.AddState(StateId.Wander, new WanderState());
+        fsm.AddState(StateId.Sprint, new SprintState());
+        fsm.AddState(StateId.CheckMap, new CheckMapState());
+        fsm.AddState(StateId.StalkApproach, new StalkApproachState());
+        fsm.AddState(StateId.StalkStare, new StalkStareState());
+        fsm.AddState(StateId.StalkFlee, new StalkFleeState());
     }
 
     private void FindCriticalTransforms()

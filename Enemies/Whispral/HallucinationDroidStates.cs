@@ -1,19 +1,18 @@
 using UnityEngine;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
-using static VepMod.Enemies.Whispral.HallucinationDroid;
 using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     États FSM pour HallucinationDroid.
+///     États FSM pour HallucinationDroid (partial class).
 /// </summary>
-public static class HallucinationDroidStates
+public sealed partial class HallucinationDroid
 {
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDroid>(true);
 
-    internal class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const string ClipName = "LostDroidStand";
         private const float IdleLoopStart = 0f;
@@ -123,7 +122,7 @@ public static class HallucinationDroidStates
         }
     }
 
-    internal abstract class MovementState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private abstract class MovementState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const float SwitchCheckInterval = 1f;
         private const float SwitchChance = 0.2f;
@@ -185,7 +184,7 @@ public static class HallucinationDroidStates
         }
     }
 
-    internal class WanderState : MovementState
+    private class WanderState : MovementState
     {
         protected override float MinDuration => 5f;
         protected override float MaxDuration => 15f;
@@ -198,7 +197,7 @@ public static class HallucinationDroidStates
         }
     }
 
-    internal class SprintState : MovementState
+    private class SprintState : MovementState
     {
         protected override float MinDuration => 3f;
         protected override float MaxDuration => 8f;
@@ -211,7 +210,7 @@ public static class HallucinationDroidStates
         }
     }
 
-    internal class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const string ClipName = "LostDroidStand";
 
@@ -352,7 +351,7 @@ public static class HallucinationDroidStates
     /// <summary>
     ///     État de stalk : le droid court vers le joueur.
     /// </summary>
-    internal class StalkApproachState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private class StalkApproachState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const float MaxApproachTime = 30f;
         private const float DestinationUpdateInterval = 1f;
@@ -422,7 +421,7 @@ public static class HallucinationDroidStates
     ///     État de stalk : le droid fixe le joueur tout en s'approchant.
     ///     Si le joueur le regarde, il maintient le regard X secondes puis fuit.
     /// </summary>
-    internal class StalkStareState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private class StalkStareState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const float MaxStareTime = 30f;
         private const float DestinationUpdateInterval = 0.5f;
@@ -507,7 +506,7 @@ public static class HallucinationDroidStates
     /// <summary>
     ///     État de stalk : le droid fuit le joueur.
     /// </summary>
-    internal class StalkFleeState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private class StalkFleeState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const float MaxFleeTime = 10f;
 
