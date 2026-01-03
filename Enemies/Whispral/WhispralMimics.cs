@@ -24,7 +24,7 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class WhispralMimics : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<WhispralMimics>(false);
+    private static readonly VepLogger LOG = VepLogger.Create<WhispralMimics>();
 
     public PhotonView PhotonView { get; private set; }
 
@@ -545,7 +545,7 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
         // Vérifier si on a une hallucination active pour ce joueur
-        var hallucinationDebuff = localPlayer.GetComponent<HallucinationDebuff>();
+        var hallucinationDebuff = localPlayer.GetComponent<DroidDebuff>();
         if (hallucinationDebuff != null && hallucinationDebuff.IsActive)
         {
             var droid = hallucinationDebuff.GetDroidByPlayerName(sourcePlayerNickName);

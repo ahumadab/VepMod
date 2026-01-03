@@ -64,7 +64,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     public State CurrentState
     {
-        get => SemiFunc.IsMasterClientOrSingleplayer() ? fsm.CurrentStateStateId : _currentState;
+        get => SemiFunc.IsMasterClientOrSingleplayer() ? Fsm.CurrentStateStateId : _currentState;
         set
         {
             if (SemiFunc.IsMasterClientOrSingleplayer()) return;
@@ -79,20 +79,20 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         photonView = GetComponent<PhotonView>();
 
         // Enregistrement des états
-        fsm.AddState(State.Spawn, new SpawnState());
-        fsm.AddState(State.Idle, new IdleState());
-        fsm.AddState(State.Roam, new RoamState());
-        fsm.AddState(State.Investigate, new InvestigateState());
-        fsm.AddState(State.NoticePlayer, new PlayerNoticeState());
-        fsm.AddState(State.GoToPlayer, new PlayerGoToState());
-        fsm.AddState(State.PrepareAttach, new AttachPrepareState());
-        fsm.AddState(State.Attached, new AttachedState());
-        fsm.AddState(State.Detach, new DetachState());
-        fsm.AddState(State.DetachWait, new DetachWaitState());
-        fsm.AddState(State.Leave, new LeaveState());
-        fsm.AddState(State.Stun, new StunState());
-        fsm.AddState(State.StunEnd, new StunEndState());
-        fsm.AddState(State.Despawn, new DespawnState());
+        Fsm.AddState(State.Spawn, new SpawnState());
+        Fsm.AddState(State.Idle, new IdleState());
+        Fsm.AddState(State.Roam, new RoamState());
+        Fsm.AddState(State.Investigate, new InvestigateState());
+        Fsm.AddState(State.NoticePlayer, new PlayerNoticeState());
+        Fsm.AddState(State.GoToPlayer, new PlayerGoToState());
+        Fsm.AddState(State.PrepareAttach, new AttachPrepareState());
+        Fsm.AddState(State.Attached, new AttachedState());
+        Fsm.AddState(State.Detach, new DetachState());
+        Fsm.AddState(State.DetachWait, new DetachWaitState());
+        Fsm.AddState(State.Leave, new LeaveState());
+        Fsm.AddState(State.Stun, new StunState());
+        Fsm.AddState(State.StunEnd, new StunEndState());
+        Fsm.AddState(State.Despawn, new DespawnState());
     }
 
     protected override void Update()
@@ -126,7 +126,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         var canDespawn = enemy.CurrentState == EnemyState.Despawn && !enemy.IsStunned();
         if (canDespawn)
         {
-            fsm.NextStateStateId = State.Despawn;
+            Fsm.NextStateStateId = State.Despawn;
         }
     }
 
@@ -134,7 +134,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         if (enemy.IsStunned())
         {
-            fsm.NextStateStateId = State.Stun;
+            Fsm.NextStateStateId = State.Stun;
         }
     }
 
@@ -303,7 +303,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         if (SemiFunc.IsMasterClientOrSingleplayer() && SemiFunc.EnemySpawn(enemy))
         {
-            fsm.NextStateStateId = State.Spawn;
+            Fsm.NextStateStateId = State.Spawn;
         }
     }
 
@@ -327,7 +327,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         if (SemiFunc.IsMasterClientOrSingleplayer() && canInvestigate)
         {
             agentDestination = enemy.StateInvestigate.onInvestigateTriggeredPosition;
-            fsm.NextStateStateId = State.Investigate;
+            Fsm.NextStateStateId = State.Investigate;
         }
     }
 
@@ -348,12 +348,12 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 photonView.RPC("UpdatePlayerTargetRPC", RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
-            fsm.NextStateStateId = State.NoticePlayer;
+            Fsm.NextStateStateId = State.NoticePlayer;
         }
         else if (CurrentState == State.GoToPlayer)
         {
             // refresh du timer dans PlayerGoTo
-            fsm.GetStateTyped<PlayerGoToState>(State.GoToPlayer)?.RefreshTimer();
+            Fsm.GetStateTyped<PlayerGoToState>(State.GoToPlayer)?.RefreshTimer();
         }
     }
 
@@ -370,7 +370,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 photonView.RPC("UpdatePlayerTargetRPC", RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
-            fsm.NextStateStateId = State.NoticePlayer;
+            Fsm.NextStateStateId = State.NoticePlayer;
         }
     }
 
@@ -381,7 +381,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         if (CurrentState is State.PrepareAttach or State.Attached)
         {
-            fsm.NextStateStateId = State.Detach;
+            Fsm.NextStateStateId = State.Detach;
         }
     }
 
@@ -627,9 +627,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         private const int MaxPrecomputedPositions = 4;
 
         private bool _agentSet;
-        private float _timer;
-        private float _precomputeTimer;
         private int _precomputedCount;
+        private float _precomputeTimer;
+        private float _timer;
 
         public override void OnStateEnter(State previous)
         {

@@ -4,46 +4,19 @@ using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
-public sealed class InvisibleDebuff : MonoBehaviour
+public sealed class InvisiblePlayerDebuff : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<InvisibleDebuff>(true);
-    private static readonly HashSet<PlayerAvatar> _globalHiddenPlayers = new();
+    private static readonly VepLogger LOG = VepLogger.Create<InvisiblePlayerDebuff>(true);
+    private static readonly HashSet<PlayerAvatar> GlobalHiddenPlayers = new();
 
-    private readonly List<PlayerAvatar> hiddenPlayers = new();
+    private readonly List<PlayerAvatar> _hiddenPlayers = new();
     public bool IsActive { get; private set; }
 
     /// <summary>
     ///     Liste des joueurs actuellement cachés par ce debuff.
     ///     Utilisé par HallucinationDebuff pour créer les hallucinations.
     /// </summary>
-    public IReadOnlyList<PlayerAvatar> HiddenPlayers => hiddenPlayers;
-
-    /// <summary>
-    ///     Vérifie si un joueur est actuellement caché (globalement).
-    ///     Utilisé par les patches pour bloquer les sons de pas.
-    /// </summary>
-    public static bool IsPlayerHidden(PlayerAvatar player)
-    {
-        return player != null && _globalHiddenPlayers.Contains(player);
-    }
-
-    /// <summary>
-    ///     Vérifie si une position correspond à un joueur caché (dans un rayon de 2m).
-    /// </summary>
-    public static bool IsPositionNearHiddenPlayer(Vector3 position, float radius = 2f)
-    {
-        foreach (var player in _globalHiddenPlayers)
-        {
-            if (player == null) continue;
-            var playerPos = player.transform.position;
-            if (Vector3.Distance(position, playerPos) <= radius)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public IReadOnlyList<PlayerAvatar> HiddenPlayers => _hiddenPlayers;
 
     private void LateUpdate()
     {
@@ -76,15 +49,42 @@ public sealed class InvisibleDebuff : MonoBehaviour
             SetPlayerVisibility(player, !invisible);
             if (invisible)
             {
-                hiddenPlayers.Add(player);
-                _globalHiddenPlayers.Add(player);
+                _hiddenPlayers.Add(player);
+                GlobalHiddenPlayers.Add(player);
             }
             else
             {
-                hiddenPlayers.Remove(player);
-                _globalHiddenPlayers.Remove(player);
+                _hiddenPlayers.Remove(player);
+                GlobalHiddenPlayers.Remove(player);
             }
         }
+    }
+
+    /// <summary>
+    ///     Vérifie si un joueur est actuellement caché (globalement).
+    ///     Utilisé par les patches pour bloquer les sons de pas.
+    /// </summary>
+    public static bool IsPlayerHidden(PlayerAvatar player)
+    {
+        return player != null && GlobalHiddenPlayers.Contains(player);
+    }
+
+    /// <summary>
+    ///     Vérifie si une position correspond à un joueur caché (dans un rayon de 2m).
+    /// </summary>
+    public static bool IsPositionNearHiddenPlayer(Vector3 position, float radius = 2f)
+    {
+        foreach (var player in GlobalHiddenPlayers)
+        {
+            if (player == null) continue;
+            var playerPos = player.transform.position;
+            if (Vector3.Distance(position, playerPos) <= radius)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool CheckNull(PlayerAvatar player)
@@ -107,8 +107,8 @@ public sealed class InvisibleDebuff : MonoBehaviour
     private void LateCheckDeactivateFlashlight()
     {
         //Vérifie si le jeu a réactivé les lampes des joueurs cachés (ex: après crouch/tumble) et les re-désactive si nécessaire.
-        if (!IsActive || hiddenPlayers.Count == 0) return;
-        foreach (var player in hiddenPlayers)
+        if (!IsActive || _hiddenPlayers.Count == 0) return;
+        foreach (var player in _hiddenPlayers)
         {
             if (!player || !player.flashlightController) continue;
             var flashlight = player.flashlightController;

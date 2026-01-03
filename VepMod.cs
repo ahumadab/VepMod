@@ -44,12 +44,16 @@ public class VepMod : BaseUnityPlugin
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
 
         // Précharger le prefab LostDroid de manière asynchrone pour éviter les freezes
-        StartCoroutine(LostDroidPrefabLoader.PreloadAsync(success =>
+        StartCoroutine(DroidPrefabLoader.PreloadAsync(success =>
         {
             if (success)
+            {
                 Logger.LogInfo("LostDroid prefab preloaded successfully.");
+            }
             else
+            {
                 Logger.LogWarning("LostDroid prefab preload failed - hallucinations may not work.");
+            }
         }));
     }
 
