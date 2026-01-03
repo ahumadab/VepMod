@@ -22,8 +22,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     internal const float SprintSpeed = 5f;
     internal const float SprintChance = 0.5f;
 
-    private const float NameplateHeight = 1.9f;
-
     // Stalk settings
     private const float StalkMinDistance = 15f; // Distance min pour déclencher le stalk
     private const float StalkChance = 0.2f; // Chance de stalk quand trop loin
@@ -40,11 +38,9 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
     private DroidAnimationController _animController;
     private CharacterController _charController;
     private DroidMovementController _movement;
+    private DroidNameplate _nameplateController;
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
-
-    // Nameplate
-    private WorldSpaceUIPlayerName _nameplate;
 
     // NavMesh settings (saved for initialization)
     private int _savedAgentTypeID;
@@ -200,7 +196,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         SetupAnimator();
         SetupAnimationController();
         ApplyPlayerColor();
-        CreateNameplate();
+        SetupNameplate();
         InitializeFSM();
 
         LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
@@ -283,7 +279,7 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
 
     private void LateUpdate()
     {
-        UpdateNameplate();
+        _nameplateController?.UpdateNameplate();
         _animController?.UpdateAnimations();
     }
 
@@ -292,11 +288,6 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
         if (_movement != null)
         {
             _movement.OnNavMeshError -= HandleNavMeshError;
-        }
-
-        if (_nameplate != null)
-        {
-            Destroy(_nameplate.gameObject);
         }
     }
 
@@ -479,57 +470,10 @@ public sealed class HallucinationDroid : StateMachineComponent<HallucinationDroi
             Materials.HostType.OtherPlayer);
     }
 
-    private void CreateNameplate()
+    private void SetupNameplate()
     {
-        if (SourcePlayer == null || WorldSpaceUIParent.instance == null) return;
-
-        var prefab = WorldSpaceUIParent.instance.playerNamePrefab;
-        if (prefab == null) return;
-
-        var nameplateGO = Instantiate(prefab, WorldSpaceUIParent.instance.transform);
-        _nameplate = nameplateGO.GetComponent<WorldSpaceUIPlayerName>();
-
-        if (_nameplate != null)
-        {
-            // Assigner le SourcePlayer pour éviter la destruction automatique
-            _nameplate.playerAvatar = SourcePlayer;
-            _nameplate.text.text = SourcePlayer.playerName;
-        }
-    }
-
-    private void UpdateNameplate()
-    {
-        if (_nameplate == null || ControllerTransform == null || Camera.main == null) return;
-
-        var worldPos = ControllerTransform.position + Vector3.up * NameplateHeight;
-        var cameraPos = Camera.main.transform.position;
-        var distance = Vector3.Distance(worldPos, cameraPos);
-
-        // Vérifier si le droid est visible (pas de mur entre la caméra et le droid)
-        var direction = worldPos - cameraPos;
-        var isVisible = !Physics.Raycast(cameraPos, direction.normalized, distance,
-            LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
-
-        // Alpha basé sur la distance (1 proche, 0 à 30m+)
-        const float maxDistance = 8f;
-        var distanceAlpha = Mathf.Clamp01(1f - distance / maxDistance);
-        var targetAlpha = isVisible ? distanceAlpha : 0f;
-
-        // Lerp smooth
-        var currentColor = _nameplate.text.color;
-        var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * 5f);
-        _nameplate.text.color = new Color(1f, 1f, 1f, newAlpha);
-
-        // Mettre à jour la position
-        var screenPos = SemiFunc.UIWorldToCanvasPosition(worldPos);
-        var rect = _nameplate.GetComponent<RectTransform>();
-        if (rect != null)
-        {
-            rect.anchoredPosition = screenPos;
-        }
-
-        // Ajuster la taille selon la distance
-        _nameplate.text.fontSize = Mathf.Clamp(20f - distance, 8f, 20f);
+        _nameplateController = gameObject.AddComponent<DroidNameplate>();
+        _nameplateController.Initialize(ControllerTransform, SourcePlayer);
     }
 
     private void ApplyPlayerColor()
