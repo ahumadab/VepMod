@@ -5,7 +5,6 @@ using UnityEngine.AI;
 using UnityEngine.Animations;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
-using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
 
