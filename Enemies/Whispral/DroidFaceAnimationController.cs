@@ -1,13 +1,15 @@
 using UnityEngine;
 using VepMod.VepFramework;
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     Contrôleur d'animation pour HallucinationDroid.
 ///     Gère les paupières fâchées, l'animation de parole et la détection du regard du joueur.
 /// </summary>
-public sealed class DroidAnimationController : MonoBehaviour
+public sealed class DroidFaceAnimationController : MonoBehaviour
 {
     // Detection settings
     private const float LookAtAngle = 50f;
@@ -18,26 +20,26 @@ public sealed class DroidAnimationController : MonoBehaviour
     private const float TalkRotationMaxAngle = 25f;
     private const int SampleDataLength = 256;
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidAnimationController>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<DroidFaceAnimationController>();
 
     // Angry eyes state
     private float _angryTimer;
     private Transform _controllerTransform;
-    private GameObject _eyelidsLeft;
-    private GameObject _eyelidsRight;
-    private bool _isAngry;
-    private Transform _leftLowerEyelidRotationX;
-    private Transform _leftUpperEyelidRotationX;
-    private Transform _leftUpperEyelidRotationZ;
-    private Transform _rightLowerEyelidRotationX;
-    private Transform _rightUpperEyelidRotationX;
-    private Transform _rightUpperEyelidRotationZ;
-    private bool _wasPlayerLooking;
+    private GameObject? _eyelidsLeft;
+    private GameObject? _eyelidsRight;
 
     // Talking animation
-    private Transform _headTopTransform;
-    private float[] _sampleData;
-    private AudioSource _talkingAudioSource;
+    private Transform? _headTopTransform;
+    private bool _isAngry;
+    private Transform? _leftLowerEyelidRotationX;
+    private Transform? _leftUpperEyelidRotationX;
+    private Transform? _leftUpperEyelidRotationZ;
+    private Transform? _rightLowerEyelidRotationX;
+    private Transform? _rightUpperEyelidRotationX;
+    private Transform? _rightUpperEyelidRotationZ;
+    private float[]? _sampleData;
+    private AudioSource? _talkingAudioSource;
+    private bool _wasPlayerLooking;
 
     /// <summary>
     ///     Indique si le joueur regarde actuellement le droid.
@@ -56,14 +58,14 @@ public sealed class DroidAnimationController : MonoBehaviour
     ///     Configure le système des paupières (appelé après setup).
     /// </summary>
     public void SetupEyelids(
-        GameObject eyelidsLeft,
-        GameObject eyelidsRight,
-        Transform leftUpperX,
-        Transform leftUpperZ,
-        Transform leftLowerX,
-        Transform rightUpperX,
-        Transform rightUpperZ,
-        Transform rightLowerX)
+        GameObject? eyelidsLeft,
+        GameObject? eyelidsRight,
+        Transform? leftUpperX,
+        Transform? leftUpperZ,
+        Transform? leftLowerX,
+        Transform? rightUpperX,
+        Transform? rightUpperZ,
+        Transform? rightLowerX)
     {
         _eyelidsLeft = eyelidsLeft;
         _eyelidsRight = eyelidsRight;
@@ -91,32 +93,6 @@ public sealed class DroidAnimationController : MonoBehaviour
         UpdatePlayerLookDetection();
         UpdateAngryEyes();
         UpdateTalkingAnimation();
-    }
-
-    private void UpdatePlayerLookDetection()
-    {
-        var camera = Camera.main;
-        if (camera == null || _controllerTransform == null)
-        {
-            IsPlayerLookingAtMe = false;
-            return;
-        }
-
-        var droidPosition = _controllerTransform.position + Vector3.up;
-        var cameraPosition = camera.transform.position;
-
-        var distance = Vector3.Distance(cameraPosition, droidPosition);
-        if (distance > LookAtMaxDistance)
-        {
-            IsPlayerLookingAtMe = false;
-            return;
-        }
-
-        var directionToDroid = (droidPosition - cameraPosition).normalized;
-        var dot = Vector3.Dot(camera.transform.forward, directionToDroid);
-        var threshold = Mathf.Cos(LookAtAngle * Mathf.Deg2Rad);
-
-        IsPlayerLookingAtMe = dot >= threshold;
     }
 
     private void UpdateAngryEyes()
@@ -217,12 +193,36 @@ public sealed class DroidAnimationController : MonoBehaviour
         }
     }
 
+    private void UpdatePlayerLookDetection()
+    {
+        var camera = Camera.main;
+        if (camera == null || _controllerTransform == null)
+        {
+            IsPlayerLookingAtMe = false;
+            return;
+        }
+
+        var droidPosition = _controllerTransform.position + Vector3.up;
+        var cameraPosition = camera.transform.position;
+
+        var distance = Vector3.Distance(cameraPosition, droidPosition);
+        if (distance > LookAtMaxDistance)
+        {
+            IsPlayerLookingAtMe = false;
+            return;
+        }
+
+        var directionToDroid = (droidPosition - cameraPosition).normalized;
+        var dot = Vector3.Dot(camera.transform.forward, directionToDroid);
+        var threshold = Mathf.Cos(LookAtAngle * Mathf.Deg2Rad);
+
+        IsPlayerLookingAtMe = dot >= threshold;
+    }
+
     private void UpdateTalkingAnimation()
     {
         if (_headTopTransform == null) return;
-
         var targetRotation = 0f;
-
         if (_talkingAudioSource == null && _controllerTransform != null)
         {
             _talkingAudioSource = _controllerTransform.GetComponent<AudioSource>();
@@ -240,7 +240,6 @@ public sealed class DroidAnimationController : MonoBehaviour
             }
 
             loudness /= SampleDataLength;
-
             if (loudness > 0.01f)
             {
                 targetRotation = Mathf.Lerp(0f, -TalkRotationMaxAngle, loudness * 10f);

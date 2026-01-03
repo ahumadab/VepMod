@@ -17,9 +17,9 @@ public sealed class DroidNameplate : MonoBehaviour
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidNameplate>(true);
 
-    private Transform _controllerTransform;
-    private WorldSpaceUIPlayerName _nameplate;
-    private PlayerAvatar _sourcePlayer;
+    private Transform _controllerTransform = null!;
+    private WorldSpaceUIPlayerName? _nameplate;
+    private PlayerAvatar _sourcePlayer = null!;
 
     /// <summary>
     ///     Initialise le contrôleur de nameplate.

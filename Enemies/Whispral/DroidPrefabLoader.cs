@@ -7,22 +7,24 @@ using UnityEngine;
 using VepMod.VepFramework;
 using Object = UnityEngine.Object;
 
+// ReSharper disable Unity.NoNullPatternMatching
+
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     Charge le prefab LostDroid depuis l'AssetBundle de WesleysEnemies.
 ///     Supporte le chargement asynchrone pour éviter les freezes.
 /// </summary>
-public static class LostDroidPrefabLoader
+public static class DroidPrefabLoader
 {
     private static readonly VepLogger LOG = VepLogger.Create("LostDroidPrefabLoader");
 
-    private static AssetBundle _wesleysBundle;
+    private static AssetBundle? _wesleysBundle;
 
     /// <summary>
     ///     Le prefab LostDroid chargé, ou null si non disponible.
     /// </summary>
-    public static GameObject LostDroidPrefab { get; private set; }
+    public static GameObject? LostDroidPrefab { get; private set; }
 
     /// <summary>
     ///     Indique si le prefab est disponible.
@@ -134,7 +136,7 @@ public static class LostDroidPrefabLoader
         onComplete?.Invoke(success);
     }
 
-    private static GameObject GetPrefabFromContent(EnemyContent content)
+    private static GameObject? GetPrefabFromContent(EnemyContent content)
     {
         var type = content.GetType();
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -178,7 +180,7 @@ public static class LostDroidPrefabLoader
         return null;
     }
 
-    private static string FindWesleysBundlePath()
+    private static string? FindWesleysBundlePath()
     {
         const string bundleFileName = "wesleysenemies_enemyprefabs";
 

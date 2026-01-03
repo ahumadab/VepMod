@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -11,19 +12,19 @@ public static class DroidHelpers
     /// <summary>
     ///     Vérifie si l'état donné est un état de mouvement.
     /// </summary>
-    public static bool IsMovementState(HallucinationDroid.StateId state)
+    public static bool IsMovementState(DroidController.StateId state)
     {
-        return state is HallucinationDroid.StateId.Wander
-            or HallucinationDroid.StateId.Sprint
-            or HallucinationDroid.StateId.StalkApproach
-            or HallucinationDroid.StateId.StalkStare
-            or HallucinationDroid.StateId.StalkFlee;
+        return state is DroidController.StateId.Wander
+            or DroidController.StateId.Sprint
+            or DroidController.StateId.StalkApproach
+            or DroidController.StateId.StalkStare
+            or DroidController.StateId.StalkFlee;
     }
 
     /// <summary>
     ///     Recherche un enfant par nom dans la hiérarchie.
     /// </summary>
-    public static Transform FindChildByName(Transform root, string name, bool includeInactive = true)
+    public static Transform? FindChildByName(Transform? root, string name, bool includeInactive = true)
     {
         if (root == null) return null;
 
@@ -44,7 +45,7 @@ public static class DroidHelpers
     public static void FindChildrenByNames(
         Transform root,
         bool includeInactive,
-        params (string name, System.Action<Transform> onFound)[] searches)
+        params (string name, Action<Transform> onFound)[] searches)
     {
         if (root == null) return;
 
@@ -81,7 +82,7 @@ public static class DroidHelpers
     /// <summary>
     ///     Récupère un clip d'animation par son nom.
     /// </summary>
-    public static AnimationClip GetAnimationClip(Animator animator, string clipName)
+    public static AnimationClip? GetAnimationClip(Animator animator, string clipName)
     {
         if (animator == null || animator.runtimeAnimatorController == null) return null;
 
@@ -111,13 +112,5 @@ public static class DroidHelpers
     {
         var player = PlayerAvatar.instance;
         return player != null ? player.transform.position : null;
-    }
-
-    /// <summary>
-    ///     Retourne le joueur local.
-    /// </summary>
-    public static PlayerAvatar GetLocalPlayer()
-    {
-        return PlayerAvatar.instance;
     }
 }

@@ -27,7 +27,7 @@ internal static class MaterialsImpulsePatch
         if (hostType != Materials.HostType.LocalPlayer && hostType != Materials.HostType.OtherPlayer) return true;
 
         // Vérifier si la position correspond à un joueur caché
-        if (InvisibleDebuff.IsPositionNearHiddenPlayer(origin))
+        if (InvisiblePlayerDebuff.IsPositionNearHiddenPlayer(origin))
         {
             return false; // Bloquer le son
         }

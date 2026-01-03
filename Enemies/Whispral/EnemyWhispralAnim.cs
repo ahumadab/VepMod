@@ -13,31 +13,31 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         BreatheOut
     }
 
-    private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>(false);
+    private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>();
 
-    [Space] [SerializeField] private Enemy enemy;
-    [SerializeField] private EnemyWhispral enemyWhispral;
+    [Space] [SerializeField] private Enemy enemy = null!;
+    [SerializeField] private EnemyWhispral enemyWhispral = null!;
 
-    [Space] [SerializeField] private Sound soundHurt;
-    [SerializeField] private Sound soundDeath;
+    [Space] [SerializeField] private Sound soundHurt = null!;
+    [SerializeField] private Sound soundDeath = null!;
 
-    [Space] [SerializeField] private Sound soundBreatheIn;
-    [SerializeField] private Sound soundBreatheOut;
+    [Space] [SerializeField] private Sound soundBreatheIn = null!;
+    [SerializeField] private Sound soundBreatheOut = null!;
     [SerializeField] private Vector2 breathingDurationInRange;
     [SerializeField] private Vector2 breathingDurationOutRange;
 
-    [Space] [SerializeField] private GameObject visuals;
-    [SerializeField] private GameObject rigidBody;
+    [Space] [SerializeField] private GameObject visuals = null!;
+    [SerializeField] private GameObject rigidBody = null!;
     protected override State DefaultState => State.NoBreathing;
 
     protected override void Awake()
     {
         base.Awake();
 
-        fsm.AddState(State.NoBreathing, new NoBreathing(this));
-        fsm.AddState(State.BreatheIn,
+        Fsm.AddState(State.NoBreathing, new NoBreathing(this));
+        Fsm.AddState(State.BreatheIn,
             new BreathingState(this, soundBreatheIn, breathingDurationInRange, State.BreatheOut));
-        fsm.AddState(State.BreatheOut,
+        Fsm.AddState(State.BreatheOut,
             new BreathingState(this, soundBreatheOut, breathingDurationOutRange, State.BreatheIn));
     }
 
@@ -47,15 +47,15 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
         if (isAttachedAndNotJumping)
         {
-            var current = fsm.CurrentStateStateId;
+            var current = Fsm.CurrentStateStateId;
             if (current != State.BreatheIn && current != State.BreatheOut)
             {
-                fsm.NextStateStateId = State.BreatheIn;
+                Fsm.NextStateStateId = State.BreatheIn;
             }
         }
         else
         {
-            fsm.NextStateStateId = State.NoBreathing;
+            Fsm.NextStateStateId = State.NoBreathing;
         }
 
         base.Update();
@@ -82,7 +82,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     public void StopBreathing()
     {
-        fsm.NextStateStateId = State.NoBreathing;
+        Fsm.NextStateStateId = State.NoBreathing;
     }
 
     #region States
@@ -101,7 +101,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     {
         private const float MinDuration = 3f;
         private readonly State _nextState = nextState;
-        private AudioSource _audioSource;
+        private AudioSource? _audioSource;
 
         public override void OnStateEnter(State previous)
         {

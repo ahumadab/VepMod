@@ -1,10 +1,18 @@
 using System;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Animations;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
+
+// ReSharper disable Unity.NoNullPatternMatching
+
+// ReSharper disable Unity.NoNullCoalescing
+
+// ReSharper disable NullableWarningSuppressionIsUsed
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace VepMod.Enemies.Whispral;
 
@@ -15,8 +23,20 @@ namespace VepMod.Enemies.Whispral;
 ///     - Rigidbody: transform suivi par Cube via ParentConstraint
 ///     - Cube: visuels + Animator
 /// </summary>
-public sealed partial class HallucinationDroid : StateMachineComponent<HallucinationDroid, HallucinationDroid.StateId>
+public sealed partial class DroidController : StateMachineComponent<DroidController, DroidController.StateId>
 {
+    public enum StateId
+    {
+        Idle,
+        Wander,
+        Sprint,
+        CheckMap,
+        StalkApproach,
+        StalkStare,
+        StalkFlee
+    }
+
+
     internal const float WalkSpeed = 2f;
     internal const float SprintSpeed = 5f;
     internal const float SprintChance = 0.5f;
@@ -29,13 +49,16 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
     internal const float StalkFleeDistance = 20f;
     internal const float StalkStareBeforeFlee = 2f;
 
-    private readonly Materials.MaterialTrigger _materialTrigger = new();
+    private static readonly VepLogger LOG = VepLogger.Create<DroidController>(true);
+    private static readonly int IsWalkingKey = Animator.StringToHash("isWalking");
+    private static readonly int IsSprintingKey = Animator.StringToHash("isSprinting");
+    private static readonly int IsTurningKey = Animator.StringToHash("isTurning");
+    private static readonly int StunKey = Animator.StringToHash("stun");
+    private static readonly int AlbedoColorKey = Shader.PropertyToID("_AlbedoColor");
 
-    // Components (animator is internal for FSM states)
-    internal Animator Animator;
-    private DroidAnimationController _animController;
+    private readonly Materials.MaterialTrigger _materialTrigger = new();
+    private DroidFaceAnimationController _animController;
     private CharacterController _charController;
-    private DroidMovementController _movement;
     private DroidNameplate _nameplateController;
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
@@ -44,14 +67,18 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
 
+    // Components (animator is internal for FSM states)
+    internal Animator Animator;
+
     public bool IsWalking { get; set; }
     public bool IsSprinting { get; set; }
     public bool IsTurning { get; private set; }
     public bool HasChangedMovementState { get; set; }
     public PlayerAvatar SourcePlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
-    public DroidMovementController Movement => _movement;
-    public bool IsPlayerLookingAtMe => _animController?.IsPlayerLookingAtMe ?? false;
+    public DroidMovementController Movement { get; private set; }
+
+    public bool IsPlayerLookingAtMe => _animController.IsPlayerLookingAtMe;
 
     protected override StateId DefaultState => StateId.Idle;
 
@@ -62,75 +89,22 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
 
     protected override void Update()
     {
-        if (_movement == null || _navAgent == null || !_navAgent.isOnNavMesh) return;
+        if (Movement == null || _navAgent == null || !_navAgent.isOnNavMesh) return;
         if (ControllerTransform == null) return;
 
         // Update FSM
-        fsm?.Update();
+        Fsm.Update();
 
         // Update movement
-        var currentState = fsm?.CurrentStateStateId;
-        var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
+        var currentState = Fsm.CurrentStateStateId;
+        var isMovementState = DroidHelpers.IsMovementState(currentState);
 
-        _movement.UpdateMovement(isMovementState);
-        _movement.UpdateRotation();
-        _movement.SyncVisualsToController(Animator?.transform);
+        Movement.UpdateMovement(isMovementState);
+        Movement.UpdateRotation();
+        Movement.SyncVisualsToController(Animator.transform);
         UpdateAnimationFlags();
-        _movement.SyncNavAgentPosition(isMovementState);
+        Movement.SyncNavAgentPosition(isMovementState);
     }
-
-
-    #region Animation
-
-    private void UpdateAnimationFlags()
-    {
-        var currentState = fsm?.CurrentStateStateId;
-        var isMovementState = currentState.HasValue && DroidHelpers.IsMovementState(currentState.Value);
-
-        if (isMovementState && ControllerTransform != null && _movement != null)
-        {
-            var angle = Quaternion.Angle(ControllerTransform.rotation, _movement.TargetRotation);
-            IsTurning = angle > 7f;
-        }
-        else
-        {
-            IsTurning = false;
-        }
-
-        if (Animator != null)
-        {
-            Animator.SetBool("isWalking", IsWalking);
-            Animator.SetBool("isSprinting", IsSprinting);
-            Animator.SetBool("isTurning", IsTurning);
-            Animator.SetBool("stun", false);
-        }
-    }
-
-    #endregion
-
-    #region Movement (delegates to DroidMovementController)
-
-    public bool TrySetRandomDestination() => _movement != null && _movement.TrySetRandomDestination();
-
-    public void StartPrecomputeDestination() => _movement?.StartPrecomputeDestination();
-
-    public bool HasPrecomputedDestination => _movement?.HasPrecomputedDestination ?? false;
-
-    public void ResetPath() => _movement?.ResetPath();
-
-    public bool HasReachedDestination() => _movement?.HasReachedDestination() ?? true;
-
-    public float GetDistanceToPlayer() => _movement?.GetDistanceToPlayer() ?? float.MaxValue;
-
-    public bool TrySetDestinationToPlayer() => _movement != null && _movement.TrySetDestinationToPlayer();
-
-    public bool TrySetFleeDestination() => _movement != null && _movement.TrySetFleeDestination(StalkFleeDistance);
-
-    public void LookAtPlayer() => _movement?.LookAtPlayer();
-
-    public void SetSpeed(float speed) => _movement?.SetSpeed(speed);
-
-    #endregion
 
     #region Audio
 
@@ -142,7 +116,7 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
     {
         if (SourcePlayer == null || ControllerTransform == null) return;
 
-        var localPlayer = DroidHelpers.GetLocalPlayer();
+        var localPlayer = PlayerAvatar.instance;
         if (localPlayer == null) return;
 
         var mimics = localPlayer.GetComponent<WhispralMimics>();
@@ -157,17 +131,97 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
 
     #endregion
 
+
+    #region Animation
+
+    private void UpdateAnimationFlags()
+    {
+        var currentState = Fsm.CurrentStateStateId;
+        var isMovementState = DroidHelpers.IsMovementState(currentState);
+
+        if (isMovementState && ControllerTransform != null && Movement != null)
+        {
+            var angle = Quaternion.Angle(ControllerTransform.rotation, Movement.TargetRotation);
+            IsTurning = angle > 7f;
+        }
+        else
+        {
+            IsTurning = false;
+        }
+
+        if (Animator != null)
+        {
+            Animator.SetBool(IsWalkingKey, IsWalking);
+            Animator.SetBool(IsSprintingKey, IsSprinting);
+            Animator.SetBool(IsTurningKey, IsTurning);
+            Animator.SetBool(StunKey, false);
+        }
+    }
+
+    #endregion
+
+    #region Movement (delegates to DroidMovementController)
+
+    public bool TrySetRandomDestination()
+    {
+        return Movement != null && Movement.TrySetRandomDestination();
+    }
+
+    public void StartPrecomputeDestination()
+    {
+        Movement.StartPrecomputeDestination();
+    }
+
+    public bool HasPrecomputedDestination => Movement.HasPrecomputedDestination;
+
+    public void ResetPath()
+    {
+        Movement.ResetPath();
+    }
+
+    public bool HasReachedDestination()
+    {
+        return Movement.HasReachedDestination();
+    }
+
+    public float GetDistanceToPlayer()
+    {
+        return Movement.GetDistanceToPlayer();
+    }
+
+    public bool TrySetDestinationToPlayer()
+    {
+        return Movement != null && Movement.TrySetDestinationToPlayer();
+    }
+
+    public bool TrySetFleeDestination()
+    {
+        return Movement != null && Movement.TrySetFleeDestination(StalkFleeDistance);
+    }
+
+    public void LookAtPlayer()
+    {
+        Movement.LookAtPlayer();
+    }
+
+    public void SetSpeed(float speed)
+    {
+        Movement.SetSpeed(speed);
+    }
+
+    #endregion
+
     #region Factory & Initialization
 
-    public static HallucinationDroid Create(PlayerAvatar sourcePlayer, Vector3 spawnPosition)
+    public static DroidController? Create(PlayerAvatar sourcePlayer, Vector3 spawnPosition)
     {
-        if (!LostDroidPrefabLoader.IsAvailable)
+        if (!DroidPrefabLoader.IsAvailable)
         {
             LOG.Warning("LostDroid prefab not available");
             return null;
         }
 
-        var instance = Instantiate(LostDroidPrefabLoader.LostDroidPrefab, spawnPosition, Quaternion.identity);
+        var instance = Instantiate(DroidPrefabLoader.LostDroidPrefab, spawnPosition, Quaternion.identity);
         if (instance == null)
         {
             LOG.Error("Failed to instantiate LostDroid prefab");
@@ -176,7 +230,7 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
 
         instance.name = $"HallucinationDroid_{sourcePlayer.playerName}";
 
-        var hallucination = instance.AddComponent<HallucinationDroid>();
+        var hallucination = instance.AddComponent<DroidController>();
         hallucination.Initialize(sourcePlayer);
 
         return hallucination;
@@ -195,28 +249,28 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
         SetupAnimationController();
         ApplyPlayerColor();
         SetupNameplate();
-        InitializeFSM();
+        InitializeFsm();
 
-        LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform?.position}");
+        LOG.Info($"HallucinationDroid created for {sourcePlayer.playerName} at {ControllerTransform.position}");
     }
 
     private void SetupMovementController()
     {
         if (ControllerTransform == null) return;
 
-        _movement = gameObject.AddComponent<DroidMovementController>();
-        _movement.Initialize(ControllerTransform, _rigidbodyTransform, _navAgent, _charController, _savedAreaMask);
-        _movement.OnNavMeshError += HandleNavMeshError;
+        Movement = gameObject.AddComponent<DroidMovementController>();
+        Movement.Initialize(ControllerTransform, _rigidbodyTransform, _navAgent, _charController, _savedAreaMask);
+        Movement.OnNavMeshError += HandleNavMeshError;
     }
 
     private void HandleNavMeshError()
     {
-        fsm.NextStateStateId = StateId.Idle;
+        Fsm.NextStateStateId = StateId.Idle;
     }
 
     private void SetupAnimationController()
     {
-        _animController = gameObject.AddComponent<DroidAnimationController>();
+        _animController = gameObject.AddComponent<DroidFaceAnimationController>();
         _animController.Initialize(ControllerTransform);
 
         // Setup head transform for talking animation
@@ -254,10 +308,10 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
             var codeEyeRight = DroidHelpers.FindChildByName(transform, "code_eye_right") ?? eyeRight;
 
             var eyelidsLeft = SetupEyeFromPlayer(codeEyeLeft, playerSource, "LEFT",
-                out var leftUpperX, out var leftUpperZ, out var leftLowerX, out _);
+                out var leftUpperX, out var leftUpperZ, out var leftLowerX);
 
             var eyelidsRight = SetupEyeFromPlayer(codeEyeRight, playerSource, "RIGHT",
-                out var rightUpperX, out var rightUpperZ, out var rightLowerX, out _);
+                out var rightUpperX, out var rightUpperZ, out var rightLowerX);
 
             if (eyelidsLeft != null) eyelidsLeft.SetActive(false);
             if (eyelidsRight != null) eyelidsRight.SetActive(false);
@@ -277,26 +331,31 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
 
     private void LateUpdate()
     {
-        _nameplateController?.UpdateNameplate();
-        _animController?.UpdateAnimations();
+        _nameplateController.UpdateNameplate();
+        _animController.UpdateAnimations();
     }
 
     private void OnDestroy()
     {
-        if (_movement != null)
+        if (Movement != null)
         {
-            _movement.OnNavMeshError -= HandleNavMeshError;
+            Movement.OnNavMeshError -= HandleNavMeshError;
         }
     }
 
-    private Material GetDroidBodyMaterial()
+    private Material? GetDroidBodyMaterial()
     {
         // Chercher un renderer sur le corps du droid (pas les yeux)
         foreach (var renderer in GetComponentsInChildren<MeshRenderer>(true))
         {
-            var name = renderer.gameObject.name.ToLower();
+            var gameObjectName = renderer.gameObject.name.ToLower();
             // Éviter les yeux et pupilles
-            if (name.Contains("eye") || name.Contains("pupil") || name.Contains("eyelid")) continue;
+            if (gameObjectName.Contains("eye") || gameObjectName.Contains("pupil") ||
+                gameObjectName.Contains("eyelid"))
+            {
+                continue;
+            }
+
             if (renderer.material != null)
             {
                 return renderer.material;
@@ -306,7 +365,7 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
         return null;
     }
 
-    private Transform FindEyelidSource()
+    private Transform? FindEyelidSource()
     {
         // Chercher PlayerAvatarVisuals dans la scène (c'est là que sont les paupières)
         var playerVisuals = FindObjectsOfType<PlayerAvatarVisuals>();
@@ -330,24 +389,22 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
     /// <summary>
     ///     Configure les paupières pour un oeil du droid en copiant depuis le player.
     /// </summary>
-    private GameObject SetupEyeFromPlayer(
+    private GameObject? SetupEyeFromPlayer(
         Transform droidEye,
         Transform playerSource,
         string side,
-        out Transform upperRotationX,
-        out Transform upperRotationZ,
-        out Transform lowerRotationX,
-        out Transform lowerRotationZ)
+        out Transform? upperRotationX,
+        out Transform? upperRotationZ,
+        out Transform? lowerRotationX)
     {
         upperRotationX = null;
         upperRotationZ = null;
         lowerRotationX = null;
-        lowerRotationZ = null;
 
         var eyelidsName = $"EYELIDS {side}";
 
         // Trouver EYELIDS sur le player source
-        Transform playerEyelids = null;
+        Transform? playerEyelids = null;
         foreach (var child in playerSource.GetComponentsInChildren<Transform>(true))
         {
             if (child.name == eyelidsName)
@@ -364,7 +421,7 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
         }
 
         // Vérifier si EYELIDS existe déjà sur le droid
-        Transform droidEyelids = null;
+        Transform? droidEyelids = null;
         foreach (Transform child in droidEye)
         {
             if (child.name == eyelidsName)
@@ -407,9 +464,9 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
                 case "eyelid_lower":
                     lowerRotationX = child;
                     break;
-                case "eyelid_lower_rotation":
-                    lowerRotationZ = child;
-                    break;
+                // case "eyelid_lower_rotation":
+                //     lowerRotationZ = child;
+                //     break;
             }
         }
 
@@ -506,29 +563,30 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
         // Appliquer la couleur à tous les renderers (sauf yeux, pupilles et health shadow)
         foreach (var renderer in cube.GetComponentsInChildren<Renderer>())
         {
-            var name = renderer.gameObject.name;
-            if (name.Contains("eye") || name.Contains("pupil") || name.Contains("mesh_health"))
+            var gameObjectName = renderer.gameObject.name;
+            if (gameObjectName.Contains("eye") || gameObjectName.Contains("pupil") ||
+                gameObjectName.Contains("mesh_health"))
             {
                 continue;
             }
 
             foreach (var material in renderer.materials)
             {
-                material.SetColor("_AlbedoColor", color);
+                material.SetColor(AlbedoColorKey, color);
             }
         }
     }
 
-    private void InitializeFSM()
+    private void InitializeFsm()
     {
-        fsm = new StateMachine(this, DefaultState);
-        fsm.AddState(StateId.Idle, new IdleState());
-        fsm.AddState(StateId.Wander, new WanderState());
-        fsm.AddState(StateId.Sprint, new SprintState());
-        fsm.AddState(StateId.CheckMap, new CheckMapState());
-        fsm.AddState(StateId.StalkApproach, new StalkApproachState());
-        fsm.AddState(StateId.StalkStare, new StalkStareState());
-        fsm.AddState(StateId.StalkFlee, new StalkFleeState());
+        Fsm = new StateMachine(this, DefaultState);
+        Fsm.AddState(StateId.Idle, new IdleState());
+        Fsm.AddState(StateId.Wander, new WanderState());
+        Fsm.AddState(StateId.Sprint, new SprintState());
+        Fsm.AddState(StateId.CheckMap, new CheckMapState());
+        Fsm.AddState(StateId.StalkApproach, new StalkApproachState());
+        Fsm.AddState(StateId.StalkStare, new StalkStareState());
+        Fsm.AddState(StateId.StalkFlee, new StalkFleeState());
     }
 
     private void FindCriticalTransforms()
@@ -549,10 +607,10 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
         if (ControllerTransform == null)
         {
             LOG.Warning("Controller transform not found, creating one");
-            var controllerGO = new GameObject("Controller");
-            controllerGO.transform.SetParent(transform);
-            controllerGO.transform.localPosition = Vector3.zero;
-            ControllerTransform = controllerGO.transform;
+            var controllerGo = new GameObject("Controller");
+            controllerGo.transform.SetParent(transform);
+            controllerGo.transform.localPosition = Vector3.zero;
+            ControllerTransform = controllerGo.transform;
         }
 
         _rigidbodyTransform = transform.Find("Rigidbody");
@@ -576,7 +634,7 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
 
     private void SaveNavMeshSettings()
     {
-        NavMeshAgent existingAgent = null;
+        NavMeshAgent? existingAgent = null;
 
         if (ControllerTransform != null)
         {
@@ -645,7 +703,10 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
                         DestroyImmediate(component);
                         destroyedThisPass++;
                     }
-                    catch { }
+                    catch
+                    {
+                        // ignored
+                    }
                 }
             }
 
@@ -690,7 +751,8 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
             }
 
             // Ajouter le relais pour les animation events (footsteps, etc.)
-            Animator.gameObject.AddComponent<HallucinationAnimEvents>();
+            var a = Animator.GetOrAddComponent<DroidFootstepsEventReceiver>();
+            a.Initialize(this);
         }
         else
         {
@@ -772,10 +834,10 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
     {
         if (ControllerTransform == null) return;
 
-        var existingCC = ControllerTransform.GetComponent<CharacterController>();
-        if (existingCC != null)
+        var existingCharacterController = ControllerTransform.GetComponent<CharacterController>();
+        if (existingCharacterController != null)
         {
-            DestroyImmediate(existingCC);
+            DestroyImmediate(existingCharacterController);
         }
 
         _charController = ControllerTransform.gameObject.AddComponent<CharacterController>();
@@ -786,21 +848,6 @@ public sealed partial class HallucinationDroid : StateMachineComponent<Hallucina
         _charController.stepOffset = 0.3f;
         _charController.skinWidth = 0.08f;
         _charController.minMoveDistance = 0.001f;
-    }
-
-    #endregion
-
-    #region FSM
-
-    public enum StateId
-    {
-        Idle,
-        Wander,
-        Sprint,
-        CheckMap,
-        StalkApproach,
-        StalkStare,
-        StalkFlee
     }
 
     #endregion

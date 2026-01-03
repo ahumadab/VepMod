@@ -17,21 +17,60 @@ public sealed class WhispralDebuffManager : MonoBehaviour
 
     private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>(true);
 
-    private PlayerAvatar playerAvatar;
-
     /// <summary>
     ///     Positions de spawn pré-calculées pour les hallucinations.
     ///     Remplies pendant GoToPlayer, consommées lors du spawn.
     /// </summary>
     private readonly Queue<Vector3> _precomputedSpawnPositions = new();
 
+    private PlayerAvatar playerAvatar = null!;
+
     public int AttachedCount { get; private set; }
 
     public bool HasWhispralAttached => AttachedCount > 0;
 
+    /// <summary>
+    ///     Nombre de positions pré-calculées disponibles.
+    /// </summary>
+    public int PrecomputedPositionCount => _precomputedSpawnPositions.Count;
+
     private void Awake()
     {
         playerAvatar = GetComponent<PlayerAvatar>();
+    }
+
+    /// <summary>
+    ///     Récupère une position de spawn pré-calculée, ou null si aucune disponible.
+    /// </summary>
+    public Vector3? GetPrecomputedSpawnPosition()
+    {
+        if (_precomputedSpawnPositions.Count > 0)
+        {
+            var pos = _precomputedSpawnPositions.Dequeue();
+            LOG.Debug($"Using precomputed spawn position: {pos} (remaining: {_precomputedSpawnPositions.Count})");
+            return pos;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Pré-calcule une position de spawn pour une hallucination.
+    ///     Appelé pendant GoToPlayer pour éviter les freezes lors du spawn.
+    /// </summary>
+    public void PrecomputeSpawnPosition()
+    {
+        var playerPos = playerAvatar?.transform.position ?? transform.position;
+
+        var levelPoint = SemiFunc.LevelPointGet(playerPos, SpawnDistanceMin, SpawnDistanceMax)
+                         ?? SemiFunc.LevelPointGet(playerPos, 0f, 999f);
+
+        if (levelPoint)
+        {
+            _precomputedSpawnPositions.Enqueue(levelPoint.transform.position);
+            LOG.Debug(
+                $"Precomputed spawn position: {levelPoint.transform.position} (queue size: {_precomputedSpawnPositions.Count})");
+        }
     }
 
     /// <summary>
@@ -76,11 +115,11 @@ public sealed class WhispralDebuffManager : MonoBehaviour
         if (isLocalPlayer)
         {
             // Le joueur affecté voit les autres comme invisibles
-            var invisibleDebuff = gameObject.GetOrAddComponent<InvisibleDebuff>();
+            var invisibleDebuff = gameObject.GetOrAddComponent<InvisiblePlayerDebuff>();
             invisibleDebuff.ApplyDebuff(true);
 
             // Créer des hallucinations des joueurs cachés qui se baladent au hasard
-            var hallucinationDebuff = gameObject.GetOrAddComponent<HallucinationDebuff>();
+            var hallucinationDebuff = gameObject.GetOrAddComponent<DroidDebuff>();
             hallucinationDebuff.ApplyDebuff(true, invisibleDebuff);
         }
         else
@@ -100,8 +139,8 @@ public sealed class WhispralDebuffManager : MonoBehaviour
 
         if (isLocalPlayer)
         {
-            var invisibleDebuff = GetComponent<InvisibleDebuff>();
-            var hallucinationDebuff = GetComponent<HallucinationDebuff>();
+            var invisibleDebuff = GetComponent<InvisiblePlayerDebuff>();
+            var hallucinationDebuff = GetComponent<DroidDebuff>();
 
             // Désactiver les hallucinations en premier
             if (hallucinationDebuff)
@@ -127,42 +166,4 @@ public sealed class WhispralDebuffManager : MonoBehaviour
         // Vider le cache des positions
         _precomputedSpawnPositions.Clear();
     }
-
-    /// <summary>
-    ///     Pré-calcule une position de spawn pour une hallucination.
-    ///     Appelé pendant GoToPlayer pour éviter les freezes lors du spawn.
-    /// </summary>
-    public void PrecomputeSpawnPosition()
-    {
-        var playerPos = playerAvatar?.transform.position ?? transform.position;
-
-        var levelPoint = SemiFunc.LevelPointGet(playerPos, SpawnDistanceMin, SpawnDistanceMax)
-                         ?? SemiFunc.LevelPointGet(playerPos, 0f, 999f);
-
-        if (levelPoint)
-        {
-            _precomputedSpawnPositions.Enqueue(levelPoint.transform.position);
-            LOG.Debug($"Precomputed spawn position: {levelPoint.transform.position} (queue size: {_precomputedSpawnPositions.Count})");
-        }
-    }
-
-    /// <summary>
-    ///     Récupère une position de spawn pré-calculée, ou null si aucune disponible.
-    /// </summary>
-    public Vector3? GetPrecomputedSpawnPosition()
-    {
-        if (_precomputedSpawnPositions.Count > 0)
-        {
-            var pos = _precomputedSpawnPositions.Dequeue();
-            LOG.Debug($"Using precomputed spawn position: {pos} (remaining: {_precomputedSpawnPositions.Count})");
-            return pos;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    ///     Nombre de positions pré-calculées disponibles.
-    /// </summary>
-    public int PrecomputedPositionCount => _precomputedSpawnPositions.Count;
 }
