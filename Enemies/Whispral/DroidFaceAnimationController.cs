@@ -14,7 +14,7 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     // Detection settings
     private const float LookAtAngle = 50f;
     private const float LookAtMaxDistance = 30f;
-    private const float AngryEyesCooldown = 0.6f;
+    private const float AngryEyesCooldown = 0.3f;
 
     // Talking animation
     private const float TalkRotationMaxAngle = 25f;
