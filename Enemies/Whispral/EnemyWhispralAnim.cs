@@ -2,6 +2,8 @@
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
 namespace VepMod.Enemies.Whispral;
 
 public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyWhispralAnim.State>
@@ -15,19 +17,19 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>();
 
-    [Space] [SerializeField] private Enemy enemy = null!;
-    [SerializeField] private EnemyWhispral enemyWhispral = null!;
+    [Space] [SerializeField] private Enemy enemy;
+    [SerializeField] private EnemyWhispral enemyWhispral;
 
-    [Space] [SerializeField] private Sound soundHurt = null!;
-    [SerializeField] private Sound soundDeath = null!;
+    [Space] [SerializeField] private Sound soundHurt;
+    [SerializeField] private Sound soundDeath;
 
-    [Space] [SerializeField] private Sound soundBreatheIn = null!;
-    [SerializeField] private Sound soundBreatheOut = null!;
+    [Space] [SerializeField] private Sound soundBreatheIn;
+    [SerializeField] private Sound soundBreatheOut;
     [SerializeField] private Vector2 breathingDurationInRange;
     [SerializeField] private Vector2 breathingDurationOutRange;
 
-    [Space] [SerializeField] private GameObject visuals = null!;
-    [SerializeField] private GameObject rigidBody = null!;
+    [Space] [SerializeField] private GameObject visuals;
+    [SerializeField] private GameObject rigidBody;
     protected override State DefaultState => State.NoBreathing;
 
     protected override void Awake()
@@ -39,6 +41,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
             new BreathingState(this, soundBreatheIn, breathingDurationInRange, State.BreatheOut));
         Fsm.AddState(State.BreatheOut,
             new BreathingState(this, soundBreatheOut, breathingDurationOutRange, State.BreatheIn));
+        ConfigBreathingSound(soundBreatheIn);
+        ConfigBreathingSound(soundBreatheOut);
     }
 
     protected override void Update()
@@ -83,6 +87,20 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     public void StopBreathing()
     {
         Fsm.NextStateStateId = State.NoBreathing;
+    }
+
+    private static void ConfigBreathingSound(Sound soundBreathe)
+    {
+        soundBreathe.Volume = 0.5f;
+        soundBreathe.VolumeRandom = 0f;
+        soundBreathe.Pitch = 0.8f;
+        soundBreathe.PitchRandom = 0f;
+        soundBreathe.SpatialBlend = 1f;
+        soundBreathe.Doppler = 1f;
+        soundBreathe.ReverbMix = 1f;
+        soundBreathe.FalloffMultiplier = 1f;
+        soundBreathe.OffscreenVolume = 1f;
+        soundBreathe.OffscreenFalloff = 1f;
     }
 
     #region States

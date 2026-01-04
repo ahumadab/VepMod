@@ -469,7 +469,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
-            _timer = Random.Range(2f, 5f);
+            _timer = Random.Range(1f, 3f);
             Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
             Enemy.NavMeshAgent.ResetPath();
         }
