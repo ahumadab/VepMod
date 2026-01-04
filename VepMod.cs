@@ -9,7 +9,7 @@ using VepMod.Patchs;
 
 namespace VepMod;
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "0.1.0")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.0")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
