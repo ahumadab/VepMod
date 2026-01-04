@@ -49,7 +49,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     internal const float StalkFleeDistance = 20f;
     internal const float StalkStareBeforeFlee = 2f;
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidController>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<DroidController>();
     private static readonly int IsWalkingKey = Animator.StringToHash("isWalking");
     private static readonly int IsSprintingKey = Animator.StringToHash("isSprinting");
     private static readonly int IsTurningKey = Animator.StringToHash("isTurning");

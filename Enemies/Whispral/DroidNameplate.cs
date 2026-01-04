@@ -15,7 +15,7 @@ public sealed class DroidNameplate : MonoBehaviour
     private const float MinFontSize = 8f;
     private const float MaxFontSize = 20f;
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidNameplate>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<DroidNameplate>();
 
     private Transform _controllerTransform = null!;
     private WorldSpaceUIPlayerName? _nameplate;

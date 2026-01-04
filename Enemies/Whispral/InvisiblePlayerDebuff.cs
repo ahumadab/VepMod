@@ -6,7 +6,7 @@ namespace VepMod.Enemies.Whispral;
 
 public sealed class InvisiblePlayerDebuff : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<InvisiblePlayerDebuff>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<InvisiblePlayerDebuff>();
     private static readonly HashSet<PlayerAvatar> GlobalHiddenPlayers = new();
 
     private readonly List<PlayerAvatar> _hiddenPlayers = new();

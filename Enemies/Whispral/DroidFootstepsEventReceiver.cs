@@ -11,7 +11,7 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class DroidFootstepsEventReceiver : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<DroidFootstepsEventReceiver>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<DroidFootstepsEventReceiver>();
     private DroidController _droid;
 
     public void Initialize(DroidController droidController)

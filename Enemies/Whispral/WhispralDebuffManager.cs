@@ -15,7 +15,7 @@ public sealed class WhispralDebuffManager : MonoBehaviour
     public const float SpawnDistanceMin = 5f;
     public const float SpawnDistanceMax = 15f;
 
-    private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<WhispralDebuffManager>();
 
     /// <summary>
     ///     Positions de spawn pré-calculées pour les hallucinations.

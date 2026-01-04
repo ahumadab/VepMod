@@ -18,7 +18,7 @@ public sealed class DroidMovementController : MonoBehaviour
     private const float RotationSpeed = 10f;
     private const float VisualYOffset = 0.25f;
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidMovementController>(true);
+    private static readonly VepLogger LOG = VepLogger.Create<DroidMovementController>();
 
     private CharacterController _charController;
     private Transform _controllerTransform;
