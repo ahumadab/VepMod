@@ -43,7 +43,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     // Stalk settings (internal for FSM states)
     internal const float StalkMinDistance = 15f;
-    internal const float StalkChance = 0.2f;
+    internal const float StalkChance = 0.1f;
     internal const float StalkArrivalDistance = 5f;
     internal const float StalkMinKeepDistance = 3f;
     internal const float StalkFleeDistance = 20f;
