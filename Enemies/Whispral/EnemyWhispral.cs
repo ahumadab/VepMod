@@ -345,7 +345,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
             if (SemiFunc.IsMultiplayer())
             {
-                photonView.RPC("UpdatePlayerTargetRPC", RpcTarget.All, playerTarget.photonView.ViewID);
+                photonView.RPC(nameof(UpdatePlayerTargetRPC), RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
             Fsm.NextStateStateId = State.NoticePlayer;
@@ -367,7 +367,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             playerTarget = enemy.Rigidbody.onGrabbedPlayerAvatar;
             if (SemiFunc.IsMultiplayer())
             {
-                photonView.RPC("UpdatePlayerTargetRPC", RpcTarget.All, playerTarget.photonView.ViewID);
+                photonView.RPC(nameof(UpdatePlayerTargetRPC), RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
             Fsm.NextStateStateId = State.NoticePlayer;
@@ -405,7 +405,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             Enemy.Rigidbody.StuckReset();
             if (GameManager.Multiplayer())
             {
-                Whispral.photonView.RPC("UpdateStateRPC", RpcTarget.All, Fsm.NextStateStateId);
+                Whispral.photonView.RPC(nameof(UpdateStateRPC), RpcTarget.All, Fsm.NextStateStateId);
             }
             else
             {
