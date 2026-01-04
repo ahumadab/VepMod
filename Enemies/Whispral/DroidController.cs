@@ -170,6 +170,21 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         return Movement != null && Movement.TrySetRandomDestination();
     }
 
+    public bool TryExtendCurrentPath()
+    {
+        return Movement != null && Movement.TryExtendCurrentPath();
+    }
+
+    public void StartPrecomputeForwardDestination()
+    {
+        Movement?.StartPrecomputeForwardDestination();
+    }
+
+    public void ClearPrecomputedForwardDestination()
+    {
+        Movement?.ClearPrecomputedForwardDestination();
+    }
+
     public void StartPrecomputeDestination()
     {
         Movement.StartPrecomputeDestination();

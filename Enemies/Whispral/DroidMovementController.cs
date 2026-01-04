@@ -25,8 +25,10 @@ public sealed class DroidMovementController : MonoBehaviour
     private Vector3 _currentVelocity;
     private Vector3 _destination;
     private bool _isPrecomputingDestination;
+    private bool _isPrecomputingForward;
     private NavMeshAgent _navAgent;
     private Vector3? _precomputedDestination;
+    private Vector3? _precomputedForwardDestination;
     private Transform? _rigidbodyTransform;
     private int _savedAreaMask = NavMesh.AllAreas;
 
@@ -34,6 +36,11 @@ public sealed class DroidMovementController : MonoBehaviour
     ///     Indique si une destination pré-calculée est disponible.
     /// </summary>
     public bool HasPrecomputedDestination => _precomputedDestination.HasValue;
+
+    /// <summary>
+    ///     Indique si une destination forward pré-calculée est disponible.
+    /// </summary>
+    public bool HasPrecomputedForwardDestination => _precomputedForwardDestination.HasValue;
 
     /// <summary>
     ///     La rotation cible actuelle (pour le calcul de IsTurning).
@@ -138,6 +145,25 @@ public sealed class DroidMovementController : MonoBehaviour
     }
 
     /// <summary>
+    ///     Démarre le pré-calcul d'une destination forward (dans la direction actuelle).
+    /// </summary>
+    public void StartPrecomputeForwardDestination(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
+    {
+        if (_isPrecomputingForward) return;
+        // On invalide l'ancienne destination forward pour en calculer une nouvelle
+        _precomputedForwardDestination = null;
+        StartCoroutine(PrecomputeForwardDestinationCoroutine(minDistance, maxDistance, maxAngleDeviation));
+    }
+
+    /// <summary>
+    ///     Réinitialise la destination forward pré-calculée.
+    /// </summary>
+    public void ClearPrecomputedForwardDestination()
+    {
+        _precomputedForwardDestination = null;
+    }
+
+    /// <summary>
     ///     Synchronise la position du NavAgent avec le controller.
     /// </summary>
     public void SyncNavAgentPosition(bool isMovementState)
@@ -239,6 +265,99 @@ public sealed class DroidMovementController : MonoBehaviour
 
         LOG.Warning("No precomputed destination, falling back to sync search");
         return TrySetDestinationSync();
+    }
+
+    /// <summary>
+    ///     Essaie de prolonger le chemin actuel dans la même direction (avec variation angulaire).
+    ///     Utilise la destination pré-calculée si disponible.
+    /// </summary>
+    public bool TryExtendCurrentPath()
+    {
+        // Utiliser la destination pré-calculée si disponible
+        if (_precomputedForwardDestination.HasValue)
+        {
+            LOG.Debug($"TryExtendCurrentPath: Using precomputed forward destination at {_precomputedForwardDestination.Value}");
+            return TrySetForwardDestination(_precomputedForwardDestination.Value);
+        }
+
+        LOG.Debug("TryExtendCurrentPath: No precomputed forward destination, falling back to sync calculation");
+        return TryExtendCurrentPathSync();
+    }
+
+    /// <summary>
+    ///     Calcul synchrone d'extension de chemin (fallback si pas de pré-calcul).
+    /// </summary>
+    private bool TryExtendCurrentPathSync(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
+    {
+        if (_controllerTransform == null || !DroidHelpers.IsNavAgentValid(_navAgent))
+        {
+            LOG.Debug("TryExtendCurrentPathSync: Invalid controller or NavAgent");
+            return false;
+        }
+
+        // Utiliser la direction actuelle du mouvement
+        var direction = _currentVelocity.normalized;
+        var directionSource = "velocity";
+
+        if (direction.sqrMagnitude < 0.01f)
+        {
+            // Fallback: direction vers la destination actuelle
+            direction = (_destination - _controllerTransform.position).normalized;
+            directionSource = "destination";
+        }
+
+        if (direction.sqrMagnitude < 0.01f)
+        {
+            LOG.Debug("TryExtendCurrentPathSync: No valid direction found");
+            return false;
+        }
+
+        // Appliquer une déviation angulaire aléatoire
+        var angleDeviation = UnityEngine.Random.Range(-maxAngleDeviation, maxAngleDeviation);
+        direction = Quaternion.Euler(0f, angleDeviation, 0f) * direction;
+
+        // Chercher une destination dans cette direction
+        var distance = UnityEngine.Random.Range(minDistance, maxDistance);
+        var targetPos = _controllerTransform.position + direction * distance;
+
+        LOG.Debug($"TryExtendCurrentPathSync: source={directionSource}, angle={angleDeviation:F1}°, dist={distance:F1}m");
+
+        if (!NavMesh.SamplePosition(targetPos, out var hit, 10f, _savedAreaMask))
+        {
+            LOG.Debug($"TryExtendCurrentPathSync: No NavMesh position found near {targetPos}");
+            return false;
+        }
+
+        var path = new NavMeshPath();
+        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
+        {
+            LOG.Debug($"TryExtendCurrentPathSync: Path calculation failed to {hit.position}");
+            return false;
+        }
+
+        LOG.Debug($"TryExtendCurrentPathSync: SUCCESS - new destination at {hit.position}");
+        _destination = hit.position;
+        _navAgent.SetPath(path);
+        return true;
+    }
+
+    private bool TrySetForwardDestination(Vector3 destination)
+    {
+        _precomputedForwardDestination = null;
+
+        if (!DroidHelpers.IsNavAgentValid(_navAgent)) return false;
+
+        var path = new NavMeshPath();
+        if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
+        {
+            LOG.Debug($"TrySetForwardDestination: Path recalculation failed to {destination}");
+            return false;
+        }
+
+        LOG.Debug($"TrySetForwardDestination: SUCCESS - destination set to {destination}");
+        _destination = destination;
+        _navAgent.SetPath(path);
+        return true;
     }
 
     /// <summary>
@@ -376,5 +495,73 @@ public sealed class DroidMovementController : MonoBehaviour
 
         _navAgent.SetPath(path);
         return true;
+    }
+
+    private IEnumerator PrecomputeForwardDestinationCoroutine(float minDistance, float maxDistance, float maxAngleDeviation)
+    {
+        _isPrecomputingForward = true;
+        LOG.Debug("PrecomputeForward: Starting coroutine");
+
+        if (_controllerTransform == null || !DroidHelpers.IsNavAgentValid(_navAgent))
+        {
+            LOG.Debug("PrecomputeForward: Invalid controller or NavAgent");
+            _isPrecomputingForward = false;
+            yield break;
+        }
+
+        // Capturer la direction actuelle
+        var direction = _currentVelocity.normalized;
+        var directionSource = "velocity";
+
+        if (direction.sqrMagnitude < 0.01f)
+        {
+            direction = (_destination - _controllerTransform.position).normalized;
+            directionSource = "destination";
+        }
+
+        if (direction.sqrMagnitude < 0.01f)
+        {
+            LOG.Debug("PrecomputeForward: No valid direction found");
+            _isPrecomputingForward = false;
+            yield break;
+        }
+
+        yield return null;
+
+        // Appliquer une déviation angulaire aléatoire
+        var angleDeviation = UnityEngine.Random.Range(-maxAngleDeviation, maxAngleDeviation);
+        direction = Quaternion.Euler(0f, angleDeviation, 0f) * direction;
+
+        // Calculer la position cible
+        var distance = UnityEngine.Random.Range(minDistance, maxDistance);
+        var currentPos = _controllerTransform.position;
+        var targetPos = currentPos + direction * distance;
+
+        LOG.Debug($"PrecomputeForward: source={directionSource}, angle={angleDeviation:F1}°, dist={distance:F1}m");
+
+        yield return null;
+
+        // Vérifier le NavMesh
+        if (!NavMesh.SamplePosition(targetPos, out var hit, 10f, _savedAreaMask))
+        {
+            LOG.Debug($"PrecomputeForward: No NavMesh position found near {targetPos}");
+            _isPrecomputingForward = false;
+            yield break;
+        }
+
+        yield return null;
+
+        // Vérifier le path
+        var path = new NavMeshPath();
+        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
+        {
+            LOG.Debug($"PrecomputeForward: Path calculation failed to {hit.position}");
+            _isPrecomputingForward = false;
+            yield break;
+        }
+
+        _precomputedForwardDestination = hit.position;
+        LOG.Debug($"PrecomputeForward: SUCCESS - precomputed destination at {hit.position}");
+        _isPrecomputingForward = false;
     }
 }

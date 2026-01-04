@@ -125,9 +125,11 @@ public sealed partial class DroidController
     {
         private const float SwitchCheckInterval = 1f;
         private const float SwitchChance = 0.2f;
+        private const float PrecomputeForwardInterval = 0.5f;
 
         private float _duration;
         private float _nextSwitchCheck;
+        private float _nextPrecomputeForward;
 
         protected abstract float MinDuration { get; }
         protected abstract float MaxDuration { get; }
@@ -140,9 +142,15 @@ public sealed partial class DroidController
             base.OnStateEnter(previous);
             _duration = Random.Range(MinDuration, MaxDuration);
             _nextSwitchCheck = SwitchCheckInterval;
+            _nextPrecomputeForward = PrecomputeForwardInterval;
 
             var isMovementSwitch = previous is StateId.Wander or StateId.Sprint;
-            if (!isMovementSwitch)
+            if (isMovementSwitch)
+            {
+                // Essayer de prolonger dans la même direction, sinon on garde la destination actuelle
+                Machine.Owner.TryExtendCurrentPath();
+            }
+            else
             {
                 if (!Machine.Owner.TrySetRandomDestination())
                 {
@@ -153,12 +161,21 @@ public sealed partial class DroidController
 
             Machine.Owner.SetSpeed(Speed);
             SetMovementFlag(true);
+
+            // Lancer le premier pré-calcul forward
+            Machine.Owner.StartPrecomputeForwardDestination();
         }
 
         public override void OnStateExit(StateId next)
         {
             base.OnStateExit(next);
             SetMovementFlag(false);
+
+            // Clear si on ne va pas vers un autre état de mouvement
+            if (next is not (StateId.Wander or StateId.Sprint))
+            {
+                Machine.Owner.ClearPrecomputedForwardDestination();
+            }
         }
 
         public override void OnStateUpdate()
@@ -169,6 +186,14 @@ public sealed partial class DroidController
             {
                 Machine.NextStateStateId = StateId.Idle;
                 return;
+            }
+
+            // Pré-calcul périodique de la destination forward
+            _nextPrecomputeForward -= Time.deltaTime;
+            if (_nextPrecomputeForward <= 0f)
+            {
+                _nextPrecomputeForward = PrecomputeForwardInterval;
+                Machine.Owner.StartPrecomputeForwardDestination();
             }
 
             if (!Machine.Owner.HasChangedMovementState && TimeElapsed >= _nextSwitchCheck)
