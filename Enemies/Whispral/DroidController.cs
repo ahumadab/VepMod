@@ -80,6 +80,9 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     public bool IsPlayerLookingAtMe => _animController.IsPlayerLookingAtMe;
 
+    public bool IsStalking =>
+        Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
+
     protected override StateId DefaultState => StateId.Idle;
 
     protected override void Awake()
@@ -271,7 +274,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     private void SetupAnimationController()
     {
         _animController = gameObject.AddComponent<DroidFaceAnimationController>();
-        _animController.Initialize(ControllerTransform);
+        _animController.Initialize(this, ControllerTransform);
 
         // Setup head transform for talking animation
         var headTopTransform = DroidHelpers.FindChildByName(transform, "code_head_top");

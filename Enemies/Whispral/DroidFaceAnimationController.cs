@@ -19,12 +19,14 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     // Talking animation
     private const float TalkRotationMaxAngle = 25f;
     private const int SampleDataLength = 256;
+    private const float StalkStareBeforeFlee = DroidController.StalkStareBeforeFlee / 0.66f;
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidFaceAnimationController>();
 
     // Angry eyes state
     private float _angryTimer;
     private Transform _controllerTransform;
+    private DroidController _droidController;
     private GameObject? _eyelidsLeft;
     private GameObject? _eyelidsRight;
 
@@ -49,9 +51,10 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     /// <summary>
     ///     Initialise le contrôleur d'animation.
     /// </summary>
-    public void Initialize(Transform controllerTransform)
+    public void Initialize(DroidController droidController, Transform controllerTransform)
     {
-        _controllerTransform = controllerTransform;
+        _droidController = droidController;
+        _controllerTransform = droidController.ControllerTransform;
     }
 
     /// <summary>
@@ -103,7 +106,7 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
         // Transition de "pas regardé" à "regardé"
         if (IsPlayerLookingAtMe && !_wasPlayerLooking)
         {
-            _angryTimer = AngryEyesCooldown;
+            _angryTimer = _droidController.IsStalking ? StalkStareBeforeFlee : AngryEyesCooldown;
         }
 
         _wasPlayerLooking = IsPlayerLookingAtMe;

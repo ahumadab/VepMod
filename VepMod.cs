@@ -68,29 +68,29 @@ public class VepMod : BaseUnityPlugin
         Logger.LogInfo("Initializing config for VepMod...");
 
         // General settings
-        ConfigVoiceVolume = Config.Bind("General", "Volume", 0.75f,
+        ConfigVoiceVolume = Config.Bind("General", "Volume", 0.5f,
             new ConfigDescription("Volume of the mimic voices.", new AcceptableValueRange<float>(0.0f, 1f)));
         ConfigHearYourself = Config.Bind("General", "Hear Yourself?", false,
             new ConfigDescription("Turning this off will make it so you won't hear your own voice played by mimics."));
 
         // Boucle 1 : Partage des sons entre clients
-        ConfigShareMinDelay = Config.Bind("Audio Sharing", "Share Min Delay", 30f,
+        ConfigShareMinDelay = Config.Bind("Audio Sharing", "Share Min Delay", 10f,
             new ConfigDescription("Minimum time between sharing audio clips with other players.",
-                new AcceptableValueRange<float>(10f, 120f)));
-        ConfigShareMaxDelay = Config.Bind("Audio Sharing", "Share Max Delay", 60f,
+                new AcceptableValueRange<float>(10f, 60f)));
+        ConfigShareMaxDelay = Config.Bind("Audio Sharing", "Share Max Delay", 30f,
             new ConfigDescription("Maximum time between sharing audio clips with other players.",
-                new AcceptableValueRange<float>(30f, 180f)));
+                new AcceptableValueRange<float>(30f, 120f)));
         ConfigSamplesPerPlayer = Config.Bind("Audio Sharing", "Samples Per Player", 10,
             new ConfigDescription("Maximum number of audio samples stored per player.",
                 new AcceptableValueRange<int>(5, 20)));
 
         // Boucle 2 : Commandes de lecture (pendant debuff Whispral)
-        ConfigVoiceMinDelay = Config.Bind("Voice Playback", "Voice Min Delay", 3f,
+        ConfigVoiceMinDelay = Config.Bind("Voice Playback", "Voice Min Delay", 8f,
             new ConfigDescription("Minimum time between voice playback commands during Whispral debuff.",
-                new AcceptableValueRange<float>(1f, 10f)));
-        ConfigVoiceMaxDelay = Config.Bind("Voice Playback", "Voice Max Delay", 8f,
+                new AcceptableValueRange<float>(6f, 15f)));
+        ConfigVoiceMaxDelay = Config.Bind("Voice Playback", "Voice Max Delay", 15f,
             new ConfigDescription("Maximum time between voice playback commands during Whispral debuff.",
-                new AcceptableValueRange<float>(3f, 20f)));
+                new AcceptableValueRange<float>(6f, 30f)));
         ConfigVoiceFilterEnabled = Config.Bind("Voice Playback", "Voice Filter Enabled?", false,
             new ConfigDescription(
                 "Turning this will enable modifiable filters for which enemies can play back voices during the Whispral debuff."));
