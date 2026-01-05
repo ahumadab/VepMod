@@ -10,6 +10,7 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
     private static readonly HashSet<PlayerAvatar> GlobalHiddenPlayers = new();
 
     private readonly List<PlayerAvatar> _hiddenPlayers = new();
+    private readonly Dictionary<PlayerAvatar, MapToolController> _mapToolCache = new();
     public bool IsActive { get; private set; }
 
     /// <summary>
@@ -20,7 +21,7 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
 
     private void LateUpdate()
     {
-        LateCheckDeactivateFlashlight();
+        LateCheckDeactivateVisuals();
     }
 
     public void ApplyDebuff(bool invisible)
@@ -104,25 +105,41 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
         return false;
     }
 
-    private void LateCheckDeactivateFlashlight()
+    private void LateCheckDeactivateVisuals()
     {
-        //Vérifie si le jeu a réactivé les lampes des joueurs cachés (ex: après crouch/tumble) et les re-désactive si nécessaire.
+        // Vérifie si le jeu a réactivé les éléments visuels des joueurs cachés et les re-désactive si nécessaire.
         if (!IsActive || _hiddenPlayers.Count == 0) return;
         foreach (var player in _hiddenPlayers)
         {
-            if (!player || !player.flashlightController) continue;
-            var flashlight = player.flashlightController;
-            var flashlightMeshEnable = flashlight.mesh && flashlight.mesh.enabled;
-            var flashlightSpotlightEnabled = flashlight.spotlight && flashlight.spotlight.enabled;
-            var haloEnabled = flashlight.halo && flashlight.halo.enabled;
-            var needToDeactivate = flashlightMeshEnable || flashlightSpotlightEnabled || haloEnabled;
-            if (!needToDeactivate) continue;
-            ToggleFlashlight(player, false);
-            LOG.Debug($"Re-deactivated flashlight for Player {player.photonView.Owner.NickName} in LateUpdate.");
+            if (!player) continue;
+
+            // Flashlight
+            if (player.flashlightController)
+            {
+                var flashlight = player.flashlightController;
+                var flashlightMeshEnable = flashlight.mesh && flashlight.mesh.enabled;
+                var flashlightSpotlightEnabled = flashlight.spotlight && flashlight.spotlight.enabled;
+                var haloEnabled = flashlight.halo && flashlight.halo.enabled;
+                var needToDeactivateFlashlight = flashlightMeshEnable || flashlightSpotlightEnabled || haloEnabled;
+                if (needToDeactivateFlashlight)
+                {
+                    ToggleFlashlight(player, false);
+                    LOG.Debug($"Re-deactivated flashlight for Player {player.photonView.Owner.NickName} in LateUpdate.");
+                }
+            }
+
+            // Map Tool - désactiver le VisualTransform si le controller l'a réactivé
+            var mapToolController = GetMapToolController(player);
+            if (mapToolController != null && mapToolController.VisualTransform &&
+                mapToolController.VisualTransform.gameObject.activeSelf)
+            {
+                mapToolController.VisualTransform.gameObject.SetActive(false);
+                LOG.Debug($"Re-deactivated Map Tool VisualTransform for Player {player.photonView.Owner.NickName} in LateUpdate.");
+            }
         }
     }
 
-    private static void SetPlayerVisibility(PlayerAvatar player, bool visible)
+    private void SetPlayerVisibility(PlayerAvatar player, bool visible)
     {
         // 1. Mesh principal (corps du joueur)
         ToggleMesh(player, visible);
@@ -132,6 +149,8 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
         ToggleFlashlight(player, visible);
         // 4. Voice chat (optionnel - pour ne plus entendre les autres)
         ToggleVoiceCom(player, visible);
+        // 5. Map Tool (objet pour regarder la carte)
+        ToggleMapTool(player, visible);
     }
 
     private static void ToggleFlashlight(PlayerAvatar player, bool visible)
@@ -171,5 +190,43 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
         {
             player.voiceChat.audioSource.mute = !visible;
         }
+    }
+
+    private void ToggleMapTool(PlayerAvatar player, bool visible)
+    {
+        var mapToolController = GetMapToolController(player);
+        if (mapToolController == null) return;
+
+        LOG.Debug($"Set Map Tool visibility for Player {player.photonView.Owner.NickName} to {visible}");
+
+        // Désactiver/réactiver le VisualTransform (ce qui est affiché visuellement)
+        if (mapToolController.VisualTransform)
+        {
+            mapToolController.VisualTransform.gameObject.SetActive(visible);
+        }
+    }
+
+    private MapToolController? GetMapToolController(PlayerAvatar player)
+    {
+        if (_mapToolCache.TryGetValue(player, out var cached))
+        {
+            return cached;
+        }
+
+        // Le MapToolController n'est pas un enfant du PlayerAvatar, il faut chercher dans la scène
+        // et le matcher via sa propriété PlayerAvatar
+        var allMapToolControllers = FindObjectsOfType<MapToolController>(true);
+        foreach (var controller in allMapToolControllers)
+        {
+            if (controller.PlayerAvatar == player)
+            {
+                _mapToolCache[player] = controller;
+                LOG.Debug($"Cached MapToolController for Player {player.photonView.Owner.NickName}");
+                return controller;
+            }
+        }
+
+        LOG.Warning($"MapToolController not found for Player {player.photonView.Owner.NickName}");
+        return null;
     }
 }
