@@ -68,7 +68,7 @@ public class VepMod : BaseUnityPlugin
         Logger.LogInfo("Initializing config for VepMod...");
 
         // General settings
-        ConfigVoiceVolume = Config.Bind("General", "Volume", 0.5f,
+        ConfigVoiceVolume = Config.Bind("General", "Volume", 1f,
             new ConfigDescription("Volume of the mimic voices.", new AcceptableValueRange<float>(0.0f, 1f)));
         ConfigHearYourself = Config.Bind("General", "Hear Yourself?", false,
             new ConfigDescription("Turning this off will make it so you won't hear your own voice played by mimics."));

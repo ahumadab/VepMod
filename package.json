@@ -1,0 +1,17 @@
+{
+  "name": "repovepmod",
+  "version": "1.0.0",
+  "description": "A new enemy that makes you hallucinate your teammates.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "release": "release-it"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@release-it/conventional-changelog": "^10.0.4",
+    "release-it": "^19.2.2"
+  }
+}

@@ -1,0 +1,10 @@
+npm:
+  publish: false
+plugins:
+  "@release-it/conventional-changelog":
+    preset: angular
+    infile: CHANGELOG.md
+git:
+  commitMessage: "chore(version): increasing to ${version}"
+hooks:
+  after:bump: "powershell -Command \"(Get-Content VepMod.cs) -replace '\\[BepInPlugin\\(\\\"com\\.vep\\.vepMod\\\", \\\"VepMod\\\", \\\"[0-9]+\\.[0-9]+\\.[0-9]+\\\"\\)\\]', '[BepInPlugin(\\\"com.vep.vepMod\\\", \\\"VepMod\\\", \\\"${version}\\\")]' | Set-Content VepMod.cs\""

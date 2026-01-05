@@ -67,3 +67,7 @@ crashlytics-build.properties
 bin/
 
 plugins/
+
+node_modules/
+
+.claude/
