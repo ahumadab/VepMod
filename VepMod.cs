@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -9,7 +9,7 @@ using VepMod.Patchs;
 
 namespace VepMod;
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.0")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.2")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
@@ -43,7 +43,7 @@ public class VepMod : BaseUnityPlugin
         _harmony.PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
 
-        // Précharger le prefab LostDroid de manière asynchrone pour éviter les freezes
+        // Pr�charger le prefab LostDroid de mani�re asynchrone pour �viter les freezes
         StartCoroutine(DroidPrefabLoader.PreloadAsync(success =>
         {
             if (success)
