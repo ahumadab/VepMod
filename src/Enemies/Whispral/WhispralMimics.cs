@@ -591,15 +591,15 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var audioData = wavFileManager?.GetRandomFile(sourcePlayerNickName);
+        var (audioData, fileSampleRate) = wavFileManager.GetRandomFile(sourcePlayerNickName);
         if (audioData == null)
         {
             LOG.Debug($"No audio found for player {sourcePlayerNickName}");
             return;
         }
 
-        var processedSamples = ProcessReceivedAudio(audioData, applyFilter, sampleRate);
-        var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, sampleRate, false);
+        var processedSamples = ProcessReceivedAudio(audioData, applyFilter, fileSampleRate);
+        var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, fileSampleRate, false);
         audioClip.SetData(processedSamples, 0);
 
         PlayAtTransform(target, audioClip);
