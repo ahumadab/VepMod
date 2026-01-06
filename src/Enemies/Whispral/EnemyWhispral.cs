@@ -781,9 +781,10 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private static float GetRandomVoiceDelay()
         {
-            var minInclusive = VepMod.ConfigVoiceMinDelay?.Value ?? 3f;
-            var maxInclusive = VepMod.ConfigVoiceMaxDelay?.Value ?? 8f;
-            return Random.Range(minInclusive, maxInclusive);
+            if (VepMod.VoiceDelay == null)
+                return Random.Range(3f, 8f);
+
+            return Random.Range(VepMod.VoiceDelay.Min, VepMod.VoiceDelay.Max);
         }
 
         private void SendVoiceCommand()
@@ -817,18 +818,11 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private static string? ChooseRandomSourcePlayer(PlayerAvatar targetPlayer)
         {
-            // Récupérer tous les joueurs disponibles
-            var excludeNickNames = new List<string>();
+            // Récupérer tous les joueurs disponibles, en excluant le joueur cible
+            var targetNickName = targetPlayer.photonView.Owner?.NickName;
 
-            // Exclure la cible si HearYourself est désactivé
-            if (!VepMod.ConfigHearYourself.Value && targetPlayer.photonView.Owner != null)
-            {
-                excludeNickNames.Add(targetPlayer.photonView.Owner.NickName);
-            }
-
-            // Filtrer les joueurs
             var players = PhotonNetwork.PlayerList
-                .Where(p => !string.IsNullOrEmpty(p.NickName) && !excludeNickNames.Contains(p.NickName))
+                .Where(p => !string.IsNullOrEmpty(p.NickName) && p.NickName != targetNickName)
                 .ToList();
 
             if (players.Count == 0) return null;

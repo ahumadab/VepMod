@@ -52,7 +52,6 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
         sampleRate = VepMod.ConfigSamplingRate.Value;
-        InitializeEnemyFilter();
 
         StartCoroutine(WaitForVoiceChat(playerAvatar));
     }
@@ -105,9 +104,6 @@ public sealed class WhispralMimics : MonoBehaviour
     private readonly Dictionary<string, List<byte[]>> receivedChunksByPlayer = new();
     private readonly Dictionary<string, int> expectedChunkCountByPlayer = new();
 
-    // Filtrage ennemis
-    private Dictionary<string, bool> enemyFilter;
-
     #endregion
 
     #region Initialization
@@ -136,23 +132,6 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
         return true;
-    }
-
-    private void InitializeEnemyFilter()
-    {
-        if (!VepMod.ConfigEnemyFilterEnabled.Value)
-        {
-            LOG.Info("Filter disabled. All enemies will mimic voices.");
-            return;
-        }
-
-        enemyFilter = new Dictionary<string, bool>();
-        foreach (var entry in VepMod.EnemyConfigEntries)
-        {
-            enemyFilter[entry.Key ?? ""] = entry.Value.Value;
-        }
-
-        LOG.Info("Enemy filter initialized.");
     }
 
     private IEnumerator WaitForVoiceChat(PlayerAvatar playerAvatar)
@@ -373,7 +352,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
         while (true)
         {
-            var delay = Random.Range(VepMod.ConfigShareMinDelay.Value, VepMod.ConfigShareMaxDelay.Value);
+            var delay = Random.Range(VepMod.ShareDelay.Min, VepMod.ShareDelay.Max);
             yield return new WaitForSeconds(delay);
 
             // Démarrer l'enregistrement
@@ -537,13 +516,6 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        // Vérifier HearYourself
-        if (sourcePlayerNickName == localPlayerNickName && !VepMod.ConfigHearYourself.Value)
-        {
-            LOG.Debug("HearYourself disabled, skipping own voice.");
-            return;
-        }
-
         // Vérifier si on a une hallucination active pour ce joueur
         var hallucinationDebuff = localPlayer.GetComponent<DroidDebuff>();
         if (hallucinationDebuff != null && hallucinationDebuff.IsActive)
@@ -553,20 +525,8 @@ public sealed class WhispralMimics : MonoBehaviour
             {
                 LOG.Debug($"Playing voice from {sourcePlayerNickName} on hallucination droid");
                 droid.PlayVoice(applyFilter);
-                return;
             }
         }
-
-        // Fallback: jouer sur les ennemis normaux
-        var audioData = wavFileManager.GetRandomFile(sourcePlayerNickName);
-        if (audioData == null)
-        {
-            LOG.Warning($"No audio found for player {sourcePlayerNickName}");
-            return;
-        }
-
-        LOG.Debug($"Playing voice from {sourcePlayerNickName} on enemies (filter: {applyFilter})");
-        PlayReceivedAudio(audioData, applyFilter, sampleRate);
     }
 
     /// <summary>
@@ -618,33 +578,6 @@ public sealed class WhispralMimics : MonoBehaviour
             2 => AudioFilters.ApplyAlienFilter(samples, receivedSampleRate),
             _ => samples
         };
-    }
-
-    private void PlayReceivedAudio(byte[] audioData, bool applyVoiceFilter, int receivedSampleRate)
-    {
-        if (applyVoiceFilter)
-        {
-            LOG.Debug("Applying voice filter.");
-        }
-
-        var processedSamples = ProcessReceivedAudio(audioData, applyVoiceFilter, receivedSampleRate);
-        var audioClip = AudioClip.Create("MimicClip", processedSamples.Length, 1, receivedSampleRate, false);
-        audioClip.SetData(processedSamples, 0);
-
-        PlayOnEnemies(audioClip);
-    }
-
-    private void PlayOnEnemies(AudioClip clip)
-    {
-        var enemies = GetValidEnemies();
-        foreach (var enemy in enemies)
-        {
-            var audioSource = enemy.GetOrAddComponent<AudioSource>();
-            ConfigureAudioSource(audioSource, clip);
-            audioSource.Play();
-
-            StartCoroutine(DestroyAudioSourceAfterPlayback(audioSource, clip.length + 0.1f));
-        }
     }
 
     /// <summary>
@@ -715,28 +648,6 @@ public sealed class WhispralMimics : MonoBehaviour
         source.outputAudioMixerGroup = playerVoiceChat.mixerMicrophoneSound;
     }
 
-    private IEnumerable<GameObject> GetValidEnemies()
-    {
-        var enemiesParent = GameObject.Find("Level Generator")?.transform.Find("Enemies");
-        if (enemiesParent == null) yield break;
-
-        foreach (Transform child in enemiesParent)
-        {
-            var enemy = child.gameObject;
-            if (enemy == null || enemy.name.Contains("Gnome")) continue;
-
-            if (enemyFilter != null)
-            {
-                var enemyName = enemy.name.Replace("(Clone)", "");
-                if (!enemyFilter.TryGetValue(enemyName, out var isEnabled) || !isEnabled)
-                {
-                    continue;
-                }
-            }
-
-            yield return enemy;
-        }
-    }
 
     private static IEnumerator DestroyAudioSourceAfterPlayback(AudioSource source, float delay)
     {
