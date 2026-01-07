@@ -24,6 +24,22 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
         LateCheckDeactivateVisuals();
     }
 
+    private void OnDestroy()
+    {
+        if (!IsActive || _hiddenPlayers.Count == 0) return;
+
+        LOG.Debug("InvisiblePlayerDebuff destroyed while active, restoring visibility.");
+        foreach (var player in _hiddenPlayers)
+        {
+            if (!player) continue;
+            GlobalHiddenPlayers.Remove(player);
+            SetPlayerVisibility(player, true);
+        }
+        _hiddenPlayers.Clear();
+        _mapToolCache.Clear();
+        IsActive = false;
+    }
+
     public void ApplyDebuff(bool invisible)
     {
         IsActive = invisible;

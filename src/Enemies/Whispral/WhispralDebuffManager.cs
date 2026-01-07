@@ -39,6 +39,16 @@ public sealed class WhispralDebuffManager : MonoBehaviour
         playerAvatar = GetComponent<PlayerAvatar>();
     }
 
+    private void OnDestroy()
+    {
+        if (HasWhispralAttached)
+        {
+            LOG.Debug("WhispralDebuffManager destroyed while debuffs active, forcing cleanup.");
+            AttachedCount = 0;
+            OnDebuffsDeactivated();
+        }
+    }
+
     /// <summary>
     ///     Récupère une position de spawn pré-calculée, ou null si aucune disponible.
     /// </summary>
