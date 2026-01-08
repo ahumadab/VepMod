@@ -32,6 +32,21 @@ public sealed class WavFileManager
     #region WAV Header
 
     /// <summary>
+    ///     Extrait le sample rate depuis les données WAV brutes.
+    ///     Le sample rate est situé aux bytes 24-27 de l'en-tête WAV.
+    /// </summary>
+    private static int ReadSampleRateFromWav(byte[] wavData)
+    {
+        if (wavData.Length < 28)
+        {
+            LOG.Warning("WAV data too short to read sample rate, using default 48000");
+            return 48000;
+        }
+
+        return BitConverter.ToInt32(wavData, 24);
+    }
+
+    /// <summary>
     ///     Écrit l'en-tête WAV standard (PCM 16-bit mono).
     /// </summary>
     internal static void WriteWavHeader(BinaryWriter writer, int sampleCount, int sampleRate)
@@ -68,24 +83,29 @@ public sealed class WavFileManager
 
     /// <summary>
     ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
+    ///     Retourne les données audio et le sample rate extrait de l'en-tête WAV.
     /// </summary>
-    public byte[]? GetRandomFile(string playerNickName)
+    public (byte[]? data, int sampleRate) GetRandomFile(string playerNickName)
     {
         var playerFolder = GetPlayerFolder(playerNickName);
         if (!Directory.Exists(playerFolder))
         {
-            return null;
+            return (null, 0);
         }
 
         var files = Directory.GetFiles(playerFolder, WavExtension);
         if (files.Length == 0)
         {
             LOG.Debug($"No audio files found for player {playerNickName}.");
-            return null;
+            return (null, 0);
         }
 
         var selectedFile = files[Random.Range(0, files.Length)];
-        return File.ReadAllBytes(selectedFile);
+        var audioData = File.ReadAllBytes(selectedFile);
+        var fileSampleRate = ReadSampleRateFromWav(audioData);
+
+        LOG.Debug($"Loaded audio file for {playerNickName} with sample rate {fileSampleRate} Hz");
+        return (audioData, fileSampleRate);
     }
 
     #endregion
