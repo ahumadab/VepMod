@@ -239,7 +239,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             return null;
         }
 
-        var instance = Instantiate(DroidPrefabLoader.LostDroidPrefab, spawnPosition, Quaternion.identity);
+        var instance = Instantiate(DroidPrefabLoader.DroidPrefab, spawnPosition, Quaternion.identity);
         if (instance == null)
         {
             LOG.Error("Failed to instantiate LostDroid prefab");
@@ -265,6 +265,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         SetupMovementController();
         SetupAnimator();
         SetupAnimationController();
+        DroidMaterialFixer.FixMaterials(gameObject);
         ApplyPlayerColor();
         SetupNameplate();
         InitializeFsm();
