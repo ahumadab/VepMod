@@ -19,6 +19,7 @@ public static class DroidPrefabLoader
 {
     private const string BundleFileName = "vepmod_prefabs";
     private const string DroidPrefabName = "MyDroid";
+    private const string EmbeddedBundleResourceName = "VepMod.Resources.vepmod_prefabs";
     private static readonly VepLogger LOG = VepLogger.Create(nameof(DroidPrefabLoader));
 
     private static AssetBundle? _bundle;
@@ -58,25 +59,63 @@ public static class DroidPrefabLoader
         IsLoading = true;
         LOG.Info("Starting async preload of Droid prefab...");
 
-        // Chercher le chemin du bundle
-        var bundlePath = FindBundlePath();
-        if (string.IsNullOrEmpty(bundlePath))
+        // 1. Essayer de charger depuis la ressource embarquée dans la DLL
+        var embeddedLoaded = false;
+        using (var stream = typeof(DroidPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
         {
-            LOG.Warning("VepMod AssetBundle not found - Droid hallucinations disabled");
-            FinishLoading(false, onComplete);
-            yield break;
+            if (stream != null)
+            {
+                LOG.Info("Found embedded AssetBundle resource, loading from DLL...");
+                byte[] bytes;
+                using (var ms = new MemoryStream())
+                {
+                    stream.CopyTo(ms);
+                    bytes = ms.ToArray();
+                }
+
+                var bundleRequest = AssetBundle.LoadFromMemoryAsync(bytes);
+                yield return bundleRequest;
+
+                _bundle = bundleRequest.assetBundle;
+                if (_bundle != null)
+                {
+                    LOG.Info("AssetBundle loaded successfully from embedded resource");
+                    embeddedLoaded = true;
+                }
+                else
+                {
+                    LOG.Warning("Failed to load AssetBundle from embedded resource, falling back to file...");
+                }
+            }
+            else
+            {
+                LOG.Debug("No embedded AssetBundle found, falling back to file...");
+            }
         }
 
-        // Charger l'AssetBundle de manière asynchrone
-        var bundleRequest = AssetBundle.LoadFromFileAsync(bundlePath);
-        yield return bundleRequest;
-
-        _bundle = bundleRequest.assetBundle;
-        if (_bundle == null)
+        // 2. Fallback: charger depuis le disque
+        if (!embeddedLoaded)
         {
-            LOG.Error($"Failed to load AssetBundle from {bundlePath}");
-            FinishLoading(false, onComplete);
-            yield break;
+            var bundlePath = FindBundlePath();
+            if (string.IsNullOrEmpty(bundlePath))
+            {
+                LOG.Warning("VepMod AssetBundle not found - Droid hallucinations disabled");
+                FinishLoading(false, onComplete);
+                yield break;
+            }
+
+            var bundleRequest = AssetBundle.LoadFromFileAsync(bundlePath);
+            yield return bundleRequest;
+
+            _bundle = bundleRequest.assetBundle;
+            if (_bundle == null)
+            {
+                LOG.Error($"Failed to load AssetBundle from {bundlePath}");
+                FinishLoading(false, onComplete);
+                yield break;
+            }
+
+            LOG.Info($"AssetBundle loaded from file: {bundlePath}");
         }
 
         // Essayer de charger le prefab directement
@@ -86,7 +125,7 @@ public static class DroidPrefabLoader
         if (assetRequest.asset != null)
         {
             DroidPrefab = assetRequest.asset as GameObject;
-            LOG.Info($"Droid prefab loaded directly from bundle: {bundlePath}");
+            LOG.Info("Droid prefab loaded directly from bundle");
             FinishLoading(true, onComplete);
             yield break;
         }
