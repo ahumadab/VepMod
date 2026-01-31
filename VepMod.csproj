@@ -20,23 +20,23 @@
 
     <!-- Package References -->
     <ItemGroup>
-        <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
-        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.1" PrivateAssets="all" IncludeAssets="build" />
-        <PackageReference Include="Linkoid.Repo.Plugin.Build" Version="*" PrivateAssets="all" />
-        <PackageReference Include="Zehs.REPOLib" Version="3.0.3" />
-        <PackageReference Include="BepInEx.Core" Version="5.*" ExcludeAssets="runtime" />
-        <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
-        <PackageReference Include="R.E.P.O.GameLibs.Steam" Version="*-*" PrivateAssets="all" />
-        <PackageReference Include="WebRtcVadSharp" Version="1.3.2" />
+        <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.1" PrivateAssets="all" IncludeAssets="build"/>
+        <PackageReference Include="Linkoid.Repo.Plugin.Build" Version="*" PrivateAssets="all"/>
+        <PackageReference Include="Zehs.REPOLib" Version="3.0.3"/>
+        <PackageReference Include="BepInEx.Core" Version="5.*" ExcludeAssets="runtime"/>
+        <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all"/>
+        <PackageReference Include="R.E.P.O.GameLibs.Steam" Version="*-*" PrivateAssets="all"/>
+        <PackageReference Include="WebRtcVadSharp" Version="1.3.2"/>
     </ItemGroup>
     <PropertyGroup>
         <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Remove="node_modules\**" />
-        <None Remove="plugins\**" />
-        <Compile Include="src\**\*.cs" />
+        <None Remove="node_modules\**"/>
+        <None Remove="plugins\**"/>
+        <Compile Include="src\**\*.cs"/>
     </ItemGroup>
 
     <!-- Embed the AssetBundle into the DLL (optional in Debug) -->
@@ -48,6 +48,6 @@
 
     <!-- Fail fast in Release if the bundle is missing -->
     <Target Name="EnsureVepModPrefabsBundlePresent" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release'">
-        <Error Condition="!Exists('Ressources\\vepmod_prefabs')" Text="Missing AssetBundle: Ressources\vepmod_prefabs. Generate/copy it before building Release (or pass a different path and update the project accordingly)." />
+        <Error Condition="!Exists('Ressources\\vepmod_prefabs')" Text="Missing AssetBundle: Ressources\vepmod_prefabs. Generate/copy it before building Release (or pass a different path and update the project accordingly)."/>
     </Target>
 </Project>

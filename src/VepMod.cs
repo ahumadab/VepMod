@@ -28,7 +28,7 @@ public static class ConfigRanges
         6f, 30f, 15f);
 }
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.2")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.4")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
