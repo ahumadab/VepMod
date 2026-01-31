@@ -1,6 +1,6 @@
 {
   "name": "repovepmod",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A new enemy that makes you hallucinate your teammates.",
   "main": "index.js",
   "scripts": {

@@ -7,4 +7,8 @@ plugins:
 git:
   commitMessage: "chore(version): increasing to ${version}"
 hooks:
-  after:bump: "powershell -Command \"(Get-Content VepMod.cs) -replace '\\[BepInPlugin\\(\\\"com\\.vep\\.vepMod\\\", \\\"VepMod\\\", \\\"[0-9]+\\.[0-9]+\\.[0-9]+\\\"\\)\\]', '[BepInPlugin(\\\"com.vep.vepMod\\\", \\\"VepMod\\\", \\\"${version}\\\")]' | Set-Content VepMod.cs\""
+  after:bump:
+    - "powershell -Command \"(Get-Content src/VepMod.cs -Encoding UTF8) -replace '\\[BepInPlugin\\(\\\"com\\.vep\\.vepMod\\\", \\\"VepMod\\\", \\\"[0-9]+\\.[0-9]+\\.[0-9]+\\\"\\)\\]', '[BepInPlugin(\\\"com.vep.vepMod\\\", \\\"VepMod\\\", \\\"${version}\\\")]' | Set-Content src/VepMod.cs -Encoding UTF8\""
+    - "powershell -Command \"$json = Get-Content 'Ressources/manifest.json' -Raw -Encoding UTF8 | ConvertFrom-Json; $json.version_number = '${version}'; $json | ConvertTo-Json -Depth 10 | Set-Content 'Ressources/manifest.json' -Encoding UTF8\""
+  after:changelog:
+    - "powershell -ExecutionPolicy Bypass -File build-release.ps1 -Version ${version}"
