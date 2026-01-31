@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4](https://github.com/ahumadab/VepMod/compare/1.0.3...1.0.4) (2026-01-31)
+
+
+### Bug Fixes
+
+* **Droid:**  Changing prefab dependencie & material shaders ([af1fe44](https://github.com/ahumadab/VepMod/commit/af1fe440dfda5608532cbd2b5e7d2d43fa8d4b5a))
+* **Droid:** Loads AssetBundle from embedded resource ([48c49c4](https://github.com/ahumadab/VepMod/commit/48c49c464ca3e5aed239e88392f26839d220e067))
+
 ## [1.0.3](https://github.com/ahumadab/VepMod/compare/1.0.2...1.0.3) (2026-01-08)
 
 
