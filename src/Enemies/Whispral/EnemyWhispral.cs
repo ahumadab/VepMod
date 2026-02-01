@@ -1,4 +1,3 @@
-﻿using System.Collections.Generic;
 using System.Linq;
 using Photon.Pun;
 using Unity.VisualScripting;
@@ -77,6 +76,18 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         base.Awake();
         photonView = GetComponent<PhotonView>();
+#if DEBUG
+        var visualsCapsule = transform.parent?.Find("Visuals/Capsule");
+        if (visualsCapsule != null)
+        {
+            visualsCapsule.gameObject.SetActive(true);
+            LOG.Debug("Debug mode: Whispral visuals enabled");
+        }
+        else
+        {
+            LOG.Warning("Debug mode: Could not find Visuals/Capsule from parent");
+        }
+#endif
 
         // Enregistrement des états
         Fsm.AddState(State.Spawn, new SpawnState());
@@ -782,7 +793,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         private static float GetRandomVoiceDelay()
         {
             if (VepMod.VoiceDelay == null)
+            {
                 return Random.Range(3f, 8f);
+            }
 
             return Random.Range(VepMod.VoiceDelay.Min, VepMod.VoiceDelay.Max);
         }
