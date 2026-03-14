@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/ahumadab/VepMod/compare/1.0.4...1.0.5) (2026-03-14)
+
+
+### Bug Fixes
+
+* **filesystem:** Introduce robust cross-platform file system sanitizer ([06278c6](https://github.com/ahumadab/VepMod/commit/06278c60ef660c3b593426913f042a8037dd52bd))
+
 ## [1.0.4](https://github.com/ahumadab/VepMod/compare/1.0.3...1.0.4) (2026-01-31)
 
 

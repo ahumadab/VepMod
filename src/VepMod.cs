@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -28,7 +28,7 @@ public static class ConfigRanges
         6f, 30f, 15f);
 }
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.4")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.5")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
