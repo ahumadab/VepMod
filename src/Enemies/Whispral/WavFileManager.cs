@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using VepMod.VepFramework;
+using VepMod.VepFramework.Extensions;
 using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
@@ -28,6 +29,37 @@ public sealed class WavFileManager
 
     public string BaseFolderPath { get; }
     public int MaxSamplesPerPlayer { get; }
+
+    #region Read Operations
+
+    /// <summary>
+    ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
+    ///     Retourne les données audio et le sample rate extrait de l'en-tête WAV.
+    /// </summary>
+    public (byte[]? data, int sampleRate) GetRandomFile(string playerNickName)
+    {
+        var playerFolder = GetPlayerFolder(playerNickName);
+        if (!Directory.Exists(playerFolder))
+        {
+            return (null, 0);
+        }
+
+        var files = Directory.GetFiles(playerFolder, WavExtension);
+        if (files.Length == 0)
+        {
+            LOG.Debug($"No audio files found for player {playerNickName}.");
+            return (null, 0);
+        }
+
+        var selectedFile = files[Random.Range(0, files.Length)];
+        var audioData = File.ReadAllBytes(selectedFile);
+        var fileSampleRate = ReadSampleRateFromWav(audioData);
+
+        LOG.Debug($"Loaded audio file for {playerNickName} with sample rate {fileSampleRate} Hz");
+        return (audioData, fileSampleRate);
+    }
+
+    #endregion
 
     #region WAV Header
 
@@ -79,37 +111,6 @@ public sealed class WavFileManager
 
     #endregion
 
-    #region Read Operations
-
-    /// <summary>
-    ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
-    ///     Retourne les données audio et le sample rate extrait de l'en-tête WAV.
-    /// </summary>
-    public (byte[]? data, int sampleRate) GetRandomFile(string playerNickName)
-    {
-        var playerFolder = GetPlayerFolder(playerNickName);
-        if (!Directory.Exists(playerFolder))
-        {
-            return (null, 0);
-        }
-
-        var files = Directory.GetFiles(playerFolder, WavExtension);
-        if (files.Length == 0)
-        {
-            LOG.Debug($"No audio files found for player {playerNickName}.");
-            return (null, 0);
-        }
-
-        var selectedFile = files[Random.Range(0, files.Length)];
-        var audioData = File.ReadAllBytes(selectedFile);
-        var fileSampleRate = ReadSampleRateFromWav(audioData);
-
-        LOG.Debug($"Loaded audio file for {playerNickName} with sample rate {fileSampleRate} Hz");
-        return (audioData, fileSampleRate);
-    }
-
-    #endregion
-
     #region Player Folder Management
 
     /// <summary>
@@ -117,23 +118,13 @@ public sealed class WavFileManager
     /// </summary>
     private string GetPlayerFolder(string playerNickName)
     {
-        var safeId = SanitizePlayerNickName(playerNickName);
-        return Path.Combine(BaseFolderPath, $"{PlayerFolderPrefix}{safeId}");
-    }
-
-    /// <summary>
-    ///     Nettoie l'ID joueur pour éviter les caractères invalides dans les noms de dossier.
-    /// </summary>
-    private static string SanitizePlayerNickName(string playerNickName)
-    {
-        if (string.IsNullOrEmpty(playerNickName))
+        var safeId = FileSystemSanitizer.Sanitize(playerNickName);
+        if (safeId == "unknown" && !string.IsNullOrEmpty(playerNickName))
         {
-            LOG.Warning("Player nickname is null or empty. Using 'unknown' as fallback.");
-            return "unknown";
+            LOG.Warning($"Player nickname '{playerNickName}' was fully sanitized to fallback 'unknown'.");
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        return string.Join("_", playerNickName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+        return Path.Combine(BaseFolderPath, $"{PlayerFolderPrefix}{safeId}");
     }
 
     /// <summary>
