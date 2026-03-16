@@ -29,6 +29,9 @@ public static class ConfigRanges
     public static readonly MinMaxRange<float> VoiceDelay = MinMaxRange.Float(
         6f, 30f, 8f,
         6f, 30f, 15f);
+
+    // Durée minimale d'enregistrement (garde-fou avant VAD)
+    public static readonly RangeValue<float> AudioMinDuration = RangeValue.Float(0.1f, 2f, 0.3f);
 }
 
 [BepInPlugin("com.vep.vepMod", "VepMod", "1.0.5")]
@@ -51,6 +54,10 @@ public class VepMod : BaseUnityPlugin
     // Outils de développement (build dev uniquement, désactivés par défaut)
     public static ConfigEntry<bool> ConfigEnableDevTools;
 #endif
+
+    // Validation audio (VAD)
+    public static ConfigEntry<float> ConfigAudioMinDuration;
+    public static ConfigEntry<bool> ConfigVadEnabled;
 
     public static readonly Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
 
@@ -128,6 +135,12 @@ public class VepMod : BaseUnityPlugin
             new ConfigDescription(
                 "Enables in-game developer tools for testing the droid: spawn/teleport/drop-test keybinds (F7-F11) and a debug HUD. For development only."));
 #endif
+
+        // Audio validation (VAD)
+        ConfigAudioMinDuration = Config.BindRange("Audio Quality", "Min Duration", ConfigRanges.AudioMinDuration,
+            "Minimum duration in seconds. Shorter recordings are rejected.");
+        ConfigVadEnabled = Config.Bind("Audio Quality", "VAD Enabled", true,
+            "Enable Voice Activity Detection (VAD) for speech filtering. Uses WebRTC ML model (requires x64). Disable if you have issues.");
     }
 
     private void PreventDelete()
