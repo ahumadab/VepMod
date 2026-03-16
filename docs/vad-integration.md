@@ -128,7 +128,7 @@ ProcessVoiceData (voice frames from Photon)
 | `src/VepFramework/Audio/AudioRecordingValidator.cs` | Legacy RMS validator — kept, used by benchmark only |
 | `src/VepFramework/Audio/AudioAnalyzer.cs` | Audio stats — kept, used by benchmark only |
 | `src/Enemies/Whispral/WhispralMimics.cs` | Recording pipeline — VAD-only + try/catch fallback |
-| `src/VepMod.cs` | Config entries — `ConfigAudioMinDuration`, `ConfigVadEnabled` |
+| `src/VepMod.cs` | Config entries (`ConfigVadEnabled`, `ConfigAudioMinDuration`) |
 | `VepMod.csproj` | Build config — WebRtcVadSharp 1.3.2, PlatformTarget x64, test exclusion |
 
 `src/VepFramework/Audio/CombinedAudioValidator.cs` was **deleted** (dead code — never called).
@@ -152,7 +152,26 @@ public static VadValidationCriteria Production => new()
 `ConfigAudioMinDuration` before calling VAD, keeping the duration threshold user-configurable
 without duplicating it inside the VAD criteria.
 
-### VAD instantiation — try/catch fallback (`WhispralMimics.cs:169`)
+### WebRtcVadSharp — deployment
+
+The NuGet package `WebRtcVadSharp 1.3.2` contains two DLLs, both deployed alongside `VepMod.dll`:
+
+- `WebRtcVadSharp.dll` (11 KB) — managed .NET wrapper, copied to output by a `<Target>` in `VepMod.csproj` (netstandard2.1 does not copy NuGet runtime DLLs by default)
+- `WebRtcVad.dll` (50 KB) — native C++ x64 library, copied to output by the NuGet package's own `.targets` file
+
+The final plugin package contains 3 files:
+
+```
+plugins/
+├── VepMod.dll
+├── WebRtcVadSharp.dll
+└── WebRtcVad.dll
+```
+
+Pinned at 1.3.2 — do not upgrade without re-running the benchmark, since the GMM model
+behavior may change across versions.
+
+### VAD instantiation — try/catch fallback
 
 ```csharp
 if (VepMod.ConfigVadEnabled.Value)
@@ -160,6 +179,7 @@ if (VepMod.ConfigVadEnabled.Value)
     try
     {
         vadValidator = new VadAudioValidator(VadValidationCriteria.Production);
+        LOG.Info("VAD validation enabled (production mode, speechRatio>=0.40).");
     }
     catch (Exception ex)
     {
@@ -170,8 +190,8 @@ if (VepMod.ConfigVadEnabled.Value)
 ```
 
 If `WebRtcVad.dll` (native x64) is absent or fails to load (e.g. on x86 or a broken install),
-the constructor throws. The catch sets `vadValidator = null` and the pipeline continues without
-speech filtering — recordings are accepted as-is, the mod still works.
+the constructor throws a `DllNotFoundException`. The catch sets `vadValidator = null` and the
+pipeline continues without speech filtering — recordings are accepted as-is, the mod still works.
 
 ---
 
@@ -185,15 +205,6 @@ speech filtering — recordings are accepted as-is, the mod still works.
 
 Required by `WebRtcVad.dll` (native x64 only). Without this, MSBuild emits a warning and
 the native DLL may fail to load at runtime on 32-bit hosts.
-
-### `WebRtcVadSharp 1.3.2`
-
-```xml
-<PackageReference Include="WebRtcVadSharp" Version="1.3.2"/>
-```
-
-Pinned — do not upgrade without re-running the benchmark, since the GMM model behavior
-may change across versions.
 
 ### Test exclusion
 
@@ -216,7 +227,7 @@ Two entries remain in `[Audio Quality]` in `BepInEx/config/com.vep.vepMod.cfg`:
 | Key | Default | Description |
 |---|---|---|
 | `Min Duration` | `0.3` | Reject recordings shorter than N seconds (pre-VAD guard) |
-| `VAD Enabled` | `true` | Enable/disable WebRTC speech detection. Disable if VAD causes issues (e.g. DLL load failure on non-standard setups) |
+| `VAD Enabled` | `true` | Enable/disable WebRTC speech detection. Disable if `WebRtcVad.dll` is missing or fails to load (e.g. the file was not included in the mod package) |
 
 Removed configs (no longer exist): `AudioMinRms`, `AudioMinPeak`, `AudioMinNonSilenceRatio`.
 
@@ -225,6 +236,8 @@ Removed configs (no longer exist): `AudioMinRms`, `AudioMinPeak`, `AudioMinNonSi
 ## Final architecture
 
 ```
+VepMod.Awake()
+│
 WhispralMimics (MonoBehaviour, one per PlayerAvatar)
 │
 ├── Awake()

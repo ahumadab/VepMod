@@ -87,3 +87,7 @@ nul
 tests/AudioBenchmark/results/
 tests/AudioBenchmark/bin/
 tests/AudioBenchmark/obj/
+
+.agents/
+
+skills-lock.json
