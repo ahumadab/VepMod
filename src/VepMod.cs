@@ -26,6 +26,9 @@ public static class ConfigRanges
     public static readonly MinMaxRange<float> VoiceDelay = MinMaxRange.Float(
         6f, 30f, 8f,
         6f, 30f, 15f);
+
+    // Durée minimale d'enregistrement (garde-fou avant VAD)
+    public static readonly RangeValue<float> AudioMinDuration = RangeValue.Float(0.1f, 2f, 0.3f);
 }
 
 [BepInPlugin("com.vep.vepMod", "VepMod", "1.0.5")]
@@ -43,6 +46,10 @@ public class VepMod : BaseUnityPlugin
     // Boucle 2 : Commandes de lecture (pendant debuff)
     public static BoundMinMaxRange<float> VoiceDelay;
     public static ConfigEntry<bool> ConfigVoiceFilterEnabled;
+
+    // Validation audio (VAD)
+    public static ConfigEntry<float> ConfigAudioMinDuration;
+    public static ConfigEntry<bool> ConfigVadEnabled;
 
     public static readonly Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
 
@@ -105,6 +112,12 @@ public class VepMod : BaseUnityPlugin
         // Experimental settings
         ConfigSamplingRate = Config.BindRange("Experimental", "Sampling Rate", ConfigRanges.SamplingRate,
             "Only change this value if the console gives you a warning about your microphone frequency not being supported.");
+
+        // Audio validation (VAD)
+        ConfigAudioMinDuration = Config.BindRange("Audio Quality", "Min Duration", ConfigRanges.AudioMinDuration,
+            "Minimum duration in seconds. Shorter recordings are rejected.");
+        ConfigVadEnabled = Config.Bind("Audio Quality", "VAD Enabled", true,
+            "Enable Voice Activity Detection (VAD) for speech filtering. Uses WebRTC ML model (requires x64). Disable if you have issues.");
     }
 
     private void PreventDelete()

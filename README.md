@@ -18,3 +18,7 @@ They wander around. Sometimes they stare at you. And they speak with your friend
 ## Requirements
 
 - [REPOLib](https://thunderstore.io/c/repo/p/Zehs/REPOLib/)
+
+## Developer Documentation
+
+- [VAD Integration](docs/vad-integration.md) — voice activity detection: benchmark methodology, results, and production implementation

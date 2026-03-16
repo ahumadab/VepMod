@@ -79,3 +79,11 @@ node_modules/
 .opencode/
 
 dist/
+
+# Parasitic "nul" file (Windows bash redirect artifact)
+nul
+
+# Benchmark results (generated, not source code)
+tests/AudioBenchmark/results/
+tests/AudioBenchmark/bin/
+tests/AudioBenchmark/obj/
