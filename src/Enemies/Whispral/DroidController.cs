@@ -54,7 +54,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     private static readonly int IsSprintingKey = Animator.StringToHash("isSprinting");
     private static readonly int IsTurningKey = Animator.StringToHash("isTurning");
     private static readonly int StunKey = Animator.StringToHash("stun");
-    private static readonly int AlbedoColorKey = Shader.PropertyToID("_AlbedoColor");
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private DroidFaceAnimationController _animController;
@@ -266,7 +265,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         SetupAnimator();
         SetupAnimationController();
         DroidMaterialFixer.FixMaterials(gameObject);
-        ApplyPlayerColor();
+        DroidCosmeticPainter.Apply(gameObject, SourcePlayer);
         SetupNameplate();
         InitializeFsm();
 
@@ -548,52 +547,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     {
         _nameplateController = gameObject.AddComponent<DroidNameplate>();
         _nameplateController.Initialize(ControllerTransform, SourcePlayer);
-    }
-
-    private void ApplyPlayerColor()
-    {
-        if (SourcePlayer == null) return;
-
-        var colorIndex = StatsManager.instance.GetPlayerColor(SourcePlayer.steamID);
-        if (colorIndex < 0 || colorIndex >= AssetManager.instance.playerColors.Count) return;
-
-        var color = AssetManager.instance.playerColors[colorIndex];
-
-        // Trouver le Cube qui contient les visuels
-        var cube = transform.Find("Rigidbody/Cube") ?? transform.Find("Cube");
-        if (cube == null)
-        {
-            foreach (var child in GetComponentsInChildren<Transform>())
-            {
-                if (child.name == "Cube")
-                {
-                    cube = child;
-                    break;
-                }
-            }
-        }
-
-        if (cube == null)
-        {
-            LOG.Warning("Cube transform not found for color application");
-            return;
-        }
-
-        // Appliquer la couleur à tous les renderers (sauf yeux, pupilles et health shadow)
-        foreach (var renderer in cube.GetComponentsInChildren<Renderer>())
-        {
-            var gameObjectName = renderer.gameObject.name;
-            if (gameObjectName.Contains("eye") || gameObjectName.Contains("pupil") ||
-                gameObjectName.Contains("mesh_health"))
-            {
-                continue;
-            }
-
-            foreach (var material in renderer.materials)
-            {
-                material.SetColor(AlbedoColorKey, color);
-            }
-        }
     }
 
     private void InitializeFsm()
