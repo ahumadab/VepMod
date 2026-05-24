@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
-using UnityEngine.Animations;
+using VepMod.Enemies.Whispral.Visuals;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
 
@@ -18,10 +17,11 @@ namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     Hallucination basée sur le prefab LostDroid de WesleysEnemies.
-///     Se balade sans attaquer, utilise l'architecture originale:
+///     Se balade sans attaquer. Backbone non-visuelle du prefab :
 ///     - Controller: NavMeshAgent + CharacterController (mouvement)
-///     - Rigidbody: transform suivi par Cube via ParentConstraint
-///     - Cube: visuels + Animator
+///     - Rigidbody: transform suivi par les visuels
+///     Les visuels (Cube du prefab) sont supprimés et remplacés par un clone
+///     du PlayerAvatarVisuals du joueur source (cosmetics + couleurs inclus).
 /// </summary>
 public sealed partial class DroidController : StateMachineComponent<DroidController, DroidController.StateId>
 {
@@ -50,9 +50,9 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     internal const float StalkStareBeforeFlee = 2f;
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidController>();
-    private static readonly int IsWalkingKey = Animator.StringToHash("isWalking");
-    private static readonly int IsSprintingKey = Animator.StringToHash("isSprinting");
-    private static readonly int IsTurningKey = Animator.StringToHash("isTurning");
+    private static readonly int IsWalkingKey = Animator.StringToHash("Moving");
+    private static readonly int IsSprintingKey = Animator.StringToHash("Sprinting");
+    private static readonly int IsTurningKey = Animator.StringToHash("Turning");
     private static readonly int StunKey = Animator.StringToHash("stun");
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
@@ -103,7 +103,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
         Movement.UpdateMovement(isMovementState);
         Movement.UpdateRotation();
-        Movement.SyncVisualsToController(Animator.transform);
+        Movement.SyncVisualsToController(Animator != null ? Animator.transform : null);
         UpdateAnimationFlags();
         Movement.SyncNavAgentPosition(isMovementState);
     }
@@ -262,10 +262,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         DisableEnemyComponents();
         SetupNavigation();
         SetupMovementController();
-        SetupAnimator();
+        SetupClonedVisuals();
         SetupAnimationController();
-        DroidMaterialFixer.FixMaterials(gameObject);
-        DroidCosmeticPainter.Apply(gameObject, SourcePlayer);
         SetupNameplate();
         InitializeFsm();
 
@@ -291,59 +289,72 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         _animController = gameObject.AddComponent<DroidFaceAnimationController>();
         _animController.Initialize(this, ControllerTransform);
 
-        // Setup head transform for talking animation
-        var headTopTransform = DroidHelpers.FindChildByName(transform, "code_head_top");
+        var visualsRoot = Animator != null ? Animator.transform : transform;
+
+        // Setup head transform for talking animation (present in cloned player visuals)
+        var headTopTransform = DroidHelpers.FindChildByName(visualsRoot, "code_head_top");
         if (headTopTransform != null)
         {
             _animController.SetupTalking(headTopTransform);
         }
 
-        // Setup eyelids for angry eyes
-        SetupEyelidsForAnimController();
+        SetupEyelidsFromClone(visualsRoot);
     }
 
-    private void SetupEyelidsForAnimController()
+    private void SetupEyelidsFromClone(Transform visualsRoot)
     {
         try
         {
-            var eyeLeft = DroidHelpers.FindChildByName(transform, "ANIM EYE LEFT");
-            var eyeRight = DroidHelpers.FindChildByName(transform, "ANIM EYE RIGHT");
+            var eyelidsLeft = DroidHelpers.FindChildByName(visualsRoot, "EYELIDS LEFT");
+            var eyelidsRight = DroidHelpers.FindChildByName(visualsRoot, "EYELIDS RIGHT");
 
-            if (eyeLeft == null || eyeRight == null)
+            if (eyelidsLeft == null || eyelidsRight == null)
             {
-                LOG.Warning("ANIM EYE LEFT/RIGHT not found for angry eyes effect");
+                LOG.Warning("EYELIDS LEFT/RIGHT not found on cloned visuals");
                 return;
             }
 
-            var playerSource = FindEyelidSource();
-            if (playerSource == null)
-            {
-                LOG.Warning("No PlayerAvatar found to copy eyelid structure");
-                return;
-            }
+            FindEyelidRotations(eyelidsLeft, out var leftUpperX, out var leftUpperZ, out var leftLowerX);
+            FindEyelidRotations(eyelidsRight, out var rightUpperX, out var rightUpperZ, out var rightLowerX);
 
-            var codeEyeLeft = DroidHelpers.FindChildByName(transform, "code_eye_left") ?? eyeLeft;
-            var codeEyeRight = DroidHelpers.FindChildByName(transform, "code_eye_right") ?? eyeRight;
-
-            var eyelidsLeft = SetupEyeFromPlayer(codeEyeLeft, playerSource, "LEFT",
-                out var leftUpperX, out var leftUpperZ, out var leftLowerX);
-
-            var eyelidsRight = SetupEyeFromPlayer(codeEyeRight, playerSource, "RIGHT",
-                out var rightUpperX, out var rightUpperZ, out var rightLowerX);
-
-            if (eyelidsLeft != null) eyelidsLeft.SetActive(false);
-            if (eyelidsRight != null) eyelidsRight.SetActive(false);
+            eyelidsLeft.gameObject.SetActive(false);
+            eyelidsRight.gameObject.SetActive(false);
 
             _animController.SetupEyelids(
-                eyelidsLeft, eyelidsRight,
+                eyelidsLeft.gameObject, eyelidsRight.gameObject,
                 leftUpperX, leftUpperZ, leftLowerX,
                 rightUpperX, rightUpperZ, rightLowerX);
-
-            LOG.Info($"Angry eyes setup: left={eyelidsLeft != null}, right={eyelidsRight != null}");
         }
         catch (Exception ex)
         {
-            LOG.Error($"SetupEyelidsForAnimController: Exception - {ex.Message}\n{ex.StackTrace}");
+            LOG.Error($"SetupEyelidsFromClone: Exception - {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    private static void FindEyelidRotations(
+        Transform eyelidsRoot,
+        out Transform? upperX,
+        out Transform? upperZ,
+        out Transform? lowerX)
+    {
+        upperX = null;
+        upperZ = null;
+        lowerX = null;
+
+        foreach (var child in eyelidsRoot.GetComponentsInChildren<Transform>(true))
+        {
+            switch (child.name)
+            {
+                case "eyelid_upper":
+                    upperX = child;
+                    break;
+                case "eyelid_upper_rotation":
+                    upperZ = child;
+                    break;
+                case "eyelid_lower":
+                    lowerX = child;
+                    break;
+            }
         }
     }
 
@@ -359,169 +370,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         {
             Movement.OnNavMeshError -= HandleNavMeshError;
         }
-    }
-
-    private Material? GetDroidBodyMaterial()
-    {
-        // Chercher un renderer sur le corps du droid (pas les yeux)
-        foreach (var renderer in GetComponentsInChildren<MeshRenderer>(true))
-        {
-            var gameObjectName = renderer.gameObject.name.ToLower();
-            // Éviter les yeux et pupilles
-            if (gameObjectName.Contains("eye") || gameObjectName.Contains("pupil") ||
-                gameObjectName.Contains("eyelid"))
-            {
-                continue;
-            }
-
-            if (renderer.material != null)
-            {
-                return renderer.material;
-            }
-        }
-
-        return null;
-    }
-
-    private Transform? FindEyelidSource()
-    {
-        // Chercher PlayerAvatarVisuals dans la scène (c'est là que sont les paupières)
-        var playerVisuals = FindObjectsOfType<PlayerAvatarVisuals>();
-
-        foreach (var visuals in playerVisuals)
-        {
-            // Chercher EYELIDS LEFT pour vérifier que c'est une source valide
-            foreach (var child in visuals.GetComponentsInChildren<Transform>(true))
-            {
-                if (child.name == "EYELIDS LEFT")
-                {
-                    return visuals.transform;
-                }
-            }
-        }
-
-        LOG.Warning("No PlayerAvatarVisuals with EYELIDS LEFT found");
-        return null;
-    }
-
-    /// <summary>
-    ///     Configure les paupières pour un oeil du droid en copiant depuis le player.
-    /// </summary>
-    private GameObject? SetupEyeFromPlayer(
-        Transform droidEye,
-        Transform playerSource,
-        string side,
-        out Transform? upperRotationX,
-        out Transform? upperRotationZ,
-        out Transform? lowerRotationX)
-    {
-        upperRotationX = null;
-        upperRotationZ = null;
-        lowerRotationX = null;
-
-        var eyelidsName = $"EYELIDS {side}";
-
-        // Trouver EYELIDS sur le player source
-        Transform? playerEyelids = null;
-        foreach (var child in playerSource.GetComponentsInChildren<Transform>(true))
-        {
-            if (child.name == eyelidsName)
-            {
-                playerEyelids = child;
-                break;
-            }
-        }
-
-        if (playerEyelids == null)
-        {
-            LOG.Warning($"{eyelidsName} not found on player source");
-            return null;
-        }
-
-        // Vérifier si EYELIDS existe déjà sur le droid
-        Transform? droidEyelids = null;
-        foreach (Transform child in droidEye)
-        {
-            if (child.name == eyelidsName)
-            {
-                droidEyelids = child;
-                break;
-            }
-        }
-
-        if (droidEyelids == null)
-        {
-            // Copier toute la hiérarchie EYELIDS du player vers le droid
-            droidEyelids = CopyTransformHierarchy(playerEyelids, droidEye);
-
-            // Agrandir les paupières pour s'adapter aux yeux du droid
-            droidEyelids.localScale = Vector3.one * 1.3f;
-
-            // Appliquer le material du droid aux paupières
-            var droidBodyMaterial = GetDroidBodyMaterial();
-            if (droidBodyMaterial != null)
-            {
-                foreach (var r in droidEyelids.GetComponentsInChildren<MeshRenderer>(true))
-                {
-                    r.material = droidBodyMaterial;
-                }
-            }
-        }
-
-        // Trouver les transforms de rotation dans la hiérarchie
-        foreach (var child in droidEyelids.GetComponentsInChildren<Transform>(true))
-        {
-            switch (child.name)
-            {
-                case "eyelid_upper":
-                    upperRotationX = child;
-                    break;
-                case "eyelid_upper_rotation":
-                    upperRotationZ = child;
-                    break;
-                case "eyelid_lower":
-                    lowerRotationX = child;
-                    break;
-                // case "eyelid_lower_rotation":
-                //     lowerRotationZ = child;
-                //     break;
-            }
-        }
-
-        return droidEyelids.gameObject;
-    }
-
-    private Transform CopyTransformHierarchy(Transform source, Transform newParent)
-    {
-        // Créer un nouveau GameObject avec le même nom
-        var copy = new GameObject(source.name);
-        copy.transform.SetParent(newParent, false);
-        copy.transform.localPosition = source.localPosition;
-        copy.transform.localRotation = source.localRotation;
-        copy.transform.localScale = source.localScale;
-
-        // Copier les MeshFilter et MeshRenderer si présents
-        var sourceMeshFilter = source.GetComponent<MeshFilter>();
-        var sourceMeshRenderer = source.GetComponent<MeshRenderer>();
-
-        if (sourceMeshFilter != null && sourceMeshRenderer != null)
-        {
-            var copyMeshFilter = copy.AddComponent<MeshFilter>();
-            var copyMeshRenderer = copy.AddComponent<MeshRenderer>();
-
-            copyMeshFilter.sharedMesh = sourceMeshFilter.sharedMesh;
-            copyMeshRenderer.sharedMaterials = sourceMeshRenderer.sharedMaterials;
-            copyMeshRenderer.shadowCastingMode = sourceMeshRenderer.shadowCastingMode;
-            copyMeshRenderer.receiveShadows = sourceMeshRenderer.receiveShadows;
-        }
-
-        // Récursivement copier les enfants
-        foreach (Transform child in source)
-        {
-            CopyTransformHierarchy(child, copy.transform);
-        }
-
-        return copy.transform;
     }
 
     /// <summary>
@@ -707,28 +555,45 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         }
     }
 
-    private void SetupAnimator()
+    private void SetupClonedVisuals()
     {
-        Animator = GetComponentInChildren<Animator>();
+        if (SourcePlayer == null)
+        {
+            LOG.Error("Cannot clone visuals: source player is null");
+            return;
+        }
 
-        if (Animator != null)
+        var cube = DroidVisualsClone.FindCube(transform);
+        if (cube == null)
+        {
+            LOG.Error("Cannot clone visuals: MyDroid/Enable/Cube not found");
+            return;
+        }
+
+        // Cube garde Animator + BloodDust + Hurt Collider. On retire seulement les
+        // composants joueur qui causent les NRE (PlayerAvatarVisuals + frères).
+        DroidVisualsClone.SanitizeCube(cube);
+
+        // L'Animator survit à SanitizeCube (whitelist). On le récupère avant strip.
+        Animator = cube.GetComponent<Animator>();
+
+        DroidVisualsClone.StripExistingRig(cube);
+
+        if (!DroidVisualsClone.TryCloneRig(SourcePlayer, cube, out var cloneRig))
+        {
+            LOG.Warning("Failed to clone source player [RIG]");
+            return;
+        }
+
+        if (Animator != null && cloneRig != null)
         {
             Animator.enabled = true;
             Animator.applyRootMotion = false;
-
-            var parentConstraint = Animator.GetComponent<ParentConstraint>();
-            if (parentConstraint != null && !parentConstraint.constraintActive)
-            {
-                parentConstraint.constraintActive = true;
-            }
-
-            // Ajouter le relais pour les animation events (footsteps, etc.)
-            var a = Animator.GetOrAddComponent<DroidFootstepsEventReceiver>();
-            a.Initialize(this);
+            DroidVisualsClone.AttachRelay(Animator, this, cloneRig);
         }
-        else
+        else if (Animator == null)
         {
-            LOG.Warning("No Animator found on prefab");
+            LOG.Warning("Cube has no Animator after SanitizeCube");
         }
     }
 
