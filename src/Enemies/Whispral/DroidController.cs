@@ -50,13 +50,10 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     internal const float StalkStareBeforeFlee = 2f;
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidController>();
-    private static readonly int IsWalkingKey = Animator.StringToHash("Moving");
-    private static readonly int IsSprintingKey = Animator.StringToHash("Sprinting");
-    private static readonly int IsTurningKey = Animator.StringToHash("Turning");
-    private static readonly int StunKey = Animator.StringToHash("stun");
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private DroidFaceAnimationController _animController;
+    private DroidAvatarAnimationController _avatarAnimController;
     private CharacterController _charController;
     private DroidNameplate _nameplateController;
     private NavMeshAgent _navAgent;
@@ -71,7 +68,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     public bool IsWalking { get; set; }
     public bool IsSprinting { get; set; }
-    public bool IsTurning { get; private set; }
     public bool HasChangedMovementState { get; set; }
     public PlayerAvatar SourcePlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
@@ -81,6 +77,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     public bool IsStalking =>
         Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
+
+    public bool IsInMovementState => DroidHelpers.IsMovementState(Fsm.CurrentStateStateId);
 
     protected override StateId DefaultState => StateId.Idle;
 
@@ -104,7 +102,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         Movement.UpdateMovement(isMovementState);
         Movement.UpdateRotation();
         Movement.SyncVisualsToController(Animator != null ? Animator.transform : null);
-        UpdateAnimationFlags();
         Movement.SyncNavAgentPosition(isMovementState);
     }
 
@@ -133,34 +130,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     #endregion
 
-
-    #region Animation
-
-    private void UpdateAnimationFlags()
-    {
-        var currentState = Fsm.CurrentStateStateId;
-        var isMovementState = DroidHelpers.IsMovementState(currentState);
-
-        if (isMovementState && ControllerTransform != null && Movement != null)
-        {
-            var angle = Quaternion.Angle(ControllerTransform.rotation, Movement.TargetRotation);
-            IsTurning = angle > 7f;
-        }
-        else
-        {
-            IsTurning = false;
-        }
-
-        if (Animator != null)
-        {
-            Animator.SetBool(IsWalkingKey, IsWalking);
-            Animator.SetBool(IsSprintingKey, IsSprinting);
-            Animator.SetBool(IsTurningKey, IsTurning);
-            Animator.SetBool(StunKey, false);
-        }
-    }
-
-    #endregion
 
     #region Movement (delegates to DroidMovementController)
 
@@ -288,6 +257,12 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     {
         _animController = gameObject.AddComponent<DroidFaceAnimationController>();
         _animController.Initialize(this, ControllerTransform);
+
+        if (Animator != null)
+        {
+            _avatarAnimController = gameObject.AddComponent<DroidAvatarAnimationController>();
+            _avatarAnimController.Initialize(this, Animator);
+        }
 
         var visualsRoot = Animator != null ? Animator.transform : transform;
 
@@ -589,7 +564,15 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         {
             Animator.enabled = true;
             Animator.applyRootMotion = false;
+
+            // L'Animator a fait son Awake sur l'ancien [RIG] du prefab et cache les
+            // bindings de bones par path. Le swap de [RIG] casse ces bindings ; Rebind
+            // force Unity à re-résoudre les chemins de bones contre la nouvelle hiérarchie.
+            Animator.Rebind();
+            Animator.Update(0f);
+
             DroidVisualsClone.AttachRelay(Animator, this, cloneRig);
+            DroidVisualsClone.TryCloneFlashlight(SourcePlayer, cloneRig);
         }
         else if (Animator == null)
         {

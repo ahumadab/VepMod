@@ -140,6 +140,84 @@ internal static class DroidVisualsClone
     // Stocké entre TryCloneRig et AttachRelay (même thread, même frame).
     private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? SpringTypeCache;
 
+    // Anchor pré-existant dans le [RIG] sous Player Spring Impulse - Arm Left (gauche)
+    // avec localPosition (0, -0.04, 0.471) et rotation quasi-identité. Le pendant
+    // 'FollowTransformClient' du FlashlightController y pointe en vanilla pour le
+    // rendu non-FPV. PlayerSpringImpulse est dans KeepTypeNames donc l'anchor
+    // survit au Sanitize du rig cloné.
+    private const string FlashlightAnchorName = "Flashlight Target Client";
+
+    /// <summary>
+    ///     Clone la Flashlight du joueur source et l'attache à l'anchor 'Flashlight
+    ///     Target Client' (main gauche) du rig cloné. Le FlashlightController est
+    ///     strippé avant que son Start ne tourne (sinon il reparenterait vers la
+    ///     Flashlight Target FPV source, hors du droid). Mesh + spotlight + halo
+    ///     sont forcés en ON et la layer bascule sur "PlayerVisuals" (vs "Triggers"
+    ///     qui rend la lampe non-locale invisible en vanilla).
+    /// </summary>
+    public static bool TryCloneFlashlight(PlayerAvatar sourcePlayer, GameObject cloneRig)
+    {
+        if (sourcePlayer == null || cloneRig == null) return false;
+
+        var sourceController = sourcePlayer.flashlightController
+                               ?? sourcePlayer.GetComponentInChildren<FlashlightController>(true);
+        if (sourceController == null)
+        {
+            LOG.Warning($"TryCloneFlashlight: no FlashlightController on {sourcePlayer.playerName}");
+            return false;
+        }
+
+        var anchor = DroidHelpers.FindChildByName(cloneRig.transform, FlashlightAnchorName);
+        if (anchor == null)
+        {
+            LOG.Warning($"TryCloneFlashlight: anchor '{FlashlightAnchorName}' not found in clone rig " +
+                        "(Player Spring Impulse - Arm Left peut-être strippé par Sanitize)");
+            return false;
+        }
+
+        var sourceFlashlight = sourceController.gameObject;
+        var clone = Object.Instantiate(sourceFlashlight, anchor);
+        clone.name = "Flashlight";
+        clone.transform.localPosition = Vector3.zero;
+        clone.transform.localRotation = Quaternion.identity;
+        clone.transform.localScale = Vector3.one;
+
+        // Capture les refs visuelles AVANT de strip le controller.
+        var clonedController = clone.GetComponent<FlashlightController>();
+        var mesh = clonedController != null ? clonedController.mesh : null;
+        var meshShadows = clonedController != null ? clonedController.meshShadows : null;
+        var spotlight = clonedController != null ? clonedController.spotlight : null;
+        var halo = clonedController != null ? clonedController.halo : null;
+
+        // Strip tous les comportements joueur AVANT que Start ne tourne (Start
+        // reparenterait vers FollowTransformLocal source, sortant la lampe du droid).
+        foreach (var comp in clone.GetComponentsInChildren<Component>(true))
+        {
+            if (comp == null) continue;
+            if (comp is Transform) continue;
+            if (comp is MeshFilter) continue;
+            if (comp is MeshRenderer) continue;
+            if (comp is Light) continue;
+            Object.DestroyImmediate(comp);
+        }
+
+        if (mesh != null) mesh.enabled = true;
+        if (meshShadows != null) meshShadows.enabled = true;
+        if (spotlight != null) spotlight.enabled = true;
+        if (halo != null) halo.enabled = true;
+
+        var visualsLayer = LayerMask.NameToLayer("PlayerVisuals");
+        if (visualsLayer < 0) visualsLayer = 0;
+        foreach (var t in clone.GetComponentsInChildren<Transform>(true))
+        {
+            if (t != null) t.gameObject.layer = visualsLayer;
+        }
+
+        clone.SetActive(true);
+        LOG.Info($"Flashlight cloned under '{FlashlightAnchorName}'");
+        return true;
+    }
+
     public static void AttachRelay(Animator animator, DroidController droid, GameObject cloneRig)
     {
         if (animator == null) return;
