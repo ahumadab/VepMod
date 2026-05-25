@@ -17,6 +17,14 @@ internal static class DroidVisualsClone
 {
     private const string RigName = "[RIG]";
 
+    // Anchor pré-existant dans le [RIG] sous Player Spring Impulse - Arm Left (gauche)
+    // avec localPosition (0, -0.04, 0.471) et rotation quasi-identité. Le pendant
+    // 'FollowTransformClient' du FlashlightController y pointe en vanilla pour le
+    // rendu non-FPV. PlayerSpringImpulse est dans KeepTypeNames donc l'anchor
+    // survit au Sanitize du rig cloné.
+    private const string FlashlightAnchorName = "Flashlight Target Client";
+    private const string MapToolAnchorName = "Map Tool Target Client";
+
     private static readonly VepLogger LOG = VepLogger.Create(nameof(DroidVisualsClone), true);
 
     private static readonly HashSet<string> KeepTypeNames = new()
@@ -34,6 +42,9 @@ internal static class DroidVisualsClone
         "Cosmetic",
         "CosmeticBlocked"
     };
+
+    // Stocké entre TryCloneRig et AttachRelay (même thread, même frame).
+    private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? SpringTypeCache;
 
     /// <summary>
     ///     Localise MyDroid/Enable/Cube (= hôte de l'Animator et du [RIG]).
@@ -128,24 +139,14 @@ internal static class DroidVisualsClone
         cloneRig = clone;
 
         var rendererCount = clone.GetComponentsInChildren<Renderer>(true).Length;
-        LOG.Info($"Cloned [RIG] from {sourcePlayer.playerName}: cubePos={cube.position}, " +
-                 $"rigLocalPos={clone.transform.localPosition}, " +
-                 $"cubeLossy={cube.lossyScale}, " +
-                 $"rigLossy={clone.transform.lossyScale}, " +
-                 $"renderers={rendererCount}, isLocal={sourcePlayer.isLocal}");
+        LOG.Debug($"Cloned [RIG] from {sourcePlayer.playerName}: cubePos={cube.position}, " +
+                  $"rigLocalPos={clone.transform.localPosition}, " +
+                  $"cubeLossy={cube.lossyScale}, " +
+                  $"rigLossy={clone.transform.lossyScale}, " +
+                  $"renderers={rendererCount}, isLocal={sourcePlayer.isLocal}");
 
         return true;
     }
-
-    // Stocké entre TryCloneRig et AttachRelay (même thread, même frame).
-    private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? SpringTypeCache;
-
-    // Anchor pré-existant dans le [RIG] sous Player Spring Impulse - Arm Left (gauche)
-    // avec localPosition (0, -0.04, 0.471) et rotation quasi-identité. Le pendant
-    // 'FollowTransformClient' du FlashlightController y pointe en vanilla pour le
-    // rendu non-FPV. PlayerSpringImpulse est dans KeepTypeNames donc l'anchor
-    // survit au Sanitize du rig cloné.
-    private const string FlashlightAnchorName = "Flashlight Target Client";
 
     /// <summary>
     ///     Clone la Flashlight du joueur source et l'attache à l'anchor 'Flashlight
@@ -214,7 +215,98 @@ internal static class DroidVisualsClone
         }
 
         clone.SetActive(true);
-        LOG.Info($"Flashlight cloned under '{FlashlightAnchorName}'");
+        LOG.Debug($"Flashlight cloned under '{FlashlightAnchorName}'");
+        return true;
+    }
+
+    /// <summary>
+    ///     Clone le MapTool du joueur source et l'attache à l'anchor 'Map Tool Target
+    ///     Client' (main droite, sous Player Spring Impulse - Arm Right) du rig cloné.
+    ///     Le MapToolController et tous ses scripts sont strippés ; on garde juste
+    ///     les visuels. Le GameObject cloné est retourné DÉSACTIVÉ — au caller
+    ///     d'appeler SetActive(true) quand le droid entre dans CheckMap state.
+    /// </summary>
+    public static bool TryCloneMapTool(PlayerAvatar sourcePlayer, GameObject cloneRig, out GameObject? clonedMapTool)
+    {
+        clonedMapTool = null;
+        if (sourcePlayer == null || cloneRig == null) return false;
+
+        // PlayerAvatar.cs est attaché à 'Player Avatar Controller', un SOUS-GameObject
+        // du root prefab — pas le root lui-même. 'Map Tool' est sibling de 'Player
+        // Avatar Controller' (enfant direct du root), donc GetComponentInChildren ne
+        // le voit pas. On remonte au root via transform.root.
+        var sourceMapToolTransform = sourcePlayer.transform.root.Find("Map Tool");
+        if (sourceMapToolTransform == null)
+        {
+            LOG.Warning($"TryCloneMapTool: 'Map Tool' not found under root of {sourcePlayer.playerName}");
+            return false;
+        }
+
+        var anchor = DroidHelpers.FindChildByName(cloneRig.transform, MapToolAnchorName);
+        if (anchor == null)
+        {
+            LOG.Warning($"TryCloneMapTool: anchor '{MapToolAnchorName}' not found in clone rig " +
+                        "(Player Spring Impulse - Arm Right peut-être strippé par Sanitize)");
+            return false;
+        }
+
+        var sourceMapTool = sourceMapToolTransform.gameObject;
+        var clone = Object.Instantiate(sourceMapTool, anchor);
+        clone.name = "Map Tool";
+        clone.transform.localPosition = Vector3.zero;
+        clone.transform.localRotation = Quaternion.identity;
+        clone.transform.localScale = Vector3.one;
+
+        // Strip tous les scripts (MapToolController + visuals scripts) AVANT que
+        // leurs Start ne tournent (sinon ils tentent d'accéder à PlayerAvatar
+        // source, photonView, etc.). On garde juste les visuels.
+        foreach (var comp in clone.GetComponentsInChildren<Component>(true))
+        {
+            if (comp == null) continue;
+            if (comp is Transform) continue;
+            if (comp is MeshFilter) continue;
+            if (comp is MeshRenderer) continue;
+            if (comp is SkinnedMeshRenderer) continue;
+            if (comp is Light) continue;
+            Object.DestroyImmediate(comp);
+        }
+
+        // Force tous les renderers à enabled (le MapToolController désactive
+        // l'affichage par défaut, animé via HideLerp).
+        foreach (var r in clone.GetComponentsInChildren<Renderer>(true))
+        {
+            if (r != null) r.enabled = true;
+        }
+
+        // MapToolController.Start() ligne 95 fait VisualTransform.SetActive(false)
+        // sur le source → l'état inactif est baked dans le clone. Le réactiver pour
+        // qu'il suive l'état du root quand on toggle ShowMapTool.
+        var visuals = DroidHelpers.FindChildByName(clone.transform, "Visuals");
+        if (visuals != null) visuals.gameObject.SetActive(true);
+
+        // HideTransform (pivot 'Hide') est rotaté 90°X par le controller à HideLerp=1
+        // (état caché). Sans controller actif sur le clone, on remet à identité
+        // pour avoir le MapTool en position "déployé".
+        var hide = DroidHelpers.FindChildByName(clone.transform, "Hide");
+        if (hide != null)
+        {
+            hide.localRotation = Quaternion.identity;
+            hide.localScale = Vector3.one;
+        }
+
+        var visualsLayer = LayerMask.NameToLayer("PlayerVisuals");
+        if (visualsLayer < 0) visualsLayer = 0;
+        foreach (var t in clone.GetComponentsInChildren<Transform>(true))
+        {
+            if (t != null) t.gameObject.layer = visualsLayer;
+        }
+
+        var rendererCount = clone.GetComponentsInChildren<Renderer>(true).Length;
+        LOG.Debug($"MapTool cloned under '{MapToolAnchorName}' " +
+                  $"(renderers={rendererCount}, visualsFound={visuals != null}, hideFound={hide != null})");
+
+        clone.SetActive(false);
+        clonedMapTool = clone;
         return true;
     }
 
@@ -238,6 +330,7 @@ internal static class DroidVisualsClone
                 if (spring != null) map[spring] = type;
             }
         }
+
         return map;
     }
 

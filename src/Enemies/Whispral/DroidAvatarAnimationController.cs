@@ -65,9 +65,11 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
         _animator.SetBool(SprintingKey, sprinting);
         _animator.SetBool(TurningKey, turning);
 
-        // États "joueur" jamais utilisés par l'AI : forcés à false chaque frame
-        // pour que toutes les transitions retombent proprement sur la branche locomotion.
-        _animator.SetBool(GrabbingKey, false);
+        // 'Grabbing' est activé par DroidController.ShowMapTool() pendant CheckMap
+        // pour déclencher la pose main levée (transition animator vers grabberPose).
+        // Tous les autres bools "joueur" restent forcés à false pour que les
+        // transitions retombent proprement sur la branche locomotion.
+        _animator.SetBool(GrabbingKey, _droid.WantsGrabbing);
         _animator.SetBool(CrouchingKey, false);
         _animator.SetBool(CrawlingKey, false);
         _animator.SetBool(TumblingKey, false);

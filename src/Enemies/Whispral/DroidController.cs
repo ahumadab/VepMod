@@ -53,8 +53,11 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private DroidFaceAnimationController _animController;
+    private DroidRightArmPoseController? _armPoseController;
     private DroidAvatarAnimationController _avatarAnimController;
     private CharacterController _charController;
+    private DroidEyeLookAtController? _eyeLookController;
+    private GameObject? _mapToolClone;
     private DroidNameplate _nameplateController;
     private NavMeshAgent _navAgent;
     private Transform _rigidbodyTransform;
@@ -69,6 +72,13 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     public bool IsWalking { get; set; }
     public bool IsSprinting { get; set; }
     public bool HasChangedMovementState { get; set; }
+
+    /// <summary>
+    ///     Drapeau lu par DroidAvatarAnimationController pour driver le bool 'Grabbing'
+    ///     de l'animator (qui déclenche la pose main levée). Activé pendant CheckMap.
+    /// </summary>
+    public bool WantsGrabbing { get; set; }
+
     public PlayerAvatar SourcePlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
     public DroidMovementController Movement { get; private set; }
@@ -103,6 +113,17 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         Movement.UpdateRotation();
         Movement.SyncVisualsToController(Animator != null ? Animator.transform : null);
         Movement.SyncNavAgentPosition(isMovementState);
+    }
+
+    /// <summary>
+    ///     Toggle la visibilité du MapTool cloné et le geste main levée associé.
+    ///     Appelé par CheckMapState à l'enter/exit.
+    /// </summary>
+    public void ShowMapTool(bool visible)
+    {
+        LOG.Debug($"ShowMapTool({visible}) - clone={(_mapToolClone != null ? "ok" : "NULL")}");
+        if (_mapToolClone != null) _mapToolClone.SetActive(visible);
+        WantsGrabbing = visible;
     }
 
     #region Audio
@@ -573,10 +594,78 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
             DroidVisualsClone.AttachRelay(Animator, this, cloneRig);
             DroidVisualsClone.TryCloneFlashlight(SourcePlayer, cloneRig);
+            DroidVisualsClone.TryCloneMapTool(SourcePlayer, cloneRig, out _mapToolClone);
+            SetupArmAndEyeMimics(cloneRig);
         }
         else if (Animator == null)
         {
             LOG.Warning("Cube has no Animator after SanitizeCube");
+        }
+    }
+
+    private void SetupArmAndEyeMimics(GameObject cloneRig)
+    {
+        if (SourcePlayer == null || cloneRig == null) return;
+
+        // PlayerAvatarRightArm et PlayerEyes sont attachés sur le GameObject 'Player
+        // Visuals' (= sourcePlayer.playerAvatarVisuals.gameObject), pas sur le sous-GO
+        // 'Player Avatar Controller' où vit PlayerAvatar.cs. Donc GetComponentInChildren
+        // sur sourcePlayer ne les voit pas (frères, pas descendants).
+        var visuals = SourcePlayer.playerAvatarVisuals;
+        if (visuals == null)
+        {
+            LOG.Warning("SetupArmAndEyeMimics: SourcePlayer.playerAvatarVisuals is null");
+            return;
+        }
+
+        // Bras droit : lit les poses + curve sur le PlayerAvatarRightArm source,
+        // résout code_arm_r dans le clone par nom (bone unique).
+        var sourceArm = visuals.GetComponent<PlayerAvatarRightArm>();
+        if (sourceArm != null && sourceArm.rightArmTransform != null)
+        {
+            var clonedArm = DroidHelpers.FindChildByName(cloneRig.transform, sourceArm.rightArmTransform.name);
+            if (clonedArm != null)
+            {
+                _armPoseController = gameObject.AddComponent<DroidRightArmPoseController>();
+                _armPoseController.Initialize(this, clonedArm, sourceArm.basePose, sourceArm.mapPose,
+                    sourceArm.poseCurve, sourceArm.poseSpeed);
+                LOG.Info($"DroidRightArmPoseController initialized on bone '{sourceArm.rightArmTransform.name}'");
+            }
+            else
+            {
+                LOG.Warning($"SetupArmAndEyeMimics: bone '{sourceArm.rightArmTransform.name}' not found in clone rig");
+            }
+        }
+        else
+        {
+            LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarRightArm on source player");
+        }
+
+        // Yeux : résout code_eye_left/right dans le clone, lookTarget dans le MapTool cloné.
+        var sourceEyes = visuals.GetComponent<PlayerEyes>();
+        if (sourceEyes != null && sourceEyes.eyeLeft != null && sourceEyes.eyeRight != null)
+        {
+            var clonedEyeLeft = DroidHelpers.FindChildByName(cloneRig.transform, sourceEyes.eyeLeft.name);
+            var clonedEyeRight = DroidHelpers.FindChildByName(cloneRig.transform, sourceEyes.eyeRight.name);
+            var lookTarget = _mapToolClone != null
+                ? DroidHelpers.FindChildByName(_mapToolClone.transform, "Player Look Target")
+                : null;
+
+            if (clonedEyeLeft != null && clonedEyeRight != null && lookTarget != null)
+            {
+                _eyeLookController = gameObject.AddComponent<DroidEyeLookAtController>();
+                _eyeLookController.Initialize(this, clonedEyeLeft, clonedEyeRight, lookTarget);
+                LOG.Info("DroidEyeLookAtController initialized");
+            }
+            else
+            {
+                LOG.Warning($"SetupArmAndEyeMimics: eye bones or lookTarget missing " +
+                            $"(eyeL={clonedEyeLeft != null}, eyeR={clonedEyeRight != null}, lookTarget={lookTarget != null})");
+            }
+        }
+        else
+        {
+            LOG.Warning("SetupArmAndEyeMimics: no PlayerEyes on source player or eyeLeft/Right null");
         }
     }
 
