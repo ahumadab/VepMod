@@ -135,6 +135,7 @@ internal static class DroidVisualsClone
         Sanitize(clone);
         ApplyColors(clone, sourcePlayer);
         NormalizeRendering(clone);
+        ForceStandingPose(clone);
 
         cloneRig = clone;
 
@@ -207,6 +208,8 @@ internal static class DroidVisualsClone
         if (spotlight != null) spotlight.enabled = true;
         if (halo != null) halo.enabled = true;
 
+        ResetFlashlightInternals(clone);
+
         var visualsLayer = LayerMask.NameToLayer("PlayerVisuals");
         if (visualsLayer < 0) visualsLayer = 0;
         foreach (var t in clone.GetComponentsInChildren<Transform>(true))
@@ -217,6 +220,33 @@ internal static class DroidVisualsClone
         clone.SetActive(true);
         LOG.Debug($"Flashlight cloned under '{FlashlightAnchorName}'");
         return true;
+    }
+
+    // Transforms internes de la lampe pilotés à runtime par des scripts strippés
+    // (ToolBackAway sur 'Back Away', logique sprint sur 'Flashlight Sprint',
+    // FlashlightController sur 'Flashlight Hide'/'Flashlight Click'). Quand on clone un
+    // joueur dont la lampe n'est pas en pose neutre déployée (ex. accroupi → Outro/Hidden
+    // rotate 'Flashlight Hide'), ces transforms gardent une orientation bakée fausse. On
+    // les remet à leur défaut prefab pour retrouver la pose déployée neutre.
+    private static readonly (string Name, Vector3 Pos)[] FlashlightNeutralNodes =
+    {
+        ("Back Away Offset", new Vector3(0f, 0f, -0.044f)),
+        ("Back Away", new Vector3(0f, 0f, 0.044f)),
+        ("Flashlight Sprint", Vector3.zero),
+        ("Flashlight Hide", Vector3.zero),
+        ("Flashlight Click", Vector3.zero)
+    };
+
+    private static void ResetFlashlightInternals(GameObject clone)
+    {
+        foreach (var (name, pos) in FlashlightNeutralNodes)
+        {
+            var node = DroidHelpers.FindChildByName(clone.transform, name);
+            if (node == null) continue;
+            node.localPosition = pos;
+            node.localRotation = Quaternion.identity;
+            node.localScale = Vector3.one;
+        }
     }
 
     /// <summary>
@@ -406,6 +436,102 @@ internal static class DroidVisualsClone
             if (colorIndex < 0 || colorIndex >= paletteCount) continue;
 
             playerMaterial.ColorSet(albedoColor, emissionColor, fresnelColor, colorIndex);
+        }
+    }
+
+    // Union COMPLÈTE des os dont les clips Crouch/Crawl écrasent un TRS (scale, position
+    // ou rotation). Tous ont un défaut prefab identité (pos 0, rot identité, scale 1).
+    // On les reset entièrement (pas juste la propriété déformée) car l'animator REPO a
+    // Write Defaults ON : chaque state remet à la valeur capturée au Rebind tout os qu'il
+    // n'anime pas. Ex. Stand Move n'anime pas ANIM BODY TOP → en marche il est remis au
+    // défaut WD ; si ce défaut est la valeur accroupie bakée au clone, le haut du corps +
+    // tête s'affaissent (visible UNIQUEMENT en marche, corrigé au changement d'état). En
+    // reset­tant tout à l'identité AVANT le Rebind, les WD defaults capturés sont debout.
+    private static readonly HashSet<string> IdentityResetBones = new()
+    {
+        "ANIM ARM L",
+        "ANIM ARM R",
+        "ANIM ARM R SCALE",
+        "ANIM BODY BOT",
+        "ANIM BODY TOP",
+        "ANIM BOT",
+        "ANIM HEAD BOT",
+        "ANIM LEG L BOT",
+        "ANIM LEG L TOP",
+        "ANIM LEG R BOT",
+        "ANIM LEG R TOP",
+        "Cosmetic Parent - Head Bottom Mesh",
+        "Player Spring Impulse - Body Bottom",
+        "Player Spring Impulse - Body Top",
+        "code_arm_l"
+    };
+
+    // GameObjects parents (dés)activés en bloc par les clips Crouch/Crawl. Standing = ON.
+    private static readonly HashSet<string> ActivateParents = new()
+    {
+        "Cosmetic Parent - Body Bottom Mesh",
+        "Cosmetic Parent - Body Top Mesh"
+    };
+
+    // L'ancre du MapTool est aussi déformée par Crouch/Crawl, mais contrairement aux os
+    // ci-dessus ses valeurs debout ne sont PAS identité : ce sont des offsets prefab
+    // spécifiques. On les restaure explicitement, sinon le MapTool cloné (enfant de cette
+    // ancre) hérite d'une rotation/échelle accroupie.
+    private const string MapToolAnchorBone = "Map Tool Target Client";
+    private static readonly Vector3 MapToolAnchorPos = new(0.007999987f, -0.084999986f, 0.4980001f);
+    private static readonly Quaternion MapToolAnchorRot = new(-0.58078414f, -0.22498398f, 0.48120198f, 0.6168604f);
+
+    /// <summary>
+    ///     Force la config visuelle "debout" sur le rig cloné, indépendamment de la
+    ///     position du joueur source au moment du clone. DOIT tourner AVANT
+    ///     Animator.Rebind() : l'AnimatorController PlayerAvatar a Write Defaults ON sur
+    ///     tous ses states, donc Unity capture au Rebind le TRS courant de chaque os
+    ///     comme "valeur par défaut", et tout state remet à cette valeur les os qu'il
+    ///     n'anime pas. En clonant un joueur accroupi/crawl, les os gardent une pose
+    ///     accroupie bakée ; sans ce reset, ces poses deviennent les WD defaults et
+    ///     resurgissent dans les states qui n'animent pas l'os (ex. la tête qui
+    ///     s'affaisse en Stand Move car ce clip n'anime pas ANIM BODY TOP).
+    ///
+    ///     On force donc, sur les éléments déformables par Crouch/Crawl (déterminés par
+    ///     diff des courbes) :
+    ///     - états actifs (m_IsActive) : 'Mesh Sphere' ON / 'Mesh Flat' OFF + parents
+    ///       'Cosmetic Parent - Body Bottom/Top Mesh' ON ;
+    ///     - TRS complet à l'identité pour toute l'union d'os crouch/crawl (défaut prefab) ;
+    ///     - ancre MapTool aux offsets prefab spécifiques (non identité).
+    ///     Idempotent si le source est déjà debout.
+    /// </summary>
+    private static void ForceStandingPose(GameObject clone)
+    {
+        foreach (var t in clone.GetComponentsInChildren<Transform>(true))
+        {
+            if (t == null) continue;
+
+            switch (t.name)
+            {
+                case "Mesh Sphere":
+                    t.gameObject.SetActive(true);
+                    continue;
+                case "Mesh Flat":
+                    t.gameObject.SetActive(false);
+                    continue;
+            }
+
+            if (ActivateParents.Contains(t.name))
+            {
+                t.gameObject.SetActive(true);
+            }
+            else if (t.name == MapToolAnchorBone)
+            {
+                t.localPosition = MapToolAnchorPos;
+                t.localRotation = MapToolAnchorRot;
+                t.localScale = Vector3.one;
+            }
+            else if (IdentityResetBones.Contains(t.name))
+            {
+                t.localPosition = Vector3.zero;
+                t.localRotation = Quaternion.identity;
+                t.localScale = Vector3.one;
+            }
         }
     }
 

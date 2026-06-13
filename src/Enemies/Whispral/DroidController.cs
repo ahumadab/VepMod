@@ -54,6 +54,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private DroidFaceAnimationController _animController;
     private DroidRightArmPoseController? _armPoseController;
+    private DroidLeftArmPoseController? _leftArmPoseController;
     private DroidAvatarAnimationController _avatarAnimController;
     private CharacterController _charController;
     private DroidEyeLookAtController? _eyeLookController;
@@ -629,7 +630,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
                 _armPoseController = gameObject.AddComponent<DroidRightArmPoseController>();
                 _armPoseController.Initialize(this, clonedArm, sourceArm.basePose, sourceArm.mapPose,
                     sourceArm.poseCurve, sourceArm.poseSpeed);
-                LOG.Info($"DroidRightArmPoseController initialized on bone '{sourceArm.rightArmTransform.name}'");
+                LOG.Debug($"DroidRightArmPoseController initialized on bone '{sourceArm.rightArmTransform.name}'");
             }
             else
             {
@@ -639,6 +640,30 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         else
         {
             LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarRightArm on source player");
+        }
+
+        // Bras gauche (porte la flashlight) : lit flashlightPose + curve sur le
+        // PlayerAvatarLeftArm source, résout le bone dans le clone par nom. La lampe
+        // du droid étant toujours allumée, on vise en permanence flashlightPose.
+        var sourceLeftArm = visuals.GetComponent<PlayerAvatarLeftArm>();
+        if (sourceLeftArm != null && sourceLeftArm.leftArmTransform != null)
+        {
+            var clonedLeftArm = DroidHelpers.FindChildByName(cloneRig.transform, sourceLeftArm.leftArmTransform.name);
+            if (clonedLeftArm != null)
+            {
+                _leftArmPoseController = gameObject.AddComponent<DroidLeftArmPoseController>();
+                _leftArmPoseController.Initialize(clonedLeftArm, sourceLeftArm.basePose, sourceLeftArm.flashlightPose,
+                    sourceLeftArm.poseCurve, sourceLeftArm.poseSpeed);
+                LOG.Debug($"DroidLeftArmPoseController initialized on bone '{sourceLeftArm.leftArmTransform.name}'");
+            }
+            else
+            {
+                LOG.Warning($"SetupArmAndEyeMimics: left arm bone '{sourceLeftArm.leftArmTransform.name}' not found in clone rig");
+            }
+        }
+        else
+        {
+            LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarLeftArm on source player");
         }
 
         // Yeux : résout code_eye_left/right dans le clone, lookTarget dans le MapTool cloné.
@@ -655,7 +680,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             {
                 _eyeLookController = gameObject.AddComponent<DroidEyeLookAtController>();
                 _eyeLookController.Initialize(this, clonedEyeLeft, clonedEyeRight, lookTarget);
-                LOG.Info("DroidEyeLookAtController initialized");
+                LOG.Debug("DroidEyeLookAtController initialized");
             }
             else
             {
