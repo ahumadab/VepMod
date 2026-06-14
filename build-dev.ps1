@@ -32,6 +32,24 @@ if (-not (Test-Path $DllPath)) {
     exit 1
 }
 
+# Sanity check: les DLLs WebRTC VAD doivent etre presentes a cote de VepMod.dll.
+# WebRtcVadSharp.dll est copiee par le Target CopyWebRtcVadSharpManaged, WebRtcVad.dll
+# (natif x64) par le .targets du package NuGet. Si l'une manque, le VAD est silencieusement
+# desactive au runtime (DllNotFoundException -> try/catch -> vadValidator = null), donc on
+# echoue ici plutot que de produire un build au VAD muet.
+$OutputDir = Split-Path $DllPath -Parent
+$vadDlls = @("WebRtcVadSharp.dll", "WebRtcVad.dll")
+$missingVad = @()
+foreach ($dll in $vadDlls) {
+    if (-not (Test-Path (Join-Path $OutputDir $dll))) {
+        $missingVad += $dll
+    }
+}
+if ($missingVad.Count -gt 0) {
+    Write-Error "VAD DLL(s) missing from output ($OutputDir): $($missingVad -join ', '). VAD would be silently disabled at runtime."
+    exit 1
+}
+
 # Sanity check: la ressource embarquee doit matcher le fichier sur disque
 # NB: on charge via byte[] (et non LoadFile) pour ne PAS verrouiller la DLL
 # dans la session PowerShell, sinon le prochain build echoue (MSB3027).
