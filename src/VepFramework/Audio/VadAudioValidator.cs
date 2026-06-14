@@ -12,11 +12,12 @@ public sealed class VadAudioValidator : IDisposable
 {
     private readonly VadValidationCriteria _criteria;
     private readonly WebRtcVad _vad;
+    private readonly object _gate = new();
     private bool _disposed;
 
     public VadAudioValidator(VadValidationCriteria? criteria = null)
     {
-        _criteria = criteria ?? VadValidationCriteria.Default;
+        _criteria = criteria ?? VadValidationCriteria.FromSensitivity(VadSensitivity.Balanced);
         _vad = new WebRtcVad
         {
             OperatingMode = _criteria.OperatingMode,
@@ -27,9 +28,12 @@ public sealed class VadAudioValidator : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _vad.Dispose();
-        _disposed = true;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _vad.Dispose();
+            _disposed = true;
+        }
     }
 
     /// <summary>
@@ -77,19 +81,30 @@ public sealed class VadAudioValidator : IDisposable
         var speechFrames = 0;
         var frameBuffer = new byte[frameBytesSize];
 
-        for (var i = 0; i < totalFrames; i++)
+        lock (_gate)
         {
-            var offset = i * frameBytesSize;
-            if (offset + frameBytesSize > pcmBytes.Length)
+            // Le validateur a pu être disposé (OnDestroy, thread Unity) pendant que ce Validate
+            // tourne sur le thread voix Photon : fail-open => on accepte plutôt que d'appeler
+            // un VAD natif déjà libéré.
+            if (_disposed)
             {
-                break;
+                return VadValidationResult.Accepted(new VadAnalysisResult(duration, totalFrames, 0, 0f));
             }
 
-            Array.Copy(pcmBytes, offset, frameBuffer, 0, frameBytesSize);
-
-            if (_vad.HasSpeech(frameBuffer, targetSampleRate, _criteria.FrameLength))
+            for (var i = 0; i < totalFrames; i++)
             {
-                speechFrames++;
+                var offset = i * frameBytesSize;
+                if (offset + frameBytesSize > pcmBytes.Length)
+                {
+                    break;
+                }
+
+                Array.Copy(pcmBytes, offset, frameBuffer, 0, frameBytesSize);
+
+                if (_vad.HasSpeech(frameBuffer, targetSampleRate, _criteria.FrameLength))
+                {
+                    speechFrames++;
+                }
             }
         }
 
@@ -246,47 +261,49 @@ public sealed class VadValidationCriteria
     /// </summary>
     public SampleRate SampleRate { get; set; } = SampleRate.Is16kHz;
 
-    public static VadValidationCriteria Default => new()
-    {
-        MinDurationSeconds = 0.3f,
-        MinSpeechRatio = 0.1f,
-        OperatingMode = OperatingMode.HighQuality,
-        FrameLength = FrameLength.Is20ms,
-        SampleRate = SampleRate.Is16kHz
-    };
-
     /// <summary>
-    ///     Preset calibré par benchmark sur 248 fichiers WAV réels (180 parole, 68 bruit).
-    ///     Meilleur F1=90% : precision 85%, recall 97%.
-    ///     Note: MinDurationSeconds = 0 car le garde-fou durée est géré en amont par WhispralMimics
+    ///     Construit les critères à partir d'un niveau de sensibilité.
+    ///     Les ratios (0.20 / 0.40 / 0.60) correspondent à des points mesurés par le benchmark
+    ///     (248 WAV réels, 180 parole / 68 bruit, tous en OperatingMode.HighQuality) :
+    ///       Permissive 0.20 -> recall 99% / precision 80%
+    ///       Balanced   0.40 -> recall 97% / precision 85% (meilleur F1)
+    ///       Strict     0.60 -> recall 90% / precision 89%
+    ///     MinDurationSeconds = 0 : le garde-fou durée est géré en amont par WhispralMimics
     ///     (lit ConfigAudioMinDuration pour rester cohérent avec la config utilisateur).
     /// </summary>
-    public static VadValidationCriteria Production => new()
+    public static VadValidationCriteria FromSensitivity(VadSensitivity sensitivity)
     {
-        MinDurationSeconds = 0f,
-        MinSpeechRatio = 0.40f,
-        OperatingMode = OperatingMode.HighQuality,
-        FrameLength = FrameLength.Is20ms,
-        SampleRate = SampleRate.Is16kHz
-    };
+        var ratio = sensitivity switch
+        {
+            VadSensitivity.Permissive => 0.20f,
+            VadSensitivity.Strict => 0.60f,
+            _ => 0.40f // Balanced
+        };
 
-    public static VadValidationCriteria Strict => new()
-    {
-        MinDurationSeconds = 1f,
-        MinSpeechRatio = 0.6f,
-        OperatingMode = OperatingMode.Aggressive,
-        FrameLength = FrameLength.Is20ms,
-        SampleRate = SampleRate.Is16kHz
-    };
+        return new VadValidationCriteria
+        {
+            MinDurationSeconds = 0f,
+            MinSpeechRatio = ratio,
+            OperatingMode = OperatingMode.HighQuality,
+            FrameLength = FrameLength.Is20ms,
+            SampleRate = SampleRate.Is16kHz
+        };
+    }
+}
 
-    public static VadValidationCriteria Permissive => new()
-    {
-        MinDurationSeconds = 0.2f,
-        MinSpeechRatio = 0.05f,
-        OperatingMode = OperatingMode.HighQuality,
-        FrameLength = FrameLength.Is20ms,
-        SampleRate = SampleRate.Is16kHz
-    };
+/// <summary>
+///     Niveau de sensibilité du VAD, exposé en configuration utilisateur.
+/// </summary>
+public enum VadSensitivity
+{
+    /// <summary>Garde quasi toute la voix (ratio 0.20), accepte un peu plus de bruit.</summary>
+    Permissive,
+
+    /// <summary>Compromis par défaut (ratio 0.40), meilleur F1.</summary>
+    Balanced,
+
+    /// <summary>Filtre davantage (ratio 0.60), peut rejeter de la voix faible.</summary>
+    Strict
 }
 
 /// <summary>

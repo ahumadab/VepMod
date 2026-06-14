@@ -165,13 +165,15 @@ public sealed class WhispralMimics : MonoBehaviour
             localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
             // Créer le validateur VAD si activé (détection de parole par ML)
-            // Preset Production calibré par benchmark: F1=90%, precision 85%, recall 97%
+            // Sensibilité choisie par l'utilisateur (presets calibrés par benchmark).
             if (VepMod.ConfigVadEnabled.Value)
             {
                 try
                 {
-                    vadValidator = new VadAudioValidator(VadValidationCriteria.Production);
-                    LOG.Info("VAD validation enabled (production mode, speechRatio>=0.40).");
+                    var sensitivity = VepMod.ConfigVadSensitivity.Value;
+                    var criteria = VadValidationCriteria.FromSensitivity(sensitivity);
+                    vadValidator = new VadAudioValidator(criteria);
+                    LOG.Info($"VAD validation enabled (sensitivity={sensitivity}, speechRatio>={criteria.MinSpeechRatio:F2}).");
                 }
                 catch (Exception ex)
                 {
@@ -331,14 +333,37 @@ public sealed class WhispralMimics : MonoBehaviour
         // Validation VAD (détection de parole par ML, filtre principal)
         if (vadValidator != null)
         {
-            var vadResult = vadValidator.Validate(recordedData, sampleRate);
-            if (!vadResult.IsValid)
+            // Rogner le silence de fin (jusqu'à SilenceTimeoutSeconds) avant la validation pour
+            // ne pas diluer le ratio de parole et pénaliser les mots courts. Le clip sauvegardé
+            // reste complet (silence inclus) — seule l'analyse VAD porte sur la région de parole.
+            var vadData = recordedData;
+            var trailingSilenceSamples = Mathf.RoundToInt(silenceTimer * sampleRate);
+            if (trailingSilenceSamples > 0)
             {
-                LOG.Debug($"Recording rejected (VAD): {vadResult.RejectionReason} - {vadResult.Analysis}");
-                return;
+                var speechLen = bufferPosition - trailingSilenceSamples;
+                if (speechLen >= sampleRate / 10) // garde-fou : au moins 0,1 s de parole
+                {
+                    vadData = new float[speechLen];
+                    Array.Copy(recordedData, vadData, speechLen);
+                }
             }
 
-            LOG.Debug($"Recording passed VAD: {vadResult.Analysis}");
+            try
+            {
+                var vadResult = vadValidator.Validate(vadData, sampleRate);
+                if (!vadResult.IsValid)
+                {
+                    LOG.Debug($"Recording rejected (VAD): {vadResult.RejectionReason} - {vadResult.Analysis}");
+                    return;
+                }
+
+                LOG.Debug($"Recording passed VAD: {vadResult.Analysis}");
+            }
+            catch (Exception ex)
+            {
+                // Fail-open : un hoquet du VAD natif ne doit pas perturber le thread voix Photon.
+                LOG.Warning($"VAD Validate threw, accepting recording (fail-open): {ex.Message}");
+            }
         }
 
         LOG.Debug(
