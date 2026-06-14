@@ -95,6 +95,7 @@ public sealed partial class DroidController
                 if (distanceToPlayer > StalkMinDistance && Random.value < StalkChance)
                 {
                     Machine.NextStateStateId = StateId.StalkApproach;
+                    LOG.Debug($"IdleState: -> StalkApproach (dist={distanceToPlayer:F1})");
                     return;
                 }
 
@@ -102,10 +103,12 @@ public sealed partial class DroidController
                 if (roll < CheckMapChance)
                 {
                     Machine.NextStateStateId = StateId.CheckMap;
+                    LOG.Debug($"IdleState: -> CheckMap (roll={roll:F2} < {CheckMapChance})");
                 }
                 else
                 {
                     Machine.NextStateStateId = Random.value < SprintChance ? StateId.Sprint : StateId.Wander;
+                    LOG.Debug($"IdleState: -> {Machine.NextStateStateId}");
                 }
             }
         }
@@ -114,7 +117,7 @@ public sealed partial class DroidController
         {
             base.OnStateExit(next);
 
-            if (_animator != null && next != StateId.CheckMap)
+            if (_animator != null)
             {
                 _animator.enabled = true;
             }
@@ -128,8 +131,8 @@ public sealed partial class DroidController
         private const float PrecomputeForwardInterval = 0.5f;
 
         private float _duration;
-        private float _nextSwitchCheck;
         private float _nextPrecomputeForward;
+        private float _nextSwitchCheck;
 
         protected abstract float MinDuration { get; }
         protected abstract float MaxDuration { get; }
@@ -236,121 +239,79 @@ public sealed partial class DroidController
 
     private sealed class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
-        private const string ClipName = "LostDroidStand";
-
-        private const float RaiseStartTime = 4.65f;
-        private const float LookStartTime = 5.5f;
-        private const float LookEndTime = 6.9333334f;
-        private const float LowerEndTime = 7.15f;
-
+        // Durées dérivées des anciens timings du clip LostDroidStand
+        // (4.65→5.5 raise, 5.5→6.93 look loop, 6.93→7.15 lower).
+        private const float RaiseDuration = 0.85f;
+        private const float LowerDuration = 0.22f;
         private const float MinLookDuration = 0.5f;
         private const float MaxLookDuration = 3f;
 
-        private Animator? _animator;
-        private AnimationClip? _clip;
-
         private Phase _currentPhase;
-        private float _currentTime;
         private float _lookDuration;
-        private float _lookTimer;
-        private GameObject? _targetObject;
+        private float _phaseTimer;
 
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
 
-            _animator = Machine.Owner.Animator;
-            if (_animator == null)
-            {
-                LOG.Warning("CheckMapState: Animator is null!");
-                Machine.NextStateStateId = StateId.Idle;
-                return;
-            }
-
-            _clip = DroidHelpers.GetAnimationClip(_animator, ClipName);
-            if (_clip == null)
-            {
-                LOG.Warning($"CheckMapState: Clip '{ClipName}' not found!");
-                Machine.NextStateStateId = StateId.Idle;
-                return;
-            }
-
-            _targetObject = _animator.gameObject;
-
             Machine.Owner.IsWalking = false;
             Machine.Owner.IsSprinting = false;
             Machine.Owner.ResetPath();
 
-            _animator.enabled = false;
+            // Active la pose main levée + affiche le MapTool cloné. L'animator
+            // (laissé enabled) gère la transition vers le grabberPose via le bool
+            // Grabbing, piloté par DroidAvatarAnimationController qui lit WantsGrabbing.
+            Machine.Owner.ShowMapTool(true);
 
             _lookDuration = Random.Range(MinLookDuration, MaxLookDuration);
-            _lookTimer = 0f;
-
             _currentPhase = Phase.Raise;
-            _currentTime = RaiseStartTime;
+            _phaseTimer = 0f;
 
-            LOG.Debug($"CheckMapState: ENTER - Clip length={_clip.length}s, starting at {_currentTime}s");
             LOG.Debug(
-                $"CheckMapState: Thresholds - Raise={RaiseStartTime}s, Look={LookStartTime}s-{LookEndTime}s, Lower={LowerEndTime}s");
-            LOG.Debug($"CheckMapState: LookDuration={_lookDuration:F1}s");
-
-            _clip.SampleAnimation(_targetObject, _currentTime);
+                $"CheckMapState: ENTER - LookDuration={_lookDuration:F1}s, mapToolClone={(Machine.Owner._mapToolClone != null ? "ok" : "NULL")}");
         }
 
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
 
-            if (_clip == null || _targetObject == null)
-            {
-                Machine.NextStateStateId = StateId.Idle;
-                return;
-            }
-
-            _currentTime += Time.deltaTime;
+            _phaseTimer += Time.deltaTime;
 
             switch (_currentPhase)
             {
                 case Phase.Raise:
-                    if (_currentTime >= LookStartTime)
+                    if (_phaseTimer >= RaiseDuration)
                     {
-                        LOG.Debug("CheckMapState: Transitioning to Phase.Look");
                         _currentPhase = Phase.Look;
-                        _lookTimer = 0f;
+                        _phaseTimer = 0f;
+                        LOG.Debug("CheckMapState: -> Look");
                     }
 
                     break;
 
                 case Phase.Look:
-                    _lookTimer += Time.deltaTime;
-
-                    if (_currentTime >= LookEndTime)
+                    if (_phaseTimer >= _lookDuration)
                     {
-                        if (_lookTimer < _lookDuration)
-                        {
-                            _currentTime = LookStartTime;
-                        }
-                        else
-                        {
-                            LOG.Debug("CheckMapState: Transitioning to Phase.Lower");
-                            _currentPhase = Phase.Lower;
-                        }
+                        // Dès qu'on entre en Lower on cache le MapTool et désactive
+                        // Grabbing → l'animator transitionne naturellement vers la
+                        // pose neutre pendant la durée Lower.
+                        Machine.Owner.ShowMapTool(false);
+                        _currentPhase = Phase.Lower;
+                        _phaseTimer = 0f;
+                        LOG.Debug("CheckMapState: -> Lower");
                     }
 
                     break;
 
                 case Phase.Lower:
-                    if (_currentTime >= LowerEndTime)
+                    if (_phaseTimer >= LowerDuration)
                     {
-                        LOG.Debug("CheckMapState: Animation complete, returning to Idle");
+                        LOG.Debug("CheckMapState: Done, back to Idle");
                         Machine.NextStateStateId = StateId.Idle;
-                        return;
                     }
 
                     break;
             }
-
-            _clip.SampleAnimation(_targetObject, _currentTime);
         }
 
         public override void OnStateExit(StateId next)
@@ -358,10 +319,10 @@ public sealed partial class DroidController
             base.OnStateExit(next);
             LOG.Debug($"CheckMapState: EXIT -> {next}");
 
-            if (_animator != null)
-            {
-                _animator.enabled = true;
-            }
+            // Garde-fou : si la transition est forcée hors du flow normal
+            // (par ex. interruption par un autre state), s'assure que le MapTool
+            // est caché et la pose neutre rétablie.
+            Machine.Owner.ShowMapTool(false);
         }
 
         private enum Phase
