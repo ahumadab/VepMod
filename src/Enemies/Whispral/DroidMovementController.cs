@@ -18,11 +18,21 @@ public sealed class DroidMovementController : MonoBehaviour
     private const float RotationSpeed = 10f;
     private const float VisualYOffset = 0.25f;
 
+    // Gravité appliquée au CharacterController. La navigation NavMesh ne gère que le
+    // déplacement horizontal ; la verticale est simulée ici pour que le droid tombe
+    // réellement des hauteurs au lieu de descendre à vitesse constante. L'accélération
+    // est lue sur Physics.gravity au runtime → identique à la gravité du jeu de base.
+    private const float GroundedStickSpeed = 2f; // m/s — colle le controller au sol et aux pentes
+    private const float MaxFallSpeed = 55f; // m/s — clamp anti-tunneling (jamais atteint en niveau)
+    private const float FallAnimDelay = 0.12f; // s en l'air avant de déclencher l'anim de chute
+
     private static readonly VepLogger LOG = VepLogger.Create<DroidMovementController>();
 
     private CharacterController _charController;
     private Transform _controllerTransform;
     private Vector3 _currentVelocity;
+    private float _verticalVelocity;
+    private float _airborneTime;
     private Vector3 _destination;
     private bool _isPrecomputingDestination;
     private bool _isPrecomputingForward;
@@ -51,6 +61,21 @@ public sealed class DroidMovementController : MonoBehaviour
     ///     Vélocité actuelle du mouvement.
     /// </summary>
     public Vector3 CurrentVelocity => _currentVelocity;
+
+    /// <summary>
+    ///     Indique si le droid est en chute (en l'air depuis assez longtemps et descendant).
+    ///     Pilote le bool 'Falling' de l'animator. Le délai évite le clignotement sur les marches.
+    /// </summary>
+    public bool IsFalling => _charController != null
+                             && !_charController.isGrounded
+                             && _airborneTime >= FallAnimDelay
+                             && _verticalVelocity < 0f;
+
+    /// <summary>Vitesse verticale courante (debug/dev tools).</summary>
+    public float DebugVerticalVelocity => _verticalVelocity;
+
+    /// <summary>Le CharacterController touche-t-il le sol (debug/dev tools).</summary>
+    public bool DebugIsGrounded => _charController != null && _charController.isGrounded;
 
     /// <summary>
     ///     Événement déclenché quand le controller sort du NavMesh.
@@ -169,6 +194,11 @@ public sealed class DroidMovementController : MonoBehaviour
     public void SyncNavAgentPosition(bool isMovementState)
     {
         if (_navAgent == null || _controllerTransform == null) return;
+
+        // Pendant une chute, le controller est volontairement éloigné du NavMesh : on ne
+        // resynchronise pas l'agent et on ne déclenche pas d'erreur tant qu'il n'a pas
+        // atterri, sinon une descente provoquerait un faux « off NavMesh » (retour Idle).
+        if (_charController != null && !_charController.isGrounded) return;
 
         var controllerPos = _controllerTransform.position;
 
@@ -362,23 +392,46 @@ public sealed class DroidMovementController : MonoBehaviour
 
     /// <summary>
     ///     Met à jour le mouvement du droid.
+    ///     Le déplacement horizontal vient du NavMeshAgent (desiredVelocity), mais la
+    ///     verticale est une vraie gravité accumulée : tant que le controller n'est pas
+    ///     au sol elle accélère vers le bas (chute réaliste depuis les hauteurs), et une
+    ///     fois au sol une petite vitesse de « collage » le maintient plaqué aux pentes.
+    ///     La gravité est appliquée à chaque frame, même hors état de mouvement, pour que
+    ///     le droid se pose toujours.
     /// </summary>
     public void UpdateMovement(bool isMovementState)
     {
-        if (!isMovementState || _navAgent == null || !_navAgent.hasPath)
+        if (_charController == null) return;
+
+        // Vitesse horizontale : pilotée par le NavMesh uniquement en état de mouvement.
+        var horizontalVelocity = Vector3.zero;
+        if (isMovementState && _navAgent != null && _navAgent.hasPath)
+        {
+            _currentVelocity = Vector3.Lerp(_currentVelocity, _navAgent.desiredVelocity, 5f * Time.deltaTime);
+            horizontalVelocity = _currentVelocity;
+            horizontalVelocity.y = 0f;
+        }
+        else
         {
             _currentVelocity = Vector3.zero;
-            return;
         }
 
-        _currentVelocity = Vector3.Lerp(_currentVelocity, _navAgent.desiredVelocity, 5f * Time.deltaTime);
-
-        if (_currentVelocity.magnitude > 0.01f && _charController != null)
+        // Gravité verticale accumulée (accélération = celle du jeu de base).
+        if (_charController.isGrounded)
         {
-            var moveVector = _currentVelocity * Time.deltaTime;
-            moveVector.y = -0.5f * Time.deltaTime;
-            _charController.Move(moveVector);
+            _verticalVelocity = -GroundedStickSpeed;
+            _airborneTime = 0f;
         }
+        else
+        {
+            _verticalVelocity -= Mathf.Abs(Physics.gravity.y) * Time.deltaTime;
+            if (_verticalVelocity < -MaxFallSpeed) _verticalVelocity = -MaxFallSpeed;
+            _airborneTime += Time.deltaTime;
+        }
+
+        var motion = horizontalVelocity;
+        motion.y = _verticalVelocity;
+        _charController.Move(motion * Time.deltaTime);
     }
 
     /// <summary>

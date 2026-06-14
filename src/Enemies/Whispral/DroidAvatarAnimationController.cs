@@ -76,7 +76,9 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
         _animator.SetBool(TumblingMoveKey, false);
         _animator.SetBool(SlidingKey, false);
         _animator.SetBool(JumpingKey, false);
-        _animator.SetBool(FallingKey, false);
+        // 'Falling' piloté par la gravité du DroidMovementController : joue l'animation
+        // de chute du joueur cloné quand le droid tombe d'une hauteur.
+        _animator.SetBool(FallingKey, _droid.IsFalling);
         _animator.SetBool(StunKey, false);
 
         // Trigger d'impulse sur front montant : déclenche le snap de sprint

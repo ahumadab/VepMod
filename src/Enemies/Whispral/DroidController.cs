@@ -91,6 +91,14 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     public bool IsInMovementState => DroidHelpers.IsMovementState(Fsm.CurrentStateStateId);
 
+    /// <summary>
+    ///     Indique si le droid est en chute (relayé au bool 'Falling' de l'animator).
+    /// </summary>
+    public bool IsFalling => Movement != null && Movement.IsFalling;
+
+    /// <summary>Nom de l'état FSM courant (debug/dev tools).</summary>
+    public string DebugStateName => Fsm.CurrentStateStateId.ToString();
+
     protected override StateId DefaultState => StateId.Idle;
 
     protected override void Awake()
@@ -152,6 +160,21 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     #endregion
 
+
+    /// <summary>
+    ///     Téléporte le droid à une position monde (outils de dev). Désactive le
+    ///     CharacterController le temps du déplacement pour éviter les collisions
+    ///     parasites. Si la cible est en l'air, la gravité prendra le relais et le
+    ///     NavMesh se resynchronisera à l'atterrissage.
+    /// </summary>
+    public void DebugTeleport(Vector3 worldPosition)
+    {
+        if (ControllerTransform == null) return;
+
+        if (_charController != null) _charController.enabled = false;
+        ControllerTransform.position = worldPosition;
+        if (_charController != null) _charController.enabled = true;
+    }
 
     #region Movement (delegates to DroidMovementController)
 
