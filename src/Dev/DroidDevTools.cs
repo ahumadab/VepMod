@@ -1,9 +1,17 @@
 #if DEBUG
 using System.Collections.Generic;
+#if !VEPMOD_NO_VAD
+using System;
+using System.IO;
+#endif
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.Enemies.Whispral;
 using VepMod.VepFramework;
+#if !VEPMOD_NO_VAD
+using VepMod.VepFramework.Audio;
+using VepMod.Patchs;
+#endif
 
 namespace VepMod.Dev;
 
@@ -21,6 +29,9 @@ namespace VepMod.Dev;
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
+#if !VEPMOD_NO_VAD
+    private const KeyCode VadReplayKey = KeyCode.F6;
+#endif
     private const KeyCode SpawnKey = KeyCode.F7;
     private const KeyCode TeleportKey = KeyCode.F8;
     private const KeyCode DropKey = KeyCode.F9;
@@ -41,6 +52,9 @@ public sealed class DroidDevTools : MonoBehaviour
 
     private void Update()
     {
+#if !VEPMOD_NO_VAD
+        if (Input.GetKeyDown(VadReplayKey)) ReplayWavFolderThroughVad();
+#endif
         if (Input.GetKeyDown(SpawnKey)) SpawnAtAim();
         if (Input.GetKeyDown(TeleportKey)) TeleportNearestToAim();
         if (Input.GetKeyDown(DropKey)) DropNearest();
@@ -141,6 +155,86 @@ public sealed class DroidDevTools : MonoBehaviour
         LOG.Info($"DevTools: despawned {count} dev droid(s).");
     }
 
+#if !VEPMOD_NO_VAD
+    /// <summary>
+    ///     Rejoue tous les WAV captures (AudioFiles/) a travers le VAD de prod a la sensibilite
+    ///     courante, et logge accept/reject + ratio par fichier + agregat. Diagnostic mic-free :
+    ///     verifie la decision runtime (vraie DLL native chargee par le jeu) sur de vrais clips.
+    /// </summary>
+    private void ReplayWavFolderThroughVad()
+    {
+        var folder = Path.Combine(Application.dataPath, "AudioFiles");
+        if (!Directory.Exists(folder))
+        {
+            LOG.Warning($"DevTools: no AudioFiles folder at {folder}.");
+            return;
+        }
+
+        var files = Directory.GetFiles(folder, "*.wav", SearchOption.AllDirectories);
+        if (files.Length == 0)
+        {
+            LOG.Warning("DevTools: no .wav files to replay through VAD.");
+            return;
+        }
+
+        var sensitivity = VepMod.ConfigVadSensitivity.Value;
+        var criteria = VadValidationCriteria.FromSensitivity(sensitivity);
+        using var validator = new VadAudioValidator(criteria);
+
+        var accepted = 0;
+        var total = 0;
+        var ratioSum = 0f;
+        LOG.Info($"DevTools: replaying {files.Length} WAV through VAD (sensitivity={sensitivity}, ratio>={criteria.MinSpeechRatio:F2})");
+
+        foreach (var file in files)
+        {
+            if (!TryLoadWav(file, out var samples, out var sr))
+            {
+                LOG.Warning($"  skip (unreadable): {Path.GetFileName(file)}");
+                continue;
+            }
+
+            var result = validator.Validate(samples, sr);
+            total++;
+            var ratio = result.Analysis?.SpeechRatio ?? 0f;
+            ratioSum += ratio;
+            if (result.IsValid) accepted++;
+
+            LOG.Info($"  {(result.IsValid ? "ACCEPT" : "REJECT")} ratio={ratio:P0} [{sr}Hz] {Path.GetFileName(file)}");
+        }
+
+        var meanRatio = total > 0 ? ratioSum / total : 0f;
+        LOG.Info($"DevTools: VAD replay done — accepted {accepted}/{total} (rejected {total - accepted}), mean speechRatio={meanRatio:P0}. " +
+                 "Note: whole-clip analysis (no trailing-silence trim), matches the offline benchmark.");
+    }
+
+    /// <summary>
+    ///     Charge un WAV PCM16 mono ecrit par WavFileManager (en-tete canonique 44 octets).
+    /// </summary>
+    private static bool TryLoadWav(string path, out float[] samples, out int sampleRate)
+    {
+        samples = Array.Empty<float>();
+        sampleRate = 0;
+        try
+        {
+            var bytes = File.ReadAllBytes(path);
+            if (bytes.Length <= 44) return false;
+            sampleRate = BitConverter.ToInt32(bytes, 24); // offset standard du sample rate WAV
+            if (sampleRate <= 0) return false;
+
+            var pcmLength = bytes.Length - 44;
+            var pcm = new byte[pcmLength];
+            Array.Copy(bytes, 44, pcm, 0, pcmLength);
+            samples = AudioFilters.ConvertBytesToFloats(pcm);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+#endif
+
     private void RefreshNearest()
     {
         var cam = Camera.main;
@@ -182,6 +276,9 @@ public sealed class DroidDevTools : MonoBehaviour
 
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n";
+#if !VEPMOD_NO_VAD
+        sb += "F6 replay AudioFiles through VAD (see log)\n";
+#endif
 
         if (_nearest != null && _nearest.Movement != null)
         {
@@ -198,13 +295,28 @@ public sealed class DroidDevTools : MonoBehaviour
             sb += "\nNo droid in scene.";
         }
 
+#if !VEPMOD_NO_VAD
+        var mimics = VepFinder.LocalMimics;
+        var sensitivity = VepMod.ConfigVadSensitivity.Value;
+        if (mimics != null && mimics.LastVadResult.HasValue)
+        {
+            var r = mimics.LastVadResult.Value;
+            var verdict = r.IsValid ? "ACCEPT" : $"REJECT ({r.RejectionReason})";
+            sb += $"\n\nVAD [{sensitivity}]: {verdict}\n  {r.Analysis}";
+        }
+        else
+        {
+            sb += $"\n\nVAD [{sensitivity}]: (no clip recorded yet)";
+        }
+#endif
+
         var style = new GUIStyle(GUI.skin.box)
         {
             alignment = TextAnchor.UpperLeft,
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 320, 170), sb, style);
+        GUI.Box(new Rect(10, 10, 380, 240), sb, style);
     }
 }
 #endif

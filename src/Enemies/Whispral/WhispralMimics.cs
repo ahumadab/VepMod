@@ -9,7 +9,9 @@ using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using VepMod.VepFramework;
+#if !VEPMOD_NO_VAD
 using VepMod.VepFramework.Audio;
+#endif
 using VepMod.VepFramework.Extensions;
 using Random = UnityEngine.Random;
 
@@ -59,7 +61,9 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private void OnDestroy()
     {
+#if !VEPMOD_NO_VAD
         vadValidator?.Dispose();
+#endif
     }
 
     #endregion
@@ -88,7 +92,13 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private PlayerVoiceChat playerVoiceChat;
     private WavFileManager wavFileManager;
+#if !VEPMOD_NO_VAD
     private VadAudioValidator? vadValidator;
+#if DEBUG
+    /// <summary>Dernier résultat VAD (instrumentation dev pour le HUD DroidDevTools).</summary>
+    public VadValidationResult? LastVadResult { get; private set; }
+#endif
+#endif
     private string localPlayerNickName;
 
     // Reflection fields
@@ -164,6 +174,7 @@ public sealed class WhispralMimics : MonoBehaviour
             wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
             localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
+#if !VEPMOD_NO_VAD
             // Créer le validateur VAD si activé (détection de parole par ML)
             // Sensibilité choisie par l'utilisateur (presets calibrés par benchmark).
             if (VepMod.ConfigVadEnabled.Value)
@@ -181,6 +192,7 @@ public sealed class WhispralMimics : MonoBehaviour
                     vadValidator = null;
                 }
             }
+#endif
 
             if (PhotonView.IsMine)
             {
@@ -330,6 +342,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
+#if !VEPMOD_NO_VAD
         // Validation VAD (détection de parole par ML, filtre principal)
         if (vadValidator != null)
         {
@@ -351,6 +364,9 @@ public sealed class WhispralMimics : MonoBehaviour
             try
             {
                 var vadResult = vadValidator.Validate(vadData, sampleRate);
+#if DEBUG
+                LastVadResult = vadResult;
+#endif
                 if (!vadResult.IsValid)
                 {
                     LOG.Debug($"Recording rejected (VAD): {vadResult.RejectionReason} - {vadResult.Analysis}");
@@ -365,6 +381,7 @@ public sealed class WhispralMimics : MonoBehaviour
                 LOG.Warning($"VAD Validate threw, accepting recording (fail-open): {ex.Message}");
             }
         }
+#endif
 
         LOG.Debug(
             $"Recording validated and finalized: {bufferPosition} samples ({duration:F2}s)");

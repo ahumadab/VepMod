@@ -254,6 +254,39 @@ only suppresses `Compile` items, not `None`. Without this exclusion, a local ben
 would pollute the plugin zip with `.exe`, `.dll`, `.csv`, and other test artifacts, making
 the package non-deterministic.
 
+### VAD-free build variant (`VepModNoVad`)
+
+A build with `-p:VepModNoVad=true` produces a plugin with **no WebRTC dependency** — no
+`WebRtcVadSharp` reference, no native `WebRtcVad.dll`, and all VAD code compiled out via the
+`VEPMOD_NO_VAD` symbol (validator, `[Audio Quality]` VAD config, the pipeline branch, and the
+dev tools). The recording pipeline keeps only the duration guard (`Min Duration`); every clip
+that passes it is saved/shared. Use it to ship a lighter, dependency-free variant (e.g. for
+hosts where the native x64 DLL cannot load).
+
+```sh
+dotnet build VepMod.csproj -c Debug -p:VepModNoVad=true   # or: ./build-dev.ps1 -NoVad
+```
+
+In `VepMod.csproj` the `WebRtcVadSharp` `PackageReference` and the `CopyWebRtcVadSharpManaged`
+target are both `Condition="'$(VepModNoVad)' != 'true'"`. The default build (`false`) is unchanged.
+
+---
+
+## In-game testing (dev tools, DEBUG only)
+
+`src/Dev/DroidDevTools.cs` (enabled via `Developer / Enable Dev Tools`) adds two VAD aids on top
+of the droid keybinds, both compiled out in `VEPMOD_NO_VAD` builds:
+
+- **F6 — replay `AudioFiles/` through the VAD.** Runs the production `VadAudioValidator` at the
+  current `VAD Sensitivity` over every captured `.wav`, logging accept/reject + speech ratio per
+  file and an aggregate. Mic-free, deterministic parity check vs the offline benchmark (whole-clip
+  analysis, no trailing-silence trim).
+- **HUD VAD line.** The F10 overlay shows the last recorded clip's verdict, ratio and the active
+  sensitivity — immediate "penalizing or not" feedback while you talk in a solo lobby.
+
+For the full end-to-end loop (share + playback on a hallucination) use two clients and trigger the
+Whispral debuff; enable the BepInEx console to read the `Recording passed/rejected (VAD)` logs.
+
 ---
 
 ## User-facing configuration

@@ -1,3 +1,4 @@
+#if !VEPMOD_NO_VAD
 using System;
 using WebRtcVadSharp;
 
@@ -372,3 +373,4 @@ public enum VadRejectionReason
     TooShort,
     NotEnoughSpeech
 }
+#endif

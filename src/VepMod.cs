@@ -8,7 +8,9 @@ using UnityEngine.SceneManagement;
 using VepMod.Dev;
 #endif
 using VepMod.Enemies.Whispral;
+#if !VEPMOD_NO_VAD
 using VepMod.VepFramework.Audio;
+#endif
 using VepMod.VepFramework.Config;
 using VepMod.VepFramework.Structures.Range;
 
@@ -58,8 +60,10 @@ public class VepMod : BaseUnityPlugin
 
     // Validation audio (VAD)
     public static ConfigEntry<float> ConfigAudioMinDuration;
+#if !VEPMOD_NO_VAD
     public static ConfigEntry<bool> ConfigVadEnabled;
     public static ConfigEntry<VadSensitivity> ConfigVadSensitivity;
+#endif
 
     public static readonly Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
 
@@ -141,11 +145,13 @@ public class VepMod : BaseUnityPlugin
         // Audio validation (VAD)
         ConfigAudioMinDuration = Config.BindRange("Audio Quality", "Min Duration", ConfigRanges.AudioMinDuration,
             "Minimum duration in seconds. Shorter recordings are rejected.");
+#if !VEPMOD_NO_VAD
         ConfigVadEnabled = Config.Bind("Audio Quality", "VAD Enabled", true,
             "Enable Voice Activity Detection (VAD) for speech filtering. Uses WebRTC ML model (requires x64). Disable if you have issues.");
         ConfigVadSensitivity = Config.Bind("Audio Quality", "VAD Sensitivity", VadSensitivity.Balanced,
             "Speech detection strictness. Permissive (ratio 0.20) keeps almost all voice but lets through more noise. " +
             "Balanced (0.40) is the default best-F1 setting. Strict (0.60) filters more aggressively but may drop quiet voice.");
+#endif
     }
 
     private void PreventDelete()
