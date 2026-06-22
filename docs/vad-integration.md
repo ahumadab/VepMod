@@ -2,6 +2,9 @@
 
 Voice Activity Detection added to the Whispral Mimic voice recording pipeline.
 
+> End-to-end overview of the whole voice system (capture → share → playback) with diagrams:
+> [`voice-mimic-pipeline.md`](./voice-mimic-pipeline.md).
+
 ---
 
 ## Context
