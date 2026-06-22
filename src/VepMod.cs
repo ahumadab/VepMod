@@ -37,7 +37,7 @@ public static class ConfigRanges
     public static readonly RangeValue<float> AudioMinDuration = RangeValue.Float(0.1f, 2f, 0.3f);
 }
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.5")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "1.1.0")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {

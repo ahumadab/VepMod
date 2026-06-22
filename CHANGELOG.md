@@ -1,5 +1,14 @@
 # Changelog
 
+# [1.1.0](https://github.com/ahumadab/VepMod/compare/1.0.5...1.1.0) (2026-06-22)
+
+
+### Features
+
+* **Audio:** WebRTC VAD speech filtering + mic sample-rate fix for Whispral mimic voices ([#5](https://github.com/ahumadab/VepMod/issues/5)) ([215fc5a](https://github.com/ahumadab/VepMod/commit/215fc5afc8aceafbf08ab06469eb3b661c3abb00))
+* **droid:** Hallucination LostDroid — clone visuel live du joueur, pose CheckMap, et spawn debout ([#4](https://github.com/ahumadab/VepMod/issues/4)) ([999c5fc](https://github.com/ahumadab/VepMod/commit/999c5fcd36fcddb08830381e3d8ed657d04d1b41))
+* **droid:** real gravity-driven falling + fall animation ([19d8d47](https://github.com/ahumadab/VepMod/commit/19d8d4750cb82b6d99a7d843664c3b9f79c4f771)), closes [#if](https://github.com/ahumadab/VepMod/issues/if)
+
 ## [1.0.5](https://github.com/ahumadab/VepMod/compare/1.0.4...1.0.5) (2026-03-14)
 
 
