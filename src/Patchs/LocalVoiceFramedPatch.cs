@@ -15,7 +15,9 @@ internal class LocalVoiceFramedPatch
     {
         VepFinder.EnsureInitialized();
         if (IsNotReady()) return;
-        VepFinder.LocalMimics.ProcessVoiceData(buf);
+        // Format SOURCE (micro), pas l'encodeur : c'est le format réel de buf.
+        var (sampleRate, channels) = VoiceFormatResolver.Resolve(__instance, buf.Length);
+        VepFinder.LocalMimics.ProcessVoiceData(buf, sampleRate, channels);
     }
 
     private static bool IsNotReady()

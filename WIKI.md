@@ -1,4 +1,4 @@
-# VepMod – Wiki (1.0.3)
+# VepMod – Wiki (1.0.5)
 
 > **WARNING – SPOILER CONTENT**  
 > This page is intended for players who want to understand in detail how the mod works.  
@@ -16,6 +16,7 @@
 5. [Configuration Settings](#configuration-settings)
 6. [Effects on the Player](#effects-on-the-player)
 7. [FAQ](#faq)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 ## Overview
@@ -102,6 +103,17 @@ The mod automatically records player voices during the game:
 - Each player can have up to **20 samples** stored (configurable)
 - Samples are shared between clients at regular intervals
 
+### Voice Quality Filter
+
+Before a recording is stored, the mod automatically checks that it contains actual speech.
+Recordings that are too short or consist only of background noise are silently discarded.
+
+This filter runs locally on each player's machine and requires no internet connection.
+It has no effect on gameplay — it only determines whether a given recording is worth keeping.
+
+If your voice is not being picked up (see [Troubleshooting](#troubleshooting)), the filter
+can be disabled in the config.
+
 ### Audio Sharing Loop
 
 | Parameter | Min | Max | Default |
@@ -152,6 +164,13 @@ All settings can be modified via the BepInEx configuration file.
 | Parameter | Default | Description |
 |---------|---------|-------------|
 | Sampling Rate | 48000 Hz | Audio sampling rate (change if microphone issues occur) |
+
+### Audio Quality
+
+| Parameter | Default | Description |
+|---------|---------|-------------|
+| Min Duration | 0.3s | Minimum recording duration. Shorter clips are discarded |
+| VAD Enabled | true | Enables automatic speech detection to filter out noise recordings. Disable if your voice is not being captured |
 
 ---
 
@@ -208,6 +227,31 @@ Yes. The mod records voices during the session and replays them through Fake Pla
 ### Q: Is audio data saved?
 
 Audio samples are stored temporarily during the session.
+
+---
+
+## Troubleshooting
+
+### My voice is not being recorded by the mod
+
+The mod filters recordings to keep only those containing actual speech. If your microphone
+is very quiet, heavily compressed, or you are in a noisy environment, clips may be rejected.
+
+Things to try:
+
+1. **Check your microphone level** — make sure the game can hear you (the in-game voice
+   indicator should react when you speak)
+2. **Disable VAD Enabled** in `BepInEx/config/com.vep.vepMod.cfg` — this turns off the
+   speech filter entirely; all recordings will be kept regardless of content
+3. **Lower Min Duration** — if you tend to speak in short bursts, set this to `0.1`
+
+### Hallucinations are not speaking
+
+This is expected if no voice samples have been collected yet. Voices are recorded and shared
+progressively during the session. Give it a few minutes of gameplay.
+
+If voices never appear after a long session, check that **VAD Enabled** is not blocking all
+your recordings (see above).
 
 ---
 

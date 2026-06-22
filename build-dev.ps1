@@ -1,3 +1,8 @@
+param(
+    # Build the VAD-free variant: no WebRtcVadSharp reference, no native WebRtcVad.dll.
+    [switch]$NoVad
+)
+
 $ErrorActionPreference = "Stop"
 
 $ProjectName = "VepMod"
@@ -5,7 +10,7 @@ $DllPath     = Join-Path $PSScriptRoot "bin\Debug\netstandard2.1\$ProjectName.dl
 $BundlePath  = Join-Path $PSScriptRoot "Ressources\vepmod_prefabs"
 $ResourceLogicalName = "VepMod.Resources.vepmod_prefabs"
 
-Write-Host "=== Build Dev ===" -ForegroundColor Cyan
+Write-Host "=== Build Dev$(if ($NoVad) { ' (NoVad)' }) ===" -ForegroundColor Cyan
 
 if (-not (Test-Path $BundlePath)) {
     Write-Error "Missing AssetBundle: $BundlePath"
@@ -21,7 +26,7 @@ if ($needsClean) {
 }
 
 Write-Host "Building $ProjectName in Debug mode..." -ForegroundColor Yellow
-dotnet build "$PSScriptRoot\$ProjectName.csproj" -c Debug
+dotnet build "$PSScriptRoot\$ProjectName.csproj" -c Debug -p:VepModNoVad=$($NoVad.ToString().ToLower())
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed with exit code $LASTEXITCODE"
     exit 1
@@ -30,6 +35,27 @@ if ($LASTEXITCODE -ne 0) {
 if (-not (Test-Path $DllPath)) {
     Write-Error "Build reported success but DLL not found at $DllPath"
     exit 1
+}
+
+# Sanity check: les DLLs WebRTC VAD doivent etre presentes a cote de VepMod.dll.
+# WebRtcVadSharp.dll est copiee par le Target CopyWebRtcVadSharpManaged, WebRtcVad.dll
+# (natif x64) par le .targets du package NuGet. Si l'une manque, le VAD est silencieusement
+# desactive au runtime (DllNotFoundException -> try/catch -> vadValidator = null), donc on
+# echoue ici plutot que de produire un build au VAD muet.
+# En variant NoVad, ces DLLs sont volontairement absentes -> on saute ce controle.
+if (-not $NoVad) {
+$OutputDir = Split-Path $DllPath -Parent
+$vadDlls = @("WebRtcVadSharp.dll", "WebRtcVad.dll")
+$missingVad = @()
+foreach ($dll in $vadDlls) {
+    if (-not (Test-Path (Join-Path $OutputDir $dll))) {
+        $missingVad += $dll
+    }
+}
+if ($missingVad.Count -gt 0) {
+    Write-Error "VAD DLL(s) missing from output ($OutputDir): $($missingVad -join ', '). VAD would be silently disabled at runtime."
+    exit 1
+}
 }
 
 # Sanity check: la ressource embarquee doit matcher le fichier sur disque
