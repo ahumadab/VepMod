@@ -72,8 +72,6 @@ public sealed class WhispralMimics : MonoBehaviour
 
     // Enregistrement audio
     private const int AudioBufferDurationSeconds = 6;
-    private const int FrameDurationMs = 20;
-    private const int FramesPerSecond = 1000 / FrameDurationMs; // 50 frames/s
     private const float SilenceTimeoutSeconds = 0.5f;
 
     // Transmission réseau
@@ -110,6 +108,7 @@ public sealed class WhispralMimics : MonoBehaviour
     private float[]? audioBuffer;
     private int bufferPosition;
     private int sampleRate;
+    private int channelCount = 1;
     private bool isRecording;
     private bool capturingSpeech;
     private bool fileSaved;
@@ -248,7 +247,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Recording
 
-    public void ProcessVoiceData(short[] voiceData)
+    public void ProcessVoiceData(short[] voiceData, int frameSampleRate, int channels)
     {
         if (!isRecording || !PhotonView.IsMine)
         {
@@ -262,7 +261,10 @@ public sealed class WhispralMimics : MonoBehaviour
             bufferPosition = 0;
             fileSaved = false;
             silenceTimer = 0f;
-            LOG.Debug("Speech detected, capturing audio.");
+            // Format autoritaire fourni par Photon (remplace l'ancienne inférence frameLength*50).
+            if (frameSampleRate > 0) sampleRate = frameSampleRate;
+            channelCount = channels >= 1 ? channels : 1;
+            LOG.Debug($"Speech detected, capturing audio ({sampleRate} Hz, {channelCount} ch, frame {voiceData.Length}).");
         }
 
         if (!capturingSpeech)
@@ -270,7 +272,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        EnsureBufferAllocated(voiceData.Length);
+        EnsureBufferAllocated();
         CopyVoiceDataToBuffer(voiceData);
 
         if (isTalking)
@@ -279,7 +281,8 @@ public sealed class WhispralMimics : MonoBehaviour
         }
         else
         {
-            silenceTimer += FrameDurationMs / 1000f;
+            var frameDurationSec = sampleRate > 0 ? (float)(voiceData.Length / channelCount) / sampleRate : 0f;
+            silenceTimer += frameDurationSec;
             if (silenceTimer >= SilenceTimeoutSeconds && bufferPosition > 0 && !fileSaved)
             {
                 LOG.Debug($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
@@ -294,30 +297,33 @@ public sealed class WhispralMimics : MonoBehaviour
         }
     }
 
-    private void EnsureBufferAllocated(int frameLength)
+    private void EnsureBufferAllocated()
     {
         if (audioBuffer != null) return;
 
-        var inferredSampleRate = frameLength * FramesPerSecond;
-        if (sampleRate != inferredSampleRate)
-        {
-            LOG.Warning(
-                $"SampleRate mismatch: {sampleRate} vs inferred {inferredSampleRate}. Using {inferredSampleRate}.");
-            sampleRate = inferredSampleRate;
-        }
-
         audioBuffer = new float[sampleRate * AudioBufferDurationSeconds];
         LOG.Debug(
-            $"Audio buffer allocated: {audioBuffer.Length} samples ({sampleRate} Hz, {AudioBufferDurationSeconds}s)");
+            $"Audio buffer allocated: {audioBuffer.Length} samples ({sampleRate} Hz, {channelCount} ch, {AudioBufferDurationSeconds}s)");
     }
 
     private void CopyVoiceDataToBuffer(short[] voiceData)
     {
         if (audioBuffer == null) return;
-        var samplesToWrite = Mathf.Min(voiceData.Length, audioBuffer.Length - bufferPosition);
+
+        // Downmix multi-canal -> mono par moyenne des canaux (no-op si channelCount == 1).
+        // Le reste du pipeline (WAV, VAD, lecture) est mono.
+        var frames = voiceData.Length / channelCount;
+        var samplesToWrite = Mathf.Min(frames, audioBuffer.Length - bufferPosition);
         for (var i = 0; i < samplesToWrite; i++)
         {
-            audioBuffer[bufferPosition + i] = voiceData[i] / 32768f;
+            var sum = 0f;
+            var baseIdx = i * channelCount;
+            for (var c = 0; c < channelCount; c++)
+            {
+                sum += voiceData[baseIdx + c];
+            }
+
+            audioBuffer[bufferPosition + i] = sum / (channelCount * 32768f);
         }
 
         bufferPosition += samplesToWrite;
