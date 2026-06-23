@@ -9,6 +9,9 @@ using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using VepMod.VepFramework;
+#if !VEPMOD_NO_VAD
+using VepMod.VepFramework.Audio;
+#endif
 using VepMod.VepFramework.Extensions;
 using Random = UnityEngine.Random;
 
@@ -24,7 +27,7 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class WhispralMimics : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<WhispralMimics>();
+    private static readonly VepLogger LOG = VepLogger.Create<WhispralMimics>(true);
 
     public PhotonView PhotonView { get; private set; }
 
@@ -56,14 +59,19 @@ public sealed class WhispralMimics : MonoBehaviour
         StartCoroutine(WaitForVoiceChat(playerAvatar));
     }
 
+    private void OnDestroy()
+    {
+#if !VEPMOD_NO_VAD
+        vadValidator?.Dispose();
+#endif
+    }
+
     #endregion
 
     #region Constants
 
     // Enregistrement audio
     private const int AudioBufferDurationSeconds = 6;
-    private const int FrameDurationMs = 20;
-    private const int FramesPerSecond = 1000 / FrameDurationMs; // 50 frames/s
     private const float SilenceTimeoutSeconds = 0.5f;
 
     // Transmission réseau
@@ -82,6 +90,13 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private PlayerVoiceChat playerVoiceChat;
     private WavFileManager wavFileManager;
+#if !VEPMOD_NO_VAD
+    private VadAudioValidator? vadValidator;
+#if DEBUG
+    /// <summary>Dernier résultat VAD (instrumentation dev pour le HUD DroidDevTools).</summary>
+    public VadValidationResult? LastVadResult { get; private set; }
+#endif
+#endif
     private string localPlayerNickName;
 
     // Reflection fields
@@ -93,6 +108,7 @@ public sealed class WhispralMimics : MonoBehaviour
     private float[]? audioBuffer;
     private int bufferPosition;
     private int sampleRate;
+    private int channelCount = 1;
     private bool isRecording;
     private bool capturingSpeech;
     private bool fileSaved;
@@ -157,6 +173,26 @@ public sealed class WhispralMimics : MonoBehaviour
             wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
             localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
+#if !VEPMOD_NO_VAD
+            // Créer le validateur VAD si activé (détection de parole par ML)
+            // Sensibilité choisie par l'utilisateur (presets calibrés par benchmark).
+            if (VepMod.ConfigVadEnabled.Value)
+            {
+                try
+                {
+                    var sensitivity = VepMod.ConfigVadSensitivity.Value;
+                    var criteria = VadValidationCriteria.FromSensitivity(sensitivity);
+                    vadValidator = new VadAudioValidator(criteria);
+                    LOG.Info($"VAD validation enabled (sensitivity={sensitivity}, speechRatio>={criteria.MinSpeechRatio:F2}).");
+                }
+                catch (Exception ex)
+                {
+                    LOG.Warning($"VAD initialization failed, recordings will not be filtered: {ex.Message}");
+                    vadValidator = null;
+                }
+            }
+#endif
+
             if (PhotonView.IsMine)
             {
                 LOG.Info($"WhispralMimics initialized for local player: {localPlayerNickName}");
@@ -211,7 +247,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Recording
 
-    public void ProcessVoiceData(short[] voiceData)
+    public void ProcessVoiceData(short[] voiceData, int frameSampleRate, int channels)
     {
         if (!isRecording || !PhotonView.IsMine)
         {
@@ -225,7 +261,10 @@ public sealed class WhispralMimics : MonoBehaviour
             bufferPosition = 0;
             fileSaved = false;
             silenceTimer = 0f;
-            LOG.Debug("Speech detected, capturing audio.");
+            // Format autoritaire fourni par Photon (remplace l'ancienne inférence frameLength*50).
+            if (frameSampleRate > 0) sampleRate = frameSampleRate;
+            channelCount = channels >= 1 ? channels : 1;
+            LOG.Debug($"Speech detected, capturing audio ({sampleRate} Hz, {channelCount} ch, frame {voiceData.Length}).");
         }
 
         if (!capturingSpeech)
@@ -233,7 +272,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        EnsureBufferAllocated(voiceData.Length);
+        EnsureBufferAllocated();
         CopyVoiceDataToBuffer(voiceData);
 
         if (isTalking)
@@ -242,7 +281,8 @@ public sealed class WhispralMimics : MonoBehaviour
         }
         else
         {
-            silenceTimer += FrameDurationMs / 1000f;
+            var frameDurationSec = sampleRate > 0 ? (float)(voiceData.Length / channelCount) / sampleRate : 0f;
+            silenceTimer += frameDurationSec;
             if (silenceTimer >= SilenceTimeoutSeconds && bufferPosition > 0 && !fileSaved)
             {
                 LOG.Debug($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
@@ -257,30 +297,33 @@ public sealed class WhispralMimics : MonoBehaviour
         }
     }
 
-    private void EnsureBufferAllocated(int frameLength)
+    private void EnsureBufferAllocated()
     {
         if (audioBuffer != null) return;
 
-        var inferredSampleRate = frameLength * FramesPerSecond;
-        if (sampleRate != inferredSampleRate)
-        {
-            LOG.Warning(
-                $"SampleRate mismatch: {sampleRate} vs inferred {inferredSampleRate}. Using {inferredSampleRate}.");
-            sampleRate = inferredSampleRate;
-        }
-
         audioBuffer = new float[sampleRate * AudioBufferDurationSeconds];
         LOG.Debug(
-            $"Audio buffer allocated: {audioBuffer.Length} samples ({sampleRate} Hz, {AudioBufferDurationSeconds}s)");
+            $"Audio buffer allocated: {audioBuffer.Length} samples ({sampleRate} Hz, {channelCount} ch, {AudioBufferDurationSeconds}s)");
     }
 
     private void CopyVoiceDataToBuffer(short[] voiceData)
     {
         if (audioBuffer == null) return;
-        var samplesToWrite = Mathf.Min(voiceData.Length, audioBuffer.Length - bufferPosition);
+
+        // Downmix multi-canal -> mono par moyenne des canaux (no-op si channelCount == 1).
+        // Le reste du pipeline (WAV, VAD, lecture) est mono.
+        var frames = voiceData.Length / channelCount;
+        var samplesToWrite = Mathf.Min(frames, audioBuffer.Length - bufferPosition);
         for (var i = 0; i < samplesToWrite; i++)
         {
-            audioBuffer[bufferPosition + i] = voiceData[i] / 32768f;
+            var sum = 0f;
+            var baseIdx = i * channelCount;
+            for (var c = 0; c < channelCount; c++)
+            {
+                sum += voiceData[baseIdx + c];
+            }
+
+            audioBuffer[bufferPosition + i] = sum / (channelCount * 32768f);
         }
 
         bufferPosition += samplesToWrite;
@@ -297,7 +340,57 @@ public sealed class WhispralMimics : MonoBehaviour
         var recordedData = new float[bufferPosition];
         Array.Copy(audioBuffer, recordedData, bufferPosition);
 
-        LOG.Debug($"Recording finalized: {bufferPosition} samples ({(float)bufferPosition / sampleRate:F2}s)");
+        // Garde-fou durée minimale (sans VAD)
+        var duration = (float)bufferPosition / sampleRate;
+        if (duration < VepMod.ConfigAudioMinDuration.Value)
+        {
+            LOG.Debug($"Recording rejected: too short ({duration:F2}s < {VepMod.ConfigAudioMinDuration.Value}s)");
+            return;
+        }
+
+#if !VEPMOD_NO_VAD
+        // Validation VAD (détection de parole par ML, filtre principal)
+        if (vadValidator != null)
+        {
+            // Rogner le silence de fin (jusqu'à SilenceTimeoutSeconds) avant la validation pour
+            // ne pas diluer le ratio de parole et pénaliser les mots courts. Le clip sauvegardé
+            // reste complet (silence inclus) — seule l'analyse VAD porte sur la région de parole.
+            var vadData = recordedData;
+            var trailingSilenceSamples = Mathf.RoundToInt(silenceTimer * sampleRate);
+            if (trailingSilenceSamples > 0)
+            {
+                var speechLen = bufferPosition - trailingSilenceSamples;
+                if (speechLen >= sampleRate / 10) // garde-fou : au moins 0,1 s de parole
+                {
+                    vadData = new float[speechLen];
+                    Array.Copy(recordedData, vadData, speechLen);
+                }
+            }
+
+            try
+            {
+                var vadResult = vadValidator.Validate(vadData, sampleRate);
+#if DEBUG
+                LastVadResult = vadResult;
+#endif
+                if (!vadResult.IsValid)
+                {
+                    LOG.Debug($"Recording rejected (VAD): {vadResult.RejectionReason} - {vadResult.Analysis}");
+                    return;
+                }
+
+                LOG.Debug($"Recording passed VAD: {vadResult.Analysis}");
+            }
+            catch (Exception ex)
+            {
+                // Fail-open : un hoquet du VAD natif ne doit pas perturber le thread voix Photon.
+                LOG.Warning($"VAD Validate threw, accepting recording (fail-open): {ex.Message}");
+            }
+        }
+#endif
+
+        LOG.Debug(
+            $"Recording validated and finalized: {bufferPosition} samples ({duration:F2}s)");
         SaveRecordingAsync(recordedData);
     }
 

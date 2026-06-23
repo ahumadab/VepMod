@@ -9,7 +9,7 @@ $ProjectName   = "VepMod"
 $ZipName       = "VieuxPoulpe-$ProjectName-$Version.zip"
 $DistDir       = Join-Path $PSScriptRoot "dist"
 $StagingDir    = Join-Path $DistDir "staging"
-$DllPath       = Join-Path $PSScriptRoot "bin\Release\netstandard2.1\$ProjectName.dll"
+$OutputDir     = Join-Path $PSScriptRoot "bin\Release\netstandard2.1"
 
 Write-Host "=== Build Release $Version ===" -ForegroundColor Cyan
 
@@ -23,7 +23,9 @@ if ($LASTEXITCODE -ne 0) {
 
 # 2. Definir les fichiers requis et verifier leur existence AVANT toute action
 $requiredFiles = @(
-    @{ Source = $DllPath;                                                       Dest = "$ProjectName.dll" },
+    @{ Source = Join-Path $OutputDir "$ProjectName.dll";                        Dest = "$ProjectName.dll" },
+    @{ Source = Join-Path $OutputDir "WebRtcVadSharp.dll";                      Dest = "WebRtcVadSharp.dll" },
+    @{ Source = Join-Path $OutputDir "WebRtcVad.dll";                           Dest = "WebRtcVad.dll" },
     @{ Source = Join-Path $PSScriptRoot "CHANGELOG.md";                         Dest = "CHANGELOG.md" },
     @{ Source = Join-Path $PSScriptRoot "README.md";                            Dest = "README.md" },
     @{ Source = Join-Path $PSScriptRoot "Ressources\manifest.json";             Dest = "manifest.json" },

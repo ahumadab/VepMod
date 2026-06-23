@@ -42,7 +42,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     public EnemyWhispralAnim enemyWhispralAnim;
 
     [Header("Attach settings")] [Tooltip("Temps pendant lequel l’ennemi reste collé au joueur.")]
-    public float attachedDuration = 20f;
+    public float attachedDuration = 200f;
 
     public EnemyWhispralAnim enemyWhispralAnima;
     [Space] public SpringQuaternion rotationSpring;

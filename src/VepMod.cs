@@ -4,7 +4,13 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if DEBUG
+using VepMod.Dev;
+#endif
 using VepMod.Enemies.Whispral;
+#if !VEPMOD_NO_VAD
+using VepMod.VepFramework.Audio;
+#endif
 using VepMod.VepFramework.Config;
 using VepMod.VepFramework.Structures.Range;
 
@@ -26,9 +32,12 @@ public static class ConfigRanges
     public static readonly MinMaxRange<float> VoiceDelay = MinMaxRange.Float(
         6f, 30f, 8f,
         6f, 30f, 15f);
+
+    // Durée minimale d'enregistrement (garde-fou avant VAD)
+    public static readonly RangeValue<float> AudioMinDuration = RangeValue.Float(0.1f, 2f, 0.3f);
 }
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "1.0.5")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "1.1.0")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
@@ -44,6 +53,18 @@ public class VepMod : BaseUnityPlugin
     public static BoundMinMaxRange<float> VoiceDelay;
     public static ConfigEntry<bool> ConfigVoiceFilterEnabled;
 
+#if DEBUG
+    // Outils de développement (build dev uniquement, désactivés par défaut)
+    public static ConfigEntry<bool> ConfigEnableDevTools;
+#endif
+
+    // Validation audio (VAD)
+    public static ConfigEntry<float> ConfigAudioMinDuration;
+#if !VEPMOD_NO_VAD
+    public static ConfigEntry<bool> ConfigVadEnabled;
+    public static ConfigEntry<VadSensitivity> ConfigVadSensitivity;
+#endif
+
     public static readonly Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
 
     internal Harmony? Harmony { get; set; }
@@ -57,6 +78,14 @@ public class VepMod : BaseUnityPlugin
 
         _harmony.PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
+
+#if DEBUG
+        if (ConfigEnableDevTools.Value)
+        {
+            gameObject.AddComponent<DroidDevTools>();
+            Logger.LogInfo("VepMod dev tools enabled (F7 spawn / F8 teleport / F9 drop / F10 HUD / F11 despawn).");
+        }
+#endif
 
         // Pr�charger le prefab LostDroid de mani�re asynchrone pour �viter les freezes
         StartCoroutine(DroidPrefabLoader.PreloadAsync(success =>
@@ -105,6 +134,24 @@ public class VepMod : BaseUnityPlugin
         // Experimental settings
         ConfigSamplingRate = Config.BindRange("Experimental", "Sampling Rate", ConfigRanges.SamplingRate,
             "Only change this value if the console gives you a warning about your microphone frequency not being supported.");
+
+#if DEBUG
+        // Developer tools (dev build only, off by default)
+        ConfigEnableDevTools = Config.Bind("Developer", "Enable Dev Tools", false,
+            new ConfigDescription(
+                "Enables in-game developer tools for testing the droid: spawn/teleport/drop-test keybinds (F7-F11) and a debug HUD. For development only."));
+#endif
+
+        // Audio validation (VAD)
+        ConfigAudioMinDuration = Config.BindRange("Audio Quality", "Min Duration", ConfigRanges.AudioMinDuration,
+            "Minimum duration in seconds. Shorter recordings are rejected.");
+#if !VEPMOD_NO_VAD
+        ConfigVadEnabled = Config.Bind("Audio Quality", "VAD Enabled", true,
+            "Enable Voice Activity Detection (VAD) for speech filtering. Uses WebRTC ML model (requires x64). Disable if you have issues.");
+        ConfigVadSensitivity = Config.Bind("Audio Quality", "VAD Sensitivity", VadSensitivity.Balanced,
+            "Speech detection strictness. Permissive (ratio 0.20) keeps almost all voice but lets through more noise. " +
+            "Balanced (0.40) is the default best-F1 setting. Strict (0.60) filters more aggressively but may drop quiet voice.");
+#endif
     }
 
     private void PreventDelete()

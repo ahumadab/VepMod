@@ -7,6 +7,15 @@
         <Authors>Vep</Authors>
         <Version>1.0.0</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+
+    <!-- Opt-out build variant: `dotnet build -p:VepModNoVad=true` produces a VAD-free plugin with
+         no WebRtcVadSharp reference and no native WebRtcVad.dll. The VEPMOD_NO_VAD symbol compiles
+         out all VAD code (validator, config, pipeline, dev tools). -->
+    <PropertyGroup>
+        <VepModNoVad Condition="'$(VepModNoVad)' == ''">false</VepModNoVad>
+        <DefineConstants Condition="'$(VepModNoVad)' == 'true'">$(DefineConstants);VEPMOD_NO_VAD</DefineConstants>
     </PropertyGroup>
 
     <!-- Add Package Sources -->
@@ -21,13 +30,13 @@
     <!-- Package References -->
     <ItemGroup>
         <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
-        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.1" PrivateAssets="all" IncludeAssets="build"/>
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.5.0-beta.2" PrivateAssets="all" IncludeAssets="build"/>
         <PackageReference Include="Linkoid.Repo.Plugin.Build" Version="*" PrivateAssets="all"/>
-        <PackageReference Include="Zehs.REPOLib" Version="3.0.3"/>
+        <PackageReference Include="Zehs.REPOLib" Version="4.*"/>
         <PackageReference Include="BepInEx.Core" Version="5.*" ExcludeAssets="runtime"/>
         <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all"/>
         <PackageReference Include="R.E.P.O.GameLibs.Steam" Version="*-*" PrivateAssets="all"/>
-        <!--        <PackageReference Include="WebRtcVadSharp" Version="1.3.2"/>-->
+        <PackageReference Include="WebRtcVadSharp" Version="1.3.2" Condition="'$(VepModNoVad)' != 'true'"/>
     </ItemGroup>
     <PropertyGroup>
         <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -36,6 +45,7 @@
     <ItemGroup>
         <None Remove="node_modules\**"/>
         <None Remove="plugins\**"/>
+        <None Remove="tests\**"/>
         <Compile Include="src\**\*.cs"/>
     </ItemGroup>
 
@@ -45,6 +55,15 @@
             <LogicalName>VepMod.Resources.vepmod_prefabs</LogicalName>
         </EmbeddedResource>
     </ItemGroup>
+
+    <!-- Copy WebRtcVadSharp.dll (managed wrapper) to output — netstandard2.1 does not copy NuGet
+         runtime DLLs by default (CopyLocalLockFileAssemblies=false). The native WebRtcVad.dll
+         is already handled by the package's own .targets file. -->
+    <Target Name="CopyWebRtcVadSharpManaged" AfterTargets="AfterBuild" Condition="'$(VepModNoVad)' != 'true'">
+        <Copy SourceFiles="$(NuGetPackageRoot)webrtcvadsharp/1.3.2/lib/netstandard2.0/WebRtcVadSharp.dll"
+              DestinationFolder="$(OutputPath)"
+              SkipUnchangedFiles="true"/>
+    </Target>
 
     <!-- Fail fast in Release if the bundle is missing -->
     <Target Name="EnsureVepModPrefabsBundlePresent" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release'">
