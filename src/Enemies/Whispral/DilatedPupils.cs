@@ -3,7 +3,7 @@ using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
-public sealed class DilatedPupilsDebuff : MonoBehaviour
+public sealed class DilatedPupils : MonoBehaviour
 {
     private const float PupilSizeMultiplier = 3f;
     private const int Priority = 5;
@@ -12,7 +12,7 @@ public sealed class DilatedPupilsDebuff : MonoBehaviour
     private const float SpringSpeedOut = 5f;
     private const float SpringDampOut = 0.3f;
     private const float RefreshInterval = 0.1f;
-    private static readonly VepLogger LOG = VepLogger.Create<DilatedPupilsDebuff>();
+    private static readonly VepLogger LOG = VepLogger.Create<DilatedPupils>();
 
     private PlayerAvatar? playerAvatar;
     private float refreshTimer;
@@ -36,10 +36,10 @@ public sealed class DilatedPupilsDebuff : MonoBehaviour
         }
     }
 
-    public void ApplyDebuff(bool dilated)
+    public void Apply(bool dilated)
     {
         IsActive = dilated;
-        LOG.Debug($"Applying dilated pupils debuff: {dilated}");
+        LOG.Debug($"Dilated Pupils: {dilated}");
 
         if (dilated)
         {

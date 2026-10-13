@@ -242,38 +242,41 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     }
 
     [PunRPC]
-    private void WhispralAttachmentRPC(int targetViewID, bool attach, PhotonMessageInfo _info = default)
+    private void AttachmentRPC(int victimViewID, int whispralViewID, bool attached, PhotonMessageInfo _info = default)
     {
         if (!SemiFunc.MasterOnlyRPC(_info))
         {
             return;
         }
 
-        PlayerAvatar? targetPlayer = null;
-        foreach (var player in GameDirector.instance.PlayerList)
+        var victim = SemiFunc.PlayerAvatarGetFromPhotonID(victimViewID);
+        if (!victim)
         {
-            if (player && player.photonView && player.photonView.ViewID == targetViewID)
-            {
-                targetPlayer = player;
-                break;
-            }
-        }
-
-        if (targetPlayer == null)
-        {
-            LOG.Warning($"WhispralAttachmentRPC: Player with ViewID {targetViewID} not found.");
+            // A Victim who left the game took their Haunting with them.
+            LOG.Debug($"AttachmentRPC: no player with ViewID {victimViewID}.");
             return;
         }
 
-        LOG.Debug($"WhispralAttachmentRPC received: attach={attach} for player {targetPlayer.playerName}");
-        var manager = targetPlayer.GetOrAddComponent<WhispralDebuffManager>();
-        if (attach)
+        var haunting = victim.GetOrAddComponent<Haunting>();
+        if (attached)
         {
-            manager.RegisterAttachment();
+            haunting.Attach(whispralViewID);
         }
         else
         {
-            manager.UnregisterAttachment();
+            haunting.Detach(whispralViewID);
+        }
+    }
+
+    private void ReportAttachment(int victimViewID, bool attached)
+    {
+        if (SemiFunc.IsMultiplayer())
+        {
+            photonView.RPC(nameof(AttachmentRPC), RpcTarget.All, victimViewID, photonView.ViewID, attached);
+        }
+        else
+        {
+            AttachmentRPC(victimViewID, photonView.ViewID, attached);
         }
     }
 
@@ -355,17 +358,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    /// <summary>
-    ///     E.g. when the Victim turns into an object.
-    /// </summary>
-    private void ForceDetach()
-    {
-        if (CurrentState is State.PrepareAttach or State.Attached)
-        {
-            Fsm.NextStateStateId = State.Detach;
-        }
-    }
-
     #endregion
 
     #region States
@@ -389,33 +381,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             {
                 Whispral.UpdateStateRPC(Fsm.NextStateStateId);
             }
-        }
-
-        /// <summary>
-        ///     For leaving Attached or PrepareAttach without going through Detach.
-        /// </summary>
-        protected void CleanupAttachmentIfNeeded(State previous)
-        {
-            if (previous is not (State.Attached or State.PrepareAttach)) return;
-
-            var player = Whispral.playerTarget;
-            if (player == null) return;
-
-            LOG.Debug($"Whispral interrupted while attached (-> {Fsm.CurrentStateStateId}), cleaning up debuffs.");
-            if (SemiFunc.IsMultiplayer())
-            {
-                Whispral.photonView.RPC(nameof(WhispralAttachmentRPC), RpcTarget.All, player.photonView.ViewID, false);
-            }
-            else
-            {
-                var manager = player.GetComponent<WhispralDebuffManager>();
-                if (manager)
-                {
-                    manager.UnregisterAttachment();
-                }
-            }
-
-            Whispral.attachAnchor = null;
         }
     }
 
@@ -696,6 +661,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     private sealed class AttachedState : WhispralStateBase
     {
         private const float VoiceFilterProbability = 0.5f;
+        private int? victimViewID;
         private float voiceTimer;
 
         public override void OnStateEnter(State previous)
@@ -703,9 +669,24 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             base.OnStateEnter(previous);
             Whispral.attachedTimer = Whispral.attachedDuration;
             voiceTimer = GetRandomVoiceDelay();
-            var player = Whispral.playerTarget;
-            Whispral.attachAnchor = player ? SemiFunc.PlayerGetFaceEyeTransform(player) : null;
-            StartAttachEffects();
+            var victim = Whispral.playerTarget;
+            if (victim == null) return;
+
+            Whispral.attachAnchor = SemiFunc.PlayerGetFaceEyeTransform(victim);
+            // Kept as an ID: the Victim's avatar may be gone by the time the Attachment ends.
+            victimViewID = victim.photonView.ViewID;
+            Whispral.ReportAttachment(victimViewID.Value, true);
+        }
+
+        // The one place an Attachment ends, whatever the next state: no other state reports it.
+        public override void OnStateExit(State next)
+        {
+            base.OnStateExit(next);
+            Whispral.attachAnchor = null;
+            if (victimViewID == null) return;
+
+            Whispral.ReportAttachment(victimViewID.Value, false);
+            victimViewID = null;
         }
 
         public override void OnStateUpdate()
@@ -770,23 +751,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             return players[Random.Range(0, players.Count)].NickName;
         }
 
-        private void StartAttachEffects()
-        {
-            var player = Whispral.playerTarget;
-            if (player == null) return;
-
-            LOG.Debug("Whispral attached to player, sending debuff RPC.");
-            if (SemiFunc.IsMultiplayer())
-            {
-                Whispral.photonView.RPC(nameof(WhispralAttachmentRPC), RpcTarget.All, player.photonView.ViewID, true);
-            }
-            else
-            {
-                var manager = player.GetOrAddComponent<WhispralDebuffManager>();
-                manager.RegisterAttachment();
-            }
-        }
-
         private void CheckDetachState()
         {
             Whispral.attachedTimer -= Time.deltaTime;
@@ -821,8 +785,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
             Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
             Enemy.NavMeshAgent.ResetPath();
-
-            StopAttachEffects();
         }
 
         public override void OnStateUpdate()
@@ -830,28 +792,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _timer -= Time.deltaTime;
             if (_timer <= 0f)
             {
-                Whispral.attachAnchor = null;
                 Fsm.NextStateStateId = State.DetachWait;
-            }
-        }
-
-        private void StopAttachEffects()
-        {
-            var player = Whispral.playerTarget;
-            if (player == null) return;
-
-            LOG.Debug("Whispral detached from player, sending debuff RPC.");
-            if (SemiFunc.IsMultiplayer())
-            {
-                Whispral.photonView.RPC(nameof(WhispralAttachmentRPC), RpcTarget.All, player.photonView.ViewID, false);
-            }
-            else
-            {
-                var manager = player.GetComponent<WhispralDebuffManager>();
-                if (manager)
-                {
-                    manager.UnregisterAttachment();
-                }
             }
         }
     }
@@ -936,12 +877,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     private class StunState : WhispralStateBase
     {
-        public override void OnStateEnter(State previous)
-        {
-            base.OnStateEnter(previous);
-            CleanupAttachmentIfNeeded(previous);
-        }
-
         public override void OnStateUpdate()
         {
             if (!Enemy.IsStunned())
@@ -977,7 +912,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
-            CleanupAttachmentIfNeeded(previous);
             Enemy.EnemyParent.Despawn();
             Fsm.NextStateStateId = State.Spawn;
         }
