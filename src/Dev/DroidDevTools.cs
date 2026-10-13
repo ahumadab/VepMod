@@ -1,5 +1,6 @@
 #if DEBUG
 using System.Collections.Generic;
+using System.Linq;
 #if !VEPMOD_NO_VAD
 using System;
 using System.IO;
@@ -25,6 +26,13 @@ namespace VepMod.Dev;
 ///       F9  — drop test: lift the nearest Hallucination and let it fall in place
 ///       F10 — toggle the HUD overlay
 ///       F11 — despawn the Hallucinations the tool spawned
+///
+///     Haunting keys, to test how an Attachment ends (the Whispral ones act on the Master only):
+///       F1  — spawn a Whispral at the aimed point
+///       F2  — stun the Whisprals preparing to attach
+///       F3  — stun every Whispral
+///       F4  — kill every Whispral
+///       F5  — kill the local player
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
@@ -36,6 +44,12 @@ public sealed class DroidDevTools : MonoBehaviour
     private const KeyCode DropKey = KeyCode.F9;
     private const KeyCode HudKey = KeyCode.F10;
     private const KeyCode DespawnKey = KeyCode.F11;
+    private const KeyCode SpawnWhispralKey = KeyCode.F1;
+    private const KeyCode StunPreparingWhispralsKey = KeyCode.F2;
+    private const KeyCode StunWhispralsKey = KeyCode.F3;
+    private const KeyCode KillWhispralsKey = KeyCode.F4;
+    private const KeyCode KillLocalPlayerKey = KeyCode.F5;
+    private const float StunDuration = 5f; // s
 
     private const float DropHeight = 6f; // m, drop test lift
     private const float AimMaxDistance = 100f; // m, aim raycast range
@@ -59,6 +73,11 @@ public sealed class DroidDevTools : MonoBehaviour
         if (Input.GetKeyDown(DropKey)) DropNearest();
         if (Input.GetKeyDown(HudKey)) _hudVisible = !_hudVisible;
         if (Input.GetKeyDown(DespawnKey)) DespawnAll();
+        if (Input.GetKeyDown(SpawnWhispralKey)) SpawnWhispralAtAim();
+        if (Input.GetKeyDown(StunPreparingWhispralsKey)) StunWhisprals(true);
+        if (Input.GetKeyDown(StunWhispralsKey)) StunWhisprals(false);
+        if (Input.GetKeyDown(KillWhispralsKey)) KillWhisprals();
+        if (Input.GetKeyDown(KillLocalPlayerKey)) KillLocalPlayer();
 
         _nearestRefreshTimer -= Time.deltaTime;
         if (_nearestRefreshTimer <= 0f)
@@ -253,6 +272,55 @@ public sealed class DroidDevTools : MonoBehaviour
         }
     }
 
+    private static void SpawnWhispralAtAim()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer() || !TryGetAimPoint(out var point)) return;
+
+        var setup = REPOLib.Modules.Enemies.RegisteredEnemies
+            .FirstOrDefault(s => s.spawnObjects.Any(p => p.PrefabName.Contains("Whispral")));
+        if (setup == null)
+        {
+            LOG.Warning("DevTools: Whispral EnemySetup not registered.");
+            return;
+        }
+
+        REPOLib.Modules.Enemies.SpawnEnemy(setup, point, Quaternion.identity, false);
+        LOG.Info($"DevTools: spawned a Whispral at {point}.");
+    }
+
+    private static void StunWhisprals(bool preparingOnly)
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        foreach (var whispral in FindObjectsOfType<EnemyWhispral>())
+        {
+            if (preparingOnly && whispral.CurrentState != EnemyWhispral.State.PrepareAttach) continue;
+
+            LOG.Info($"DevTools: stunning Whispral {whispral.GetComponent<Photon.Pun.PhotonView>().ViewID} in state {whispral.CurrentState}.");
+            whispral.enemy.StateStunned.Set(StunDuration);
+        }
+    }
+
+    private static void KillWhisprals()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        foreach (var whispral in FindObjectsOfType<EnemyWhispral>())
+        {
+            LOG.Info($"DevTools: killing Whispral {whispral.GetComponent<Photon.Pun.PhotonView>().ViewID} in state {whispral.CurrentState}.");
+            whispral.enemy.Health.Hurt(int.MaxValue / 2, Vector3.up);
+        }
+    }
+
+    private static void KillLocalPlayer()
+    {
+        var player = PlayerAvatar.instance;
+        if (player == null) return;
+
+        LOG.Info("DevTools: killing the local player.");
+        player.playerHealth.Hurt(int.MaxValue / 2, false);
+    }
+
     private static bool TryGetAimPoint(out Vector3 point)
     {
         var cam = Camera.main;
@@ -274,7 +342,9 @@ public sealed class DroidDevTools : MonoBehaviour
         if (!_hudVisible) return;
 
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
-                 $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n";
+                 $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n" +
+                 "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
+                 "F5 kill yourself\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
@@ -315,7 +385,7 @@ public sealed class DroidDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 380, 240), sb, style);
+        GUI.Box(new Rect(10, 10, 440, 280), sb, style);
     }
 }
 #endif
