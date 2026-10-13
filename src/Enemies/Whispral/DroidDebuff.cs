@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -14,11 +15,14 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class DroidDebuff : MonoBehaviour
 {
+    private const float SpawnRetryDelay = 1f;
+
     private static readonly VepLogger LOG = VepLogger.Create<DroidDebuff>();
 
     private readonly Dictionary<PlayerAvatar, DroidController> _droids = new();
-    private WhispralDebuffManager _debuffManager;
+    private readonly List<PlayerAvatar> _staleSources = new();
     private InvisiblePlayerDebuff _invisiblePlayerDebuff;
+    private Coroutine? _spawning;
 
     public bool IsActive { get; private set; }
 
@@ -44,13 +48,8 @@ public sealed class DroidDebuff : MonoBehaviour
 
         IsActive = active;
         _invisiblePlayerDebuff = sourcePlayerDebuff;
-        _debuffManager = GetComponent<WhispralDebuffManager>();
 
-        if (active)
-        {
-            CreateHallucinations();
-        }
-        else
+        if (!active)
         {
             DestroyAllHallucinations();
         }
@@ -69,52 +68,40 @@ public sealed class DroidDebuff : MonoBehaviour
         return null;
     }
 
-    private void CreateHallucination(PlayerAvatar sourcePlayer)
+    // The spawn-point search runs a frame before the instantiation, and one Hallucination spawns per run: creating
+    // every Hallucination in the frame the Victim became Haunted froze the game.
+    private IEnumerator SpawnHallucination(PlayerAvatar sourcePlayer)
     {
-        LOG.Debug($"Creating hallucination for player {sourcePlayer.playerName}");
+        var spawnPosition = FindSpawnPosition();
+        yield return null;
 
-        if (!DroidPrefabLoader.IsAvailable)
-        {
-            LOG.Warning("Hallucination prefab not available - cannot create hallucination");
-            return;
-        }
+        var hallucination = sourcePlayer && spawnPosition.HasValue
+            ? DroidController.Create(sourcePlayer, spawnPosition.Value)
+            : null;
 
-        var spawnPos = FindSpawnPosition();
-        if (!spawnPos.HasValue)
-        {
-            LOG.Warning($"Could not find spawn position for hallucination of {sourcePlayer.playerName}");
-            return;
-        }
-
-        var hallucination = DroidController.Create(sourcePlayer, spawnPos.Value);
         if (hallucination == null)
         {
-            LOG.Warning($"Hallucination for {sourcePlayer.playerName} failed to create");
-            return;
+            LOG.Warning("Hallucination failed to spawn, retrying later");
+            yield return new WaitForSeconds(SpawnRetryDelay);
         }
-
-        _droids[sourcePlayer] = hallucination;
-        LOG.Debug($"Hallucination created at {hallucination.transform.position}");
-    }
-
-    private void CreateHallucinations()
-    {
-        if (_invisiblePlayerDebuff == null) return;
-
-        LOG.Debug("Creating hallucinations for hidden players.");
-
-        foreach (var player in _invisiblePlayerDebuff.HiddenPlayers)
+        else
         {
-            if (player && !_droids.ContainsKey(player))
-            {
-                CreateHallucination(player);
-            }
+            _droids[sourcePlayer] = hallucination;
+            LOG.Debug($"Hallucination of {sourcePlayer.playerName} spawned at {spawnPosition}");
         }
+
+        _spawning = null;
     }
 
     private void DestroyAllHallucinations()
     {
         LOG.Debug("Destroying all hallucinations.");
+
+        if (_spawning != null)
+        {
+            StopCoroutine(_spawning);
+            _spawning = null;
+        }
 
         foreach (var kvp in _droids)
         {
@@ -141,26 +128,13 @@ public sealed class DroidDebuff : MonoBehaviour
         _droids.Remove(player);
     }
 
-    private Vector3? FindSpawnPosition()
+    private static Vector3? FindSpawnPosition()
     {
-        // A precomputed position avoids the freeze of the synchronous search.
-        if (_debuffManager != null)
-        {
-            var precomputed = _debuffManager.GetPrecomputedSpawnPosition();
-            if (precomputed.HasValue)
-            {
-                LOG.Debug($"Using precomputed spawn position: {precomputed.Value}");
-                return precomputed.Value;
-            }
-        }
+        var victimPosition = PlayerAvatar.instance.transform.position;
 
-        // Synchronous search, which may freeze the game.
-        LOG.Warning("No precomputed position available, falling back to sync search");
-        var playerPos = PlayerAvatar.instance.transform.position;
-
-        var levelPoint = SemiFunc.LevelPointGet(playerPos, WhispralDebuffManager.SpawnDistanceMin,
-                             WhispralDebuffManager.SpawnDistanceMax)
-                         ?? SemiFunc.LevelPointGet(playerPos, 0f, 999f);
+        var levelPoint = SemiFunc.LevelPointGet(victimPosition, DroidController.SpawnDistanceMin,
+                             DroidController.SpawnDistanceMax)
+                         ?? SemiFunc.LevelPointGet(victimPosition, 0f, 999f);
 
         if (!levelPoint)
         {
@@ -175,26 +149,32 @@ public sealed class DroidDebuff : MonoBehaviour
     {
         var hiddenPlayers = _invisiblePlayerDebuff.HiddenPlayers;
 
-        foreach (var player in hiddenPlayers)
+        if (_spawning == null)
         {
-            if (player && !_droids.ContainsKey(player))
+            for (var i = 0; i < hiddenPlayers.Count; i++)
             {
-                CreateHallucination(player);
+                var player = hiddenPlayers[i];
+                if (player && !_droids.ContainsKey(player))
+                {
+                    _spawning = StartCoroutine(SpawnHallucination(player));
+                    break;
+                }
             }
         }
 
-        var toRemove = new List<PlayerAvatar>();
         foreach (var kvp in _droids)
         {
             if (!kvp.Key || !kvp.Value || !hiddenPlayers.Contains(kvp.Key))
             {
-                toRemove.Add(kvp.Key);
+                _staleSources.Add(kvp.Key);
             }
         }
 
-        foreach (var player in toRemove)
+        foreach (var player in _staleSources)
         {
             DestroyHallucination(player);
         }
+
+        _staleSources.Clear();
     }
 }

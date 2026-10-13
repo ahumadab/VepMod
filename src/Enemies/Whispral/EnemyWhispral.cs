@@ -277,31 +277,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
-    [PunRPC]
-    private void PrecomputeSpawnPositionRPC(int targetViewID, PhotonMessageInfo _info = default)
-    {
-        if (!SemiFunc.MasterOnlyRPC(_info))
-        {
-            return;
-        }
-
-        PlayerAvatar targetPlayer = null;
-        foreach (var player in GameDirector.instance.PlayerList)
-        {
-            if (player && player.photonView && player.photonView.ViewID == targetViewID)
-            {
-                targetPlayer = player;
-                break;
-            }
-        }
-
-        if (targetPlayer == null) return;
-
-        // The spawn position is precomputed on the Victim's client.
-        var manager = targetPlayer.GetComponent<WhispralDebuffManager>();
-        manager?.PrecomputeSpawnPosition();
-    }
-
     #endregion
 
     #region Hooks Enemy (API publique)
@@ -625,12 +600,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         private const float TimeToStopGoingToPlayer = 2f;
         private const float AttachDistanceThreshold = 1.5f;
-        private const float PrecomputeInterval = 0.5f;
-        private const int MaxPrecomputedPositions = 4;
 
         private bool _agentSet;
-        private int _precomputedCount;
-        private float _precomputeTimer;
         private float _timer;
 
         public override void OnStateEnter(State previous)
@@ -638,10 +609,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             base.OnStateEnter(previous);
             _timer = TimeToStopGoingToPlayer;
             _agentSet = true;
-            _precomputeTimer = 0f;
-            _precomputedCount = 0;
-
-            PrecomputeSpawnPosition();
         }
 
         public void RefreshTimer()
@@ -658,13 +625,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             {
                 Fsm.NextStateStateId = State.Leave;
                 return;
-            }
-
-            _precomputeTimer -= Time.deltaTime;
-            if (_precomputeTimer <= 0f && _precomputedCount < MaxPrecomputedPositions)
-            {
-                PrecomputeSpawnPosition();
-                _precomputeTimer = PrecomputeInterval;
             }
 
             var playerPos = player.transform.position;
@@ -699,24 +659,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             {
                 SemiFunc.EnemyCartJumpReset(Enemy);
                 Fsm.NextStateStateId = State.PrepareAttach;
-            }
-        }
-
-        private void PrecomputeSpawnPosition()
-        {
-            var player = Whispral.playerTarget;
-            if (player == null) return;
-
-            _precomputedCount++;
-
-            if (SemiFunc.IsMultiplayer())
-            {
-                Whispral.photonView.RPC(nameof(PrecomputeSpawnPositionRPC), RpcTarget.All, player.photonView.ViewID);
-            }
-            else
-            {
-                var manager = player.GetComponent<WhispralDebuffManager>();
-                manager?.PrecomputeSpawnPosition();
             }
         }
     }
