@@ -87,7 +87,8 @@ public sealed class DroidDebuff : MonoBehaviour
         else
         {
             _droids[imitatedPlayer] = hallucination;
-            LOG.Debug($"Hallucination of {imitatedPlayer.playerName} spawned at {spawnPosition}");
+            var distance = Vector3.Distance(spawnPosition!.Value, PlayerAvatar.instance.transform.position);
+            LOG.Debug($"Hallucination of {imitatedPlayer.playerName} spawned {distance:F1} m from the Victim");
         }
 
         _spawning = null;
