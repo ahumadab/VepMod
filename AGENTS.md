@@ -2,6 +2,11 @@
 
 REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/Assembly-CSharp/`. Read it before using, patching or imitating a game class (`PlayerAvatar`, `SemiFunc`, `EnemyParent`…). The mod compiles against the `R.E.P.O.GameLibs.Steam` NuGet package, so on a mismatch the compiler wins over this copy.
 
+## Coding standards
+
+Before writing, changing or reviewing code, read `CODING_STANDARDS.md` (module shape, lifecycle, network contract,
+comments).
+
 ## Agent skills
 
 ### Issue tracker
