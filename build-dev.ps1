@@ -1,6 +1,8 @@
 param(
     # Build the VAD-free variant: no WebRtcVadSharp reference, no native WebRtcVad.dll.
-    [switch]$NoVad
+    [switch]$NoVad,
+    # Thunderstore profile whose VepMod.dll the build replaces, so the next launch of that profile runs it.
+    [string]$DeployTo
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,12 +39,10 @@ if (-not (Test-Path $DllPath)) {
     exit 1
 }
 
-# Sanity check: les DLLs WebRTC VAD doivent etre presentes a cote de VepMod.dll.
-# WebRtcVadSharp.dll est copiee par le Target CopyWebRtcVadSharpManaged, WebRtcVad.dll
-# (natif x64) par le .targets du package NuGet. Si l'une manque, le VAD est silencieusement
-# desactive au runtime (DllNotFoundException -> try/catch -> vadValidator = null), donc on
-# echoue ici plutot que de produire un build au VAD muet.
-# En variant NoVad, ces DLLs sont volontairement absentes -> on saute ce controle.
+# The WebRTC VAD DLLs must sit next to VepMod.dll: WebRtcVadSharp.dll comes from the
+# CopyWebRtcVadSharpManaged target, the native x64 WebRtcVad.dll from the NuGet package's .targets.
+# A missing one silently disables the VAD at runtime (DllNotFoundException caught, vadValidator = null),
+# so the build fails here instead. The NoVad variant leaves them out on purpose.
 if (-not $NoVad) {
 $OutputDir = Split-Path $DllPath -Parent
 $vadDlls = @("WebRtcVadSharp.dll", "WebRtcVad.dll")
@@ -58,9 +58,8 @@ if ($missingVad.Count -gt 0) {
 }
 }
 
-# Sanity check: la ressource embarquee doit matcher le fichier sur disque
-# NB: on charge via byte[] (et non LoadFile) pour ne PAS verrouiller la DLL
-# dans la session PowerShell, sinon le prochain build echoue (MSB3027).
+# The embedded bundle must match the one on disk. Loading from byte[] rather than LoadFile keeps the
+# PowerShell session from locking the DLL, which would fail the next build (MSB3027).
 $dllBytes = [IO.File]::ReadAllBytes($DllPath)
 $asm = [Reflection.Assembly]::Load($dllBytes)
 $stream = $asm.GetManifestResourceStream($ResourceLogicalName)
@@ -80,4 +79,18 @@ if ($embeddedSize -ne $diskSize) {
 Write-Host ""
 Write-Host "OK: $DllPath" -ForegroundColor Green
 Write-Host "    embeds vepmod_prefabs ($embeddedSize bytes, matches disk)" -ForegroundColor Green
+
+if ($DeployTo) {
+    $pluginDir = Get-Item "$env:APPDATA\Thunderstore Mod Manager\DataFolder\REPO\profiles\$DeployTo\BepInEx\plugins\*-VepMod-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pluginDir) {
+        Write-Error "No VepMod plugin folder in Thunderstore profile '$DeployTo'"
+        exit 1
+    }
+    if (Get-Process REPO -ErrorAction SilentlyContinue) {
+        Write-Error "REPO is running and locks the deployed DLL: close the game, then deploy again"
+        exit 1
+    }
+    Copy-Item $DllPath $pluginDir.FullName -Force
+    Write-Host "    deployed to $($pluginDir.FullName)" -ForegroundColor Green
+}
 Write-Host "=== Done ===" -ForegroundColor Cyan

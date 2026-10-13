@@ -6,12 +6,20 @@ namespace VepMod.VepFramework;
 public sealed class VepLogger
 {
     private const string Prefix = "VepMod";
+
+    // A dev build writes every Debug line, so an in-game test can be checked from the log afterwards.
+#if DEBUG
+    private const bool DebugBuild = true;
+#else
+    private const bool DebugBuild = false;
+#endif
+
     private readonly ManualLogSource _log;
 
     private VepLogger(string className, bool debugEnabled = false)
     {
         _log = Logger.CreateLogSource($"{Prefix}.{className}");
-        DebugEnabled = debugEnabled;
+        DebugEnabled = debugEnabled || DebugBuild;
     }
 
     public bool DebugEnabled { get; set; }
