@@ -19,11 +19,7 @@ internal static class MaterialsImpulsePatch
 
         if (hostType != Materials.HostType.LocalPlayer && hostType != Materials.HostType.OtherPlayer) return true;
 
-        if (InvisiblePlayerDebuff.IsPositionNearHiddenPlayer(origin))
-        {
-            return false;
-        }
-
-        return true;
+        var imitations = PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Imitations>() : null;
+        return !imitations || !imitations!.IsNearImitatedPlayer(origin);
     }
 }

@@ -580,15 +580,12 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var hallucinationDebuff = localPlayer.GetComponent<DroidDebuff>();
-        if (hallucinationDebuff != null && hallucinationDebuff.IsActive)
+        var imitations = localPlayer.GetComponent<Imitations>();
+        var hallucination = imitations ? imitations.FindHallucination(sourcePlayerNickName) : null;
+        if (hallucination)
         {
-            var droid = hallucinationDebuff.GetDroidByPlayerName(sourcePlayerNickName);
-            if (droid != null)
-            {
-                LOG.Debug($"Playing voice from {sourcePlayerNickName} on hallucination droid");
-                droid.PlayVoice(applyFilter);
-            }
+            LOG.Debug($"Playing voice from {sourcePlayerNickName} on their Hallucination");
+            hallucination!.PlayVoice(applyFilter);
         }
     }
 
