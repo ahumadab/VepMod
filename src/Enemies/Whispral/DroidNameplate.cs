@@ -11,6 +11,9 @@ public sealed class DroidNameplate : MonoBehaviour
     private const float MinFontSize = 8f;
     private const float MaxFontSize = 20f;
 
+    // Deliberately dimmer than a real teammate's nameplate, which peaks at 0.5.
+    private const float MaxAlpha = 0.2f;
+
     private static readonly VepLogger LOG = VepLogger.Create<DroidNameplate>();
 
     private Transform _controllerTransform = null!;
@@ -41,7 +44,7 @@ public sealed class DroidNameplate : MonoBehaviour
             LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
 
         var distanceAlpha = Mathf.Clamp01(1f - distance / MaxVisibleDistance);
-        var targetAlpha = isVisible ? distanceAlpha : 0f;
+        var targetAlpha = isVisible ? distanceAlpha * MaxAlpha : 0f;
 
         var currentColor = _nameplate.text.color;
         var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * FadeSpeed);
@@ -69,8 +72,9 @@ public sealed class DroidNameplate : MonoBehaviour
 
         if (_nameplate != null)
         {
-            // WorldSpaceUIPlayerName destroys itself without a playerAvatar.
-            _nameplate.playerAvatar = _sourcePlayer;
+            // The game's Update fades the name of a dead player and of one the camera is not aiming at, and moves it
+            // to the player, while this nameplate follows the Hallucination: only UpdateNameplate drives it.
+            _nameplate.enabled = false;
             _nameplate.text.text = _sourcePlayer.playerName;
         }
     }
