@@ -1,8 +1,5 @@
 namespace AudioBenchmark.Models;
 
-/// <summary>
-///     Représente un fichier WAV chargé en mémoire avec ses métadonnées.
-/// </summary>
 public sealed class WavFile
 {
     public required string FilePath { get; init; }

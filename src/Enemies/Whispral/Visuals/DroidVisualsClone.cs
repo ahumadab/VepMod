@@ -7,21 +7,18 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral.Visuals;
 
 /// <summary>
-///     Greffe le [RIG] du joueur source dans le Cube existant du droid (MyDroid/Enable/Cube).
-///     Le Cube est conservé tel quel (Animator, BloodDust, Hurt Collider) : on lui retire
-///     uniquement les composants joueur qui font NRE (PlayerAvatarVisuals, PlayerAvatarRightArm,
-///     etc.) et on remplace son [RIG] enfant par celui du joueur source (qui amène ses bones,
-///     ses cosmetic parents et ses cosmetic items déjà instanciés).
+///     Grafts the cloned player's [RIG] into the Hallucination prefab's Cube (MyDroid/Enable/Cube). The Cube keeps
+///     its Animator, BloodDust and Hurt Collider; only the player components that throw (PlayerAvatarVisuals,
+///     PlayerAvatarRightArm…) are removed, and its [RIG] child is replaced by the cloned player's, which brings
+///     the bones, cosmetic parents and already instantiated cosmetic items.
 /// </summary>
 internal static class DroidVisualsClone
 {
     private const string RigName = "[RIG]";
 
-    // Anchor pré-existant dans le [RIG] sous Player Spring Impulse - Arm Left (gauche)
-    // avec localPosition (0, -0.04, 0.471) et rotation quasi-identité. Le pendant
-    // 'FollowTransformClient' du FlashlightController y pointe en vanilla pour le
-    // rendu non-FPV. PlayerSpringImpulse est dans KeepTypeNames donc l'anchor
-    // survit au Sanitize du rig cloné.
+    // An anchor already in the [RIG], under Player Spring Impulse - Arm Left, at localPosition (0, -0.04, 0.471)
+    // with a near-identity rotation. In the game, the FlashlightController's 'FollowTransformClient' points there
+    // for third-person rendering. PlayerSpringImpulse is in KeepTypeNames, so the anchor survives Sanitize.
     private const string FlashlightAnchorName = "Flashlight Target Client";
     private const string MapToolAnchorName = "Map Tool Target Client";
 
@@ -33,21 +30,19 @@ internal static class DroidVisualsClone
         "PlayerSpringImpulse"
     };
 
-    // Composants Cosmetic* qu'on doit IMPÉRATIVEMENT détruire (au lieu de garder via la
-    // règle "tout ce qui commence par Cosmetic"). Ils accèdent à des champs internes
-    // non-sérialisés (playerCosmetics, cosmeticAsset, cosmeticTypeAsset) qui sont null
-    // sur le clone → NRE en boucle dans leurs Update.
+    // Exceptions to keeping every Cosmetic* component: these read non-serialized fields (playerCosmetics,
+    // cosmeticAsset, cosmeticTypeAsset) that are null on the clone, and throw in their Update every frame.
     private static readonly HashSet<string> DestroyCosmeticTypeNames = new()
     {
         "Cosmetic",
         "CosmeticBlocked"
     };
 
-    // Stocké entre TryCloneRig et AttachRelay (même thread, même frame).
+    // Held from TryCloneRig to AttachRelay, in the same frame.
     private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? SpringTypeCache;
 
     /// <summary>
-    ///     Localise MyDroid/Enable/Cube (= hôte de l'Animator et du [RIG]).
+    ///     MyDroid/Enable/Cube, which holds the Animator and the [RIG].
     /// </summary>
     public static Transform? FindCube(Transform droidRoot)
     {
@@ -64,9 +59,8 @@ internal static class DroidVisualsClone
     }
 
     /// <summary>
-    ///     Détruit les composants directement attachés à Cube qui dépendent du PlayerAvatar
-    ///     source (NRE en cascade). Ne touche PAS les composants des enfants — ça sera fait
-    ///     sur le sous-arbre [RIG] cloné, après instantiation.
+    ///     Cube's own components that need the cloned player's PlayerAvatar, and throw without it. Its children are
+    ///     handled on the cloned [RIG] after instantiation.
     /// </summary>
     public static void SanitizeCube(Transform cube)
     {
@@ -81,8 +75,7 @@ internal static class DroidVisualsClone
     }
 
     /// <summary>
-    ///     Détruit l'ancien [RIG] que le user avait copié dans son prefab — on va le
-    ///     remplacer par un clone live du joueur source pour avoir ses cosmetics.
+    ///     The prefab's own [RIG] makes way for a live clone, which carries the player's cosmetics.
     /// </summary>
     public static void StripExistingRig(Transform cube)
     {
@@ -91,9 +84,6 @@ internal static class DroidVisualsClone
         if (rig != null) Object.DestroyImmediate(rig.gameObject);
     }
 
-    /// <summary>
-    ///     Clone le [RIG] du joueur source sous Cube, à la place de l'ancien.
-    /// </summary>
     public static bool TryCloneRig(
         PlayerAvatar sourcePlayer,
         Transform cube,
@@ -122,13 +112,13 @@ internal static class DroidVisualsClone
         }
 
         var clone = Object.Instantiate(sourceRig.gameObject, cube);
-        clone.name = RigName; // matcher les paths des animation clips
+        clone.name = RigName; // the animation paths name it
         clone.transform.localPosition = Vector3.zero;
         clone.transform.localRotation = Quaternion.identity;
         clone.transform.localScale = Vector3.one;
         clone.SetActive(true);
 
-        // Capture (spring → type) avant que Sanitize ne détruise les Cosmetic MonoBehaviours.
+        // Before Sanitize destroys the Cosmetic MonoBehaviours that know each spring's type.
         var springTypes = CaptureSpringTypes(clone);
         SpringTypeCache = springTypes;
 
@@ -150,12 +140,10 @@ internal static class DroidVisualsClone
     }
 
     /// <summary>
-    ///     Clone la Flashlight du joueur source et l'attache à l'anchor 'Flashlight
-    ///     Target Client' (main gauche) du rig cloné. Le FlashlightController est
-    ///     strippé avant que son Start ne tourne (sinon il reparenterait vers la
-    ///     Flashlight Target FPV source, hors du droid). Mesh + spotlight + halo
-    ///     sont forcés en ON et la layer bascule sur "PlayerVisuals" (vs "Triggers"
-    ///     qui rend la lampe non-locale invisible en vanilla).
+    ///     Attaches the cloned player's flashlight to the left-hand 'Flashlight Target Client' anchor of the cloned rig.
+    ///     The FlashlightController is stripped before its Start runs, which would reparent the flashlight to the
+    ///     player's first-person target, outside the Hallucination. Mesh, spotlight and halo are forced on, and the
+    ///     layer becomes "PlayerVisuals": on "Triggers" the game keeps a non-local flashlight invisible.
     /// </summary>
     public static bool TryCloneFlashlight(PlayerAvatar sourcePlayer, GameObject cloneRig)
     {
@@ -184,15 +172,14 @@ internal static class DroidVisualsClone
         clone.transform.localRotation = Quaternion.identity;
         clone.transform.localScale = Vector3.one;
 
-        // Capture les refs visuelles AVANT de strip le controller.
+        // The controller holds the visual references, so they are read before it is stripped.
         var clonedController = clone.GetComponent<FlashlightController>();
         var mesh = clonedController != null ? clonedController.mesh : null;
         var meshShadows = clonedController != null ? clonedController.meshShadows : null;
         var spotlight = clonedController != null ? clonedController.spotlight : null;
         var halo = clonedController != null ? clonedController.halo : null;
 
-        // Strip tous les comportements joueur AVANT que Start ne tourne (Start
-        // reparenterait vers FollowTransformLocal source, sortant la lampe du droid).
+        // Before Start runs: it would reparent the flashlight to the player's FollowTransformLocal.
         foreach (var comp in clone.GetComponentsInChildren<Component>(true))
         {
             if (comp == null) continue;
@@ -222,12 +209,10 @@ internal static class DroidVisualsClone
         return true;
     }
 
-    // Transforms internes de la lampe pilotés à runtime par des scripts strippés
-    // (ToolBackAway sur 'Back Away', logique sprint sur 'Flashlight Sprint',
-    // FlashlightController sur 'Flashlight Hide'/'Flashlight Click'). Quand on clone un
-    // joueur dont la lampe n'est pas en pose neutre déployée (ex. accroupi → Outro/Hidden
-    // rotate 'Flashlight Hide'), ces transforms gardent une orientation bakée fausse. On
-    // les remet à leur défaut prefab pour retrouver la pose déployée neutre.
+    // Flashlight transforms that stripped scripts drive at runtime: ToolBackAway on 'Back Away', the sprint logic on
+    // 'Flashlight Sprint', FlashlightController on 'Flashlight Hide' and 'Flashlight Click'. Cloning a player whose
+    // flashlight is not in its neutral pose (crouching rotates 'Flashlight Hide') bakes a wrong orientation, so they
+    // go back to their prefab defaults.
     private static readonly (string Name, Vector3 Pos)[] FlashlightNeutralNodes =
     {
         ("Back Away Offset", new Vector3(0f, 0f, -0.044f)),
@@ -250,21 +235,17 @@ internal static class DroidVisualsClone
     }
 
     /// <summary>
-    ///     Clone le MapTool du joueur source et l'attache à l'anchor 'Map Tool Target
-    ///     Client' (main droite, sous Player Spring Impulse - Arm Right) du rig cloné.
-    ///     Le MapToolController et tous ses scripts sont strippés ; on garde juste
-    ///     les visuels. Le GameObject cloné est retourné DÉSACTIVÉ — au caller
-    ///     d'appeler SetActive(true) quand le droid entre dans CheckMap state.
+    ///     Attaches the cloned player's map tool, visuals only, to the right-hand 'Map Tool Target Client' anchor
+    ///     (under Player Spring Impulse - Arm Right) of the cloned rig. Returned inactive: the caller activates it
+    ///     when the Hallucination enters CheckMap.
     /// </summary>
     public static bool TryCloneMapTool(PlayerAvatar sourcePlayer, GameObject cloneRig, out GameObject? clonedMapTool)
     {
         clonedMapTool = null;
         if (sourcePlayer == null || cloneRig == null) return false;
 
-        // PlayerAvatar.cs est attaché à 'Player Avatar Controller', un SOUS-GameObject
-        // du root prefab — pas le root lui-même. 'Map Tool' est sibling de 'Player
-        // Avatar Controller' (enfant direct du root), donc GetComponentInChildren ne
-        // le voit pas. On remonte au root via transform.root.
+        // PlayerAvatar sits on 'Player Avatar Controller', a child of the prefab root, and 'Map Tool' is its sibling:
+        // GetComponentInChildren cannot reach it, the search starts from transform.root.
         var sourceMapToolTransform = sourcePlayer.transform.root.Find("Map Tool");
         if (sourceMapToolTransform == null)
         {
@@ -287,9 +268,7 @@ internal static class DroidVisualsClone
         clone.transform.localRotation = Quaternion.identity;
         clone.transform.localScale = Vector3.one;
 
-        // Strip tous les scripts (MapToolController + visuals scripts) AVANT que
-        // leurs Start ne tournent (sinon ils tentent d'accéder à PlayerAvatar
-        // source, photonView, etc.). On garde juste les visuels.
+        // Before their Start runs, which reaches for the player's PlayerAvatar and photonView.
         foreach (var comp in clone.GetComponentsInChildren<Component>(true))
         {
             if (comp == null) continue;
@@ -301,22 +280,19 @@ internal static class DroidVisualsClone
             Object.DestroyImmediate(comp);
         }
 
-        // Force tous les renderers à enabled (le MapToolController désactive
-        // l'affichage par défaut, animé via HideLerp).
+        // MapToolController hides them by default and animates them through HideLerp.
         foreach (var r in clone.GetComponentsInChildren<Renderer>(true))
         {
             if (r != null) r.enabled = true;
         }
 
-        // MapToolController.Start() ligne 95 fait VisualTransform.SetActive(false)
-        // sur le source → l'état inactif est baked dans le clone. Le réactiver pour
-        // qu'il suive l'état du root quand on toggle ShowMapTool.
+        // MapToolController.Start deactivates VisualTransform on the player, and the clone inherits it. Active, it
+        // follows the root that ShowMapTool toggles.
         var visuals = DroidHelpers.FindChildByName(clone.transform, "Visuals");
         if (visuals != null) visuals.gameObject.SetActive(true);
 
-        // HideTransform (pivot 'Hide') est rotaté 90°X par le controller à HideLerp=1
-        // (état caché). Sans controller actif sur le clone, on remet à identité
-        // pour avoir le MapTool en position "déployé".
+        // The controller turns the 'Hide' pivot 90° on X when hidden (HideLerp = 1). With no controller on the clone,
+        // identity is the held-out pose.
         var hide = DroidHelpers.FindChildByName(clone.transform, "Hide");
         if (hide != null)
         {
@@ -365,10 +341,8 @@ internal static class DroidVisualsClone
     }
 
     /// <summary>
-    ///     Whitelist : on conserve uniquement les composants utiles au rendu et à
-    ///     l'animation cosmétique. Tout le reste (PlayerAvatar*, PlayerExpression,
-    ///     PlayerCosmetics, Photon*, AudioSource voix, etc.) est détruit pour éviter
-    ///     les NRE en cascade dans leurs Update.
+    ///     Keeps only what rendering and cosmetic animation need. Everything else (PlayerAvatar*, PlayerExpression,
+    ///     PlayerCosmetics, Photon*, the voice AudioSource…) is destroyed: it would throw in its Update.
     /// </summary>
     private static void Sanitize(GameObject clone)
     {
@@ -392,14 +366,11 @@ internal static class DroidVisualsClone
 
         var typeName = comp.GetType().Name;
 
-        // Exclusions explicites : Cosmetic et CosmeticBlocked NRE en boucle (cf.
-        // DestroyCosmeticTypeNames). On capture leur état utile avant via
-        // CaptureSpringTypes pour ne pas perdre le mapping spring → type.
+        // See DestroyCosmeticTypeNames; CaptureSpringTypes keeps what they knew.
         if (DestroyCosmeticTypeNames.Contains(typeName)) return false;
 
-        // Tout le reste Cosmetic* est utile : CosmeticSprings (anim cosmétique),
-        // CosmeticCustomSpring, CosmeticHideCondition, CosmeticOffsetCondition,
-        // CosmeticSwitchCondition, CosmeticCustomCondition, CosmeticLookDown, etc.
+        // The other Cosmetic* components animate the cosmetics: CosmeticSprings, CosmeticCustomSpring,
+        // CosmeticHideCondition, CosmeticOffsetCondition, CosmeticSwitchCondition, CosmeticLookDown…
         if (typeName.StartsWith("Cosmetic")) return true;
 
         if (KeepTypeNames.Contains(typeName)) return true;
@@ -439,14 +410,12 @@ internal static class DroidVisualsClone
         }
     }
 
-    // Union COMPLÈTE des os dont les clips Crouch/Crawl écrasent un TRS (scale, position
-    // ou rotation). Tous ont un défaut prefab identité (pos 0, rot identité, scale 1).
-    // On les reset entièrement (pas juste la propriété déformée) car l'animator REPO a
-    // Write Defaults ON : chaque state remet à la valeur capturée au Rebind tout os qu'il
-    // n'anime pas. Ex. Stand Move n'anime pas ANIM BODY TOP → en marche il est remis au
-    // défaut WD ; si ce défaut est la valeur accroupie bakée au clone, le haut du corps +
-    // tête s'affaissent (visible UNIQUEMENT en marche, corrigé au changement d'état). En
-    // reset­tant tout à l'identité AVANT le Rebind, les WD defaults capturés sont debout.
+    // Every bone whose position, rotation or scale the Crouch or Crawl animations override; each has an identity
+    // prefab default. The whole transform is reset, not just the deformed property: the game's animator has
+    // Write Defaults on, so every state puts the bones it does not animate back to the values captured at Rebind.
+    // Stand Move does not animate ANIM BODY TOP, for instance: if the captured default were the crouched pose
+    // baked at clone time, the upper body and head would sag while walking only. Reset before Rebind, the captured
+    // defaults are standing.
     private static readonly HashSet<string> IdentityResetBones = new()
     {
         "ANIM ARM L",
@@ -466,39 +435,29 @@ internal static class DroidVisualsClone
         "code_arm_l"
     };
 
-    // GameObjects parents (dés)activés en bloc par les clips Crouch/Crawl. Standing = ON.
+    // Parents the Crouch and Crawl animations switch on and off as a block; standing, they are on.
     private static readonly HashSet<string> ActivateParents = new()
     {
         "Cosmetic Parent - Body Bottom Mesh",
         "Cosmetic Parent - Body Top Mesh"
     };
 
-    // L'ancre du MapTool est aussi déformée par Crouch/Crawl, mais contrairement aux os
-    // ci-dessus ses valeurs debout ne sont PAS identité : ce sont des offsets prefab
-    // spécifiques. On les restaure explicitement, sinon le MapTool cloné (enfant de cette
-    // ancre) hérite d'une rotation/échelle accroupie.
+    // Crouch and Crawl deform the map tool anchor too, but its standing values are prefab offsets, not identity.
+    // Without them, the cloned map tool under it would inherit a crouched rotation and scale.
     private const string MapToolAnchorBone = "Map Tool Target Client";
     private static readonly Vector3 MapToolAnchorPos = new(0.007999987f, -0.084999986f, 0.4980001f);
     private static readonly Quaternion MapToolAnchorRot = new(-0.58078414f, -0.22498398f, 0.48120198f, 0.6168604f);
 
     /// <summary>
-    ///     Force la config visuelle "debout" sur le rig cloné, indépendamment de la
-    ///     position du joueur source au moment du clone. DOIT tourner AVANT
-    ///     Animator.Rebind() : l'AnimatorController PlayerAvatar a Write Defaults ON sur
-    ///     tous ses states, donc Unity capture au Rebind le TRS courant de chaque os
-    ///     comme "valeur par défaut", et tout state remet à cette valeur les os qu'il
-    ///     n'anime pas. En clonant un joueur accroupi/crawl, les os gardent une pose
-    ///     accroupie bakée ; sans ce reset, ces poses deviennent les WD defaults et
-    ///     resurgissent dans les states qui n'animent pas l'os (ex. la tête qui
-    ///     s'affaisse en Stand Move car ce clip n'anime pas ANIM BODY TOP).
+    ///     Puts the cloned rig in its standing pose, whatever the player was doing when cloned. Must run before
+    ///     Animator.Rebind(): see IdentityResetBones for why.
     ///
-    ///     On force donc, sur les éléments déformables par Crouch/Crawl (déterminés par
-    ///     diff des courbes) :
-    ///     - états actifs (m_IsActive) : 'Mesh Sphere' ON / 'Mesh Flat' OFF + parents
-    ///       'Cosmetic Parent - Body Bottom/Top Mesh' ON ;
-    ///     - TRS complet à l'identité pour toute l'union d'os crouch/crawl (défaut prefab) ;
-    ///     - ancre MapTool aux offsets prefab spécifiques (non identité).
-    ///     Idempotent si le source est déjà debout.
+    ///     On what Crouch and Crawl deform (found by diffing the animation curves):
+    ///     - active states: 'Mesh Sphere' on, 'Mesh Flat' off, and the 'Cosmetic Parent - Body Bottom/Top Mesh'
+    ///       parents on;
+    ///     - the whole transform of each Crouch or Crawl bone back to identity;
+    ///     - the map tool anchor back to its prefab offsets.
+    ///     A no-op when the player was already standing.
     /// </summary>
     private static void ForceStandingPose(GameObject clone)
     {
@@ -536,9 +495,8 @@ internal static class DroidVisualsClone
     }
 
     /// <summary>
-    ///     Force tous les renderers à projeter normalement (le local player se masque
-    ///     en ShadowsOnly et utilise la layer "PlayerVisualsLocal" masquée côté caméra).
-    ///     On bascule sur "PlayerVisuals" (layer des avatars non-locaux, visible).
+    ///     The local player's renderers are ShadowsOnly on the camera-hidden "PlayerVisualsLocal" layer; a clone of the
+    ///     local player is moved to "PlayerVisuals", the visible layer of non-local avatars, with normal shadows.
     /// </summary>
     private static void NormalizeRendering(GameObject clone)
     {

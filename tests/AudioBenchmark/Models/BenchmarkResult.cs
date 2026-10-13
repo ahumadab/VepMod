@@ -1,31 +1,28 @@
 namespace AudioBenchmark.Models;
 
-/// <summary>
-///     Résultat complet du benchmark pour un fichier WAV.
-/// </summary>
 public sealed class BenchmarkResult
 {
-    // Métadonnées fichier
+    // File
     public required string FileName { get; init; }
     public required string PlayerName { get; init; }
     public required float DurationSeconds { get; init; }
     public required int SampleRate { get; init; }
     public required long FileSizeBytes { get; init; }
 
-    // Métriques audio brutes
+    // Raw audio metrics
     public required float Rms { get; init; }
     public required float RmsDb { get; init; }
     public required float PeakAmplitude { get; init; }
     public required float PeakDb { get; init; }
     public required float NonSilenceRatio { get; init; }
 
-    // Résultats pré-filtre RMS par preset
+    // RMS pre-filter, per preset
     public required string PreFilter_Game { get; init; }
     public required string PreFilter_Default { get; init; }
     public required string PreFilter_Strict { get; init; }
     public required string PreFilter_Permissive { get; init; }
 
-    // Résultats VAD par preset
+    // VAD, per preset
     public required float VadSpeechRatio { get; init; }
     public required int VadSpeechFrames { get; init; }
     public required int VadTotalFrames { get; init; }
@@ -33,7 +30,7 @@ public sealed class BenchmarkResult
     public required string Vad_Strict { get; init; }
     public required string Vad_Permissive { get; init; }
 
-    // Résultat pipeline combiné
+    // Combined pipeline
     public required string Combined_Result { get; init; }
     public required string Combined_RejectionStage { get; init; }
 

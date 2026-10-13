@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using VepMod.VepFramework;
 
@@ -13,10 +13,6 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
     private readonly Dictionary<PlayerAvatar, MapToolController> _mapToolCache = new();
     public bool IsActive { get; private set; }
 
-    /// <summary>
-    ///     Liste des joueurs actuellement cachés par ce debuff.
-    ///     Utilisé par HallucinationDebuff pour créer les hallucinations.
-    /// </summary>
     public IReadOnlyList<PlayerAvatar> HiddenPlayers => _hiddenPlayers;
 
     private void LateUpdate()
@@ -55,7 +51,6 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
         {
             if (CheckNull(player)) continue;
 
-            // Skip le joueur local (celui qui subit le debuff)
             if (player.photonView.IsMine)
             {
                 LOG.Debug($"Skipping local player {player.photonView.Owner.NickName}.");
@@ -78,17 +73,13 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
     }
 
     /// <summary>
-    ///     Vérifie si un joueur est actuellement caché (globalement).
-    ///     Utilisé par les patches pour bloquer les sons de pas.
+    ///     Across every Victim on this client.
     /// </summary>
     public static bool IsPlayerHidden(PlayerAvatar player)
     {
         return player != null && GlobalHiddenPlayers.Contains(player);
     }
 
-    /// <summary>
-    ///     Vérifie si une position correspond à un joueur caché (dans un rayon de 2m).
-    /// </summary>
     public static bool IsPositionNearHiddenPlayer(Vector3 position, float radius = 2f)
     {
         foreach (var player in GlobalHiddenPlayers)
@@ -123,13 +114,12 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
 
     private void LateCheckDeactivateVisuals()
     {
-        // Vérifie si le jeu a réactivé les éléments visuels des joueurs cachés et les re-désactive si nécessaire.
+        // The game turns some of a hidden player's visuals back on; they are hidden again after it.
         if (!IsActive || _hiddenPlayers.Count == 0) return;
         foreach (var player in _hiddenPlayers)
         {
             if (!player) continue;
 
-            // Flashlight
             if (player.flashlightController)
             {
                 var flashlight = player.flashlightController;
@@ -144,7 +134,6 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
                 }
             }
 
-            // Map Tool - désactiver le VisualTransform si le controller l'a réactivé
             var mapToolController = GetMapToolController(player);
             if (mapToolController != null && mapToolController.VisualTransform &&
                 mapToolController.VisualTransform.gameObject.activeSelf)
@@ -157,15 +146,10 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
 
     private void SetPlayerVisibility(PlayerAvatar player, bool visible)
     {
-        // 1. Mesh principal (corps du joueur)
         ToggleMesh(player, visible);
-        // 2. Nametag au-dessus de la tête
         ToggleNameplate(player, visible);
-        // 3. Lampe torche (lumière + mesh)
         ToggleFlashlight(player, visible);
-        // 4. Voice chat (optionnel - pour ne plus entendre les autres)
         ToggleVoiceCom(player, visible);
-        // 5. Map Tool (objet pour regarder la carte)
         ToggleMapTool(player, visible);
     }
 
@@ -215,7 +199,6 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
 
         LOG.Debug($"Set Map Tool visibility for Player {player.photonView.Owner.NickName} to {visible}");
 
-        // Désactiver/réactiver le VisualTransform (ce qui est affiché visuellement)
         if (mapToolController.VisualTransform)
         {
             mapToolController.VisualTransform.gameObject.SetActive(visible);
@@ -229,8 +212,8 @@ public sealed class InvisiblePlayerDebuff : MonoBehaviour
             return cached;
         }
 
-        // Le MapToolController n'est pas un enfant du PlayerAvatar, il faut chercher dans la scène
-        // et le matcher via sa propriété PlayerAvatar
+        // A MapToolController is not under its PlayerAvatar in the hierarchy: it is found in the scene by its
+        // PlayerAvatar property.
         var allMapToolControllers = FindObjectsOfType<MapToolController>(true);
         foreach (var controller in allMapToolControllers)
         {

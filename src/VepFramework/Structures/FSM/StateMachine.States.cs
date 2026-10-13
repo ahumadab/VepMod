@@ -69,6 +69,4 @@ public partial class StateMachineBase<TMachine, TStateId>
             }
         }
     }
-
-    //* Feel Free to add new archétypes here !
 }

@@ -7,10 +7,9 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral.Visuals;
 
 /// <summary>
-///     Receveur d'AnimationEvents pour le clone des visuels joueur posé sur un droid.
-///     Reproduit les 15 méthodes de PlayerAvatarVisuals attendues par les clips, sans
-///     dépendance à playerAvatar / playerCosmetics (qui sont détruits sur le clone).
-///     Doit être posé sur le même GameObject que l'Animator.
+///     Receives the AnimationEvents of a Hallucination's cloned player visuals: the 15 PlayerAvatarVisuals methods
+///     the animations call, without playerAvatar or playerCosmetics, which are destroyed on the clone.
+///     Must sit on the Animator's GameObject.
 /// </summary>
 public sealed class DroidAvatarVisualsRelay : MonoBehaviour
 {
@@ -20,10 +19,9 @@ public sealed class DroidAvatarVisualsRelay : MonoBehaviour
     private DroidController _droid;
     private CosmeticSprings[] _springs = System.Array.Empty<CosmeticSprings>();
 
-    // Cache des types par ressort. Les Cosmetic MonoBehaviours sont détruits sur le clone
-    // (leurs champs internes playerCosmetics/cosmeticAsset sont null et NRE en cascade), du
-    // coup spring.cosmetic.type n'est plus accessible. On capture le type AVANT destruction
-    // et on le passe au relais via Initialize.
+    // The Cosmetic MonoBehaviours are destroyed on the clone (their null playerCosmetics and cosmeticAsset throw
+    // in cascade), so spring.cosmetic.type is gone: each spring's type is captured before the destruction and
+    // handed over through Initialize.
     private Dictionary<CosmeticSprings, SemiFunc.CosmeticType> _springTypes = new();
 
     public void Initialize(
@@ -51,14 +49,14 @@ public sealed class DroidAvatarVisualsRelay : MonoBehaviour
     public void FootstepMedium() => PlayFootstep();
     public void FootstepHeavy() => PlayFootstep();
 
-    // ---- Pose changes (no-op sur le droid) ----
+    // ---- Pose changes (no-op on a Hallucination) ----
 
     public void StandToCrouch() { }
     public void CrouchToStand() { }
     public void CrouchToCrawl() { }
     public void CrawlToCrouch() { }
 
-    // ---- Spring foot impulses (reproduit PlayerCosmetics.CosmeticSpringFoot*) ----
+    // ---- Spring foot impulses (as PlayerCosmetics.CosmeticSpringFoot*) ----
 
     public void RightFootUp() => ImpulseRight(2f, -30f);
     public void RightFootDown() => ImpulseRight(-2f, 30f);

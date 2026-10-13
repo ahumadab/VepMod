@@ -10,8 +10,7 @@ using Random = UnityEngine.Random;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Gestion des fichiers audio WAV par joueur (lecture, écriture, nettoyage).
-///     Structure: AudioFiles/player_{playerNickName}/sample_*.wav
+///     The Voice Banks on disk: AudioFiles/player_{playerNickName}/sample_*.wav
 /// </summary>
 public sealed class WavFileManager
 {
@@ -33,8 +32,7 @@ public sealed class WavFileManager
     #region Read Operations
 
     /// <summary>
-    ///     Lit un fichier WAV aléatoire pour un joueur spécifique.
-    ///     Retourne les données audio et le sample rate extrait de l'en-tête WAV.
+    ///     A random Voice Sample of the player, with the sample rate read from its WAV header.
     /// </summary>
     public (byte[]? data, int sampleRate) GetRandomFile(string playerNickName)
     {
@@ -63,10 +61,6 @@ public sealed class WavFileManager
 
     #region WAV Header
 
-    /// <summary>
-    ///     Extrait le sample rate depuis les données WAV brutes.
-    ///     Le sample rate est situé aux bytes 24-27 de l'en-tête WAV.
-    /// </summary>
     private static int ReadSampleRateFromWav(byte[] wavData)
     {
         if (wavData.Length < 28)
@@ -79,7 +73,7 @@ public sealed class WavFileManager
     }
 
     /// <summary>
-    ///     Écrit l'en-tête WAV standard (PCM 16-bit mono).
+    ///     16-bit PCM, mono.
     /// </summary>
     internal static void WriteWavHeader(BinaryWriter writer, int sampleCount, int sampleRate)
     {
@@ -113,9 +107,6 @@ public sealed class WavFileManager
 
     #region Player Folder Management
 
-    /// <summary>
-    ///     Retourne le chemin du dossier pour un joueur spécifique.
-    /// </summary>
     private string GetPlayerFolder(string playerNickName)
     {
         var safeId = FileSystemSanitizer.Sanitize(playerNickName);
@@ -127,9 +118,6 @@ public sealed class WavFileManager
         return Path.Combine(BaseFolderPath, $"{PlayerFolderPrefix}{safeId}");
     }
 
-    /// <summary>
-    ///     Retourne la liste des IDs de tous les joueurs ayant des sons stockés.
-    /// </summary>
     public string[] GetAllPlayerNickNames()
     {
         if (!Directory.Exists(BaseFolderPath)) return [];
@@ -145,15 +133,11 @@ public sealed class WavFileManager
 
     #region Save Operations
 
-    /// <summary>
-    ///     Sauvegarde des samples audio dans un fichier WAV pour un joueur spécifique.
-    /// </summary>
     public async Task<string> SaveAsync(float[] audioData, int sampleRate, string playerNickName)
     {
         var playerFolder = GetPlayerFolder(playerNickName);
         Directory.CreateDirectory(playerFolder);
 
-        // Rotation: supprimer le plus ancien si à capacité
         await EnsureCapacityAsync(playerNickName);
 
         var filePath = Path.Combine(playerFolder, $"sample_{DateTime.Now.Ticks}.wav");
@@ -170,20 +154,17 @@ public sealed class WavFileManager
     }
 
     /// <summary>
-    ///     Sauvegarde des données audio brutes (bytes) pour un joueur spécifique.
-    ///     Utilisé pour sauvegarder les sons reçus d'autres joueurs.
+    ///     For a Voice Sample received from another player: the bytes already hold the whole WAV, header included.
     /// </summary>
     public async Task<string> SaveFromBytesAsync(byte[] audioBytes, int sampleRate, string playerNickName)
     {
         var playerFolder = GetPlayerFolder(playerNickName);
         Directory.CreateDirectory(playerFolder);
 
-        // Rotation: supprimer le plus ancien si à capacité
         await EnsureCapacityAsync(playerNickName);
 
         var filePath = Path.Combine(playerFolder, $"sample_{DateTime.Now.Ticks}.wav");
 
-        // Les bytes contiennent déjà l'en-tête WAV complet, donc on écrit directement
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         LOG.Debug($"Audio saved from bytes for player {playerNickName}: {Path.GetFileName(filePath)}");
@@ -191,8 +172,7 @@ public sealed class WavFileManager
     }
 
     /// <summary>
-    ///     S'assure que le dossier du joueur ne dépasse pas la capacité max.
-    ///     Supprime les fichiers les plus anciens si nécessaire.
+    ///     Drops the oldest Voice Samples until one more fits in the Voice Bank.
     /// </summary>
     private async Task EnsureCapacityAsync(string playerNickName)
     {

@@ -5,26 +5,22 @@ using System.IO;
 namespace VepMod.VepFramework.Extensions;
 
 /// <summary>
-///     Utilitaire de sanitisation de chaînes pour une utilisation comme noms
-///     de fichiers ou dossiers sur le filesystem.
+///     Turns any string into a valid file or folder name.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         Windows impose des contraintes spécifiques sur les noms de dossiers qui ne sont
-///         pas couvertes par <see cref="Path.GetInvalidFileNameChars" /> :
+///         Windows has naming rules that <see cref="Path.GetInvalidFileNameChars" /> does not cover:
 ///     </para>
 ///     <list type="bullet">
-///         <item>Les noms ne peuvent pas se terminer par un point '.' ou un espace ' '.</item>
-///         <item>Certains noms sont réservés par le système (CON, NUL, AUX, PRN, COM1-9, LPT1-9).</item>
+///         <item>A name cannot end with a dot or a space.</item>
+///         <item>Some names are reserved (CON, NUL, AUX, PRN, COM1-9, LPT1-9).</item>
 ///     </list>
 ///     <para>
-///         Cette classe centralise toutes ces règles afin de garantir la compatibilité cross-platform.
-///         Voir: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+///         See https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 ///     </para>
 ///     <para>
-///         <b>Propriété clé</b> : la sanitisation est <b>idempotente</b> —
-///         <c>Sanitize(Sanitize(x)) == Sanitize(x)</c> — ce qui est requis par les appelants
-///         qui peuvent re-sanitiser des noms déjà extraits du filesystem (ex: scan de dossiers).
+///         Sanitizing is <b>idempotent</b> (<c>Sanitize(Sanitize(x)) == Sanitize(x)</c>): callers sanitize
+///         again names they read back from the file system, when scanning folders.
 ///     </para>
 /// </remarks>
 public static class FileSystemSanitizer
@@ -32,8 +28,7 @@ public static class FileSystemSanitizer
     private const string DefaultFallback = "unknown";
 
     /// <summary>
-    ///     Noms réservés par Windows qui ne peuvent pas être utilisés comme noms de fichiers
-    ///     ou dossiers, quelle que soit l'extension.
+    ///     Reserved whatever the extension.
     /// </summary>
     private static readonly HashSet<string> WindowsReservedNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -43,15 +38,10 @@ public static class FileSystemSanitizer
     };
 
     /// <summary>
-    ///     Transforme une chaîne arbitraire en nom valide pour le filesystem,
-    ///     compatible Windows, Linux et macOS.
+    ///     Valid on Windows, Linux and macOS.
     /// </summary>
-    /// <param name="input">La chaîne à sanitiser (ex: pseudo joueur Steam).</param>
-    /// <param name="fallback">
-    ///     Valeur de repli si le résultat est vide après sanitisation.
-    ///     Par défaut : "unknown".
-    /// </param>
-    /// <returns>Un nom de fichier/dossier valide sur tous les OS supportés.</returns>
+    /// <param name="input">For instance a Steam nickname.</param>
+    /// <param name="fallback">Returned when nothing is left after sanitizing.</param>
     public static string Sanitize(string input, string fallback = DefaultFallback)
     {
         if (string.IsNullOrEmpty(input))
@@ -59,28 +49,19 @@ public static class FileSystemSanitizer
             return fallback;
         }
 
-        // 1. Retirer les caractères invalides pour le filesystem de l'OS courant.
-        //    Sur Windows : < > : " / \ | ? * et caractères de contrôle (0x00-0x1F).
-        //    Sur Linux/macOS : \0 et /.
+        // The current OS's invalid characters: < > : " / \ | ? * and 0x00-0x1F on Windows, \0 and / elsewhere.
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = string.Join("_", input.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
 
-        // 2. Windows interdit les noms de dossier/fichier se terminant par '.' ou ' '.
-        //    Inoffensif sur Linux/macOS (ces caractères y sont valides en fin de nom),
-        //    mais garantit un comportement cohérent cross-platform.
+        // Windows only, trimmed everywhere so a name is the same on every OS.
         sanitized = sanitized.TrimEnd('.', ' ');
 
-        // 3. Si le résultat est vide (ex: pseudo composé uniquement de caractères invalides
-        //    ou de points), utiliser la valeur de repli.
         if (string.IsNullOrEmpty(sanitized))
         {
             return fallback;
         }
 
-        // 4. Windows réserve certains noms (CON, NUL, AUX, etc.) qui ne peuvent pas être
-        //    utilisés comme noms de dossier, même avec une extension.
-        //    On les préfixe et suffixe avec '_' pour les rendre valides.
-        //    Idempotent : "_CON_" ne fait pas partie des noms réservés.
+        // Idempotent: "_CON_" is not reserved.
         if (WindowsReservedNames.Contains(sanitized))
         {
             sanitized = $"_{sanitized}_";

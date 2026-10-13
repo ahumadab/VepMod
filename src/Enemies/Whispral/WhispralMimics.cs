@@ -20,10 +20,9 @@ using Random = UnityEngine.Random;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Gère l'enregistrement, le partage et la lecture des voix pour le système Mimic.
-///     Architecture à 2 boucles:
-///     - Boucle 1: Partage des sons entre tous les clients
-///     - Boucle 2: Commandes de lecture du Master vers les joueurs debuffés
+///     Records, shares and plays Voice Samples for Mimics, in two loops:
+///     - every client shares its player's Voice Samples with all the others;
+///     - the Master tells a Victim's client which Hallucination performs a Mimic.
 /// </summary>
 public sealed class WhispralMimics : MonoBehaviour
 {
@@ -70,15 +69,15 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Constants
 
-    // Enregistrement audio
+    // Recording
     private const int AudioBufferDurationSeconds = 6;
     private const float SilenceTimeoutSeconds = 0.5f;
 
-    // Transmission réseau
+    // Network
     private const int ChunkSizeBytes = 8192;
     private const int ChunkDelayMs = 125;
 
-    // Lecture audio (valeurs du prefab Voice du jeu)
+    // Playback, from the game's Voice prefab
     private const float SpatialBlend = 1f;
     private const float DopplerLevel = 0.5f;
     private const float MinDistance = 5f;
@@ -93,7 +92,7 @@ public sealed class WhispralMimics : MonoBehaviour
 #if !VEPMOD_NO_VAD
     private VadAudioValidator? vadValidator;
 #if DEBUG
-    /// <summary>Dernier résultat VAD (instrumentation dev pour le HUD DroidDevTools).</summary>
+    /// <summary>Shown on the DroidDevTools HUD.</summary>
     public VadValidationResult? LastVadResult { get; private set; }
 #endif
 #endif
@@ -104,7 +103,7 @@ public sealed class WhispralMimics : MonoBehaviour
     private FieldInfo recorderField;
     private FieldInfo isTalkingField;
 
-    // Enregistrement
+    // Recording
     private float[]? audioBuffer;
     private int bufferPosition;
     private int sampleRate;
@@ -116,7 +115,7 @@ public sealed class WhispralMimics : MonoBehaviour
     private byte[]? lastSavedAudioBytes;
     private bool hasNewRecording;
 
-    // Réception chunks par joueur (pour le partage)
+    // Shared Voice Samples being received, per player
     private readonly Dictionary<string, List<byte[]>> receivedChunksByPlayer = new();
     private readonly Dictionary<string, int> expectedChunkCountByPlayer = new();
 
@@ -166,16 +165,14 @@ public sealed class WhispralMimics : MonoBehaviour
         LOG.Info("PlayerVoiceChat initialized.");
         DetectSampleRate();
 
-        // Initialiser wavFileManager pour TOUS les joueurs (nécessaire pour recevoir les RPCs)
-        // mais la boucle de partage ne démarre que pour le joueur local
+        // Every player's instance receives the sharing RPCs, so each one needs the Voice Banks; only the local
+        // player's instance shares.
         if (SemiFunc.RunIsLevel())
         {
             wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
             localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
 #if !VEPMOD_NO_VAD
-            // Créer le validateur VAD si activé (détection de parole par ML)
-            // Sensibilité choisie par l'utilisateur (presets calibrés par benchmark).
             if (VepMod.ConfigVadEnabled.Value)
             {
                 try
@@ -197,7 +194,6 @@ public sealed class WhispralMimics : MonoBehaviour
             {
                 LOG.Info($"WhispralMimics initialized for local player: {localPlayerNickName}");
 
-                // BOUCLE 1: Partage des sons (uniquement pour le joueur local)
                 StartCoroutine(ShareAudioLoop());
             }
             else
@@ -261,7 +257,7 @@ public sealed class WhispralMimics : MonoBehaviour
             bufferPosition = 0;
             fileSaved = false;
             silenceTimer = 0f;
-            // Format autoritaire fourni par Photon (remplace l'ancienne inférence frameLength*50).
+            // Photon's own format, more reliable than inferring it from the frame length.
             if (frameSampleRate > 0) sampleRate = frameSampleRate;
             channelCount = channels >= 1 ? channels : 1;
             LOG.Debug($"Speech detected, capturing audio ({sampleRate} Hz, {channelCount} ch, frame {voiceData.Length}).");
@@ -310,8 +306,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (audioBuffer == null) return;
 
-        // Downmix multi-canal -> mono par moyenne des canaux (no-op si channelCount == 1).
-        // Le reste du pipeline (WAV, VAD, lecture) est mono.
+        // Averaged down to mono: the rest of the pipeline (WAV, VAD, playback) is mono.
         var frames = voiceData.Length / channelCount;
         var samplesToWrite = Mathf.Min(frames, audioBuffer.Length - bufferPosition);
         for (var i = 0; i < samplesToWrite; i++)
@@ -340,7 +335,6 @@ public sealed class WhispralMimics : MonoBehaviour
         var recordedData = new float[bufferPosition];
         Array.Copy(audioBuffer, recordedData, bufferPosition);
 
-        // Garde-fou durée minimale (sans VAD)
         var duration = (float)bufferPosition / sampleRate;
         if (duration < VepMod.ConfigAudioMinDuration.Value)
         {
@@ -349,18 +343,16 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
 #if !VEPMOD_NO_VAD
-        // Validation VAD (détection de parole par ML, filtre principal)
         if (vadValidator != null)
         {
-            // Rogner le silence de fin (jusqu'à SilenceTimeoutSeconds) avant la validation pour
-            // ne pas diluer le ratio de parole et pénaliser les mots courts. Le clip sauvegardé
-            // reste complet (silence inclus) — seule l'analyse VAD porte sur la région de parole.
+            // The trailing silence (up to SilenceTimeoutSeconds) would dilute the speech ratio and penalise short
+            // words, so the VAD analyses the speech only. The saved Voice Sample keeps its silence.
             var vadData = recordedData;
             var trailingSilenceSamples = Mathf.RoundToInt(silenceTimer * sampleRate);
             if (trailingSilenceSamples > 0)
             {
                 var speechLen = bufferPosition - trailingSilenceSamples;
-                if (speechLen >= sampleRate / 10) // garde-fou : au moins 0,1 s de parole
+                if (speechLen >= sampleRate / 10) // at least 0.1 s of speech
                 {
                     vadData = new float[speechLen];
                     Array.Copy(recordedData, vadData, speechLen);
@@ -383,7 +375,7 @@ public sealed class WhispralMimics : MonoBehaviour
             }
             catch (Exception ex)
             {
-                // Fail-open : un hoquet du VAD natif ne doit pas perturber le thread voix Photon.
+                // Accepting keeps a hiccup of the native VAD from disturbing the Photon voice thread.
                 LOG.Warning($"VAD Validate threw, accepting recording (fail-open): {ex.Message}");
             }
         }
@@ -412,10 +404,8 @@ public sealed class WhispralMimics : MonoBehaviour
         {
             await wavFileManager.SaveAsync(audioData, sampleRate, localPlayerNickName);
 
-            // Convertir en bytes pour le partage
             var audioBytes = AudioFilters.ConvertFloatsToBytes(audioData);
 
-            // Créer un fichier WAV complet avec header
             using var memoryStream = new MemoryStream();
             using var writer = new BinaryWriter(memoryStream);
             WavFileManager.WriteWavHeader(writer, audioData.Length, sampleRate);
@@ -434,11 +424,8 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #endregion
 
-    #region Boucle 1: Partage des sons
+    #region Voice Sample sharing
 
-    /// <summary>
-    ///     BOUCLE 1: Enregistre périodiquement la voix et la partage avec les autres joueurs.
-    /// </summary>
     private IEnumerator ShareAudioLoop()
     {
         LOG.Info("ShareAudioLoop started.");
@@ -448,10 +435,8 @@ public sealed class WhispralMimics : MonoBehaviour
             var delay = Random.Range(VepMod.ShareDelay.Min, VepMod.ShareDelay.Max);
             yield return new WaitForSeconds(delay);
 
-            // Démarrer l'enregistrement
             StartRecording();
 
-            // Attendre que l'enregistrement soit terminé (max AudioBufferDurationSeconds + 1s)
             var timeout = AudioBufferDurationSeconds + 1f;
             while (isRecording && timeout > 0)
             {
@@ -459,7 +444,6 @@ public sealed class WhispralMimics : MonoBehaviour
                 yield return new WaitForSeconds(0.1f);
             }
 
-            // Si on a un nouvel enregistrement, le partager
             if (hasNewRecording && lastSavedAudioBytes != null)
             {
                 hasNewRecording = false;
@@ -469,9 +453,6 @@ public sealed class WhispralMimics : MonoBehaviour
         // ReSharper disable once IteratorNeverReturns
     }
 
-    /// <summary>
-    ///     Envoie les données audio en chunks aux autres joueurs.
-    /// </summary>
     private async Task ShareAudioWithOthersAsync(byte[] audioData)
     {
         if (!PhotonNetwork.IsConnectedAndReady)
@@ -514,17 +495,13 @@ public sealed class WhispralMimics : MonoBehaviour
         return chunks;
     }
 
-    /// <summary>
-    ///     RPC: Reçoit un chunk audio d'un autre joueur et le stocke.
-    /// </summary>
     [PunRPC]
     public void ReceiveSharedAudioChunk(byte[] chunk, int chunkIndex, int totalChunks, string sourcePlayerNickName,
         int srcSampleRate)
     {
-        // Ignorer mes propres sons (ne devrait pas arriver avec RpcTarget.Others)
+        // Sent to RpcTarget.Others, so this is only a safety net.
         if (sourcePlayerNickName == localPlayerNickName) return;
 
-        // Initialiser le buffer pour ce joueur si c'est le premier chunk
         if (chunkIndex == 0)
         {
             receivedChunksByPlayer[sourcePlayerNickName] = new List<byte[]>();
@@ -533,14 +510,12 @@ public sealed class WhispralMimics : MonoBehaviour
                 $"Receiving shared audio from {sourcePlayerNickName}: {totalChunks} chunks at {srcSampleRate} Hz");
         }
 
-        // Vérifier que le joueur existe dans nos buffers
         if (!receivedChunksByPlayer.TryGetValue(sourcePlayerNickName, out var chunks))
         {
             LOG.Warning($"Received chunk for unknown player: {sourcePlayerNickName}");
             return;
         }
 
-        // Ajouter le chunk
         while (chunks.Count <= chunkIndex)
         {
             chunks.Add(null);
@@ -548,7 +523,6 @@ public sealed class WhispralMimics : MonoBehaviour
 
         chunks[chunkIndex] = chunk;
 
-        // Vérifier si tous les chunks sont reçus
         var expectedCount = expectedChunkCountByPlayer.GetValueOrDefault(sourcePlayerNickName, 0);
         if (chunks.Count >= expectedCount && chunks.All(c => c != null))
         {
@@ -557,7 +531,6 @@ public sealed class WhispralMimics : MonoBehaviour
             var combinedData = CombineChunks(chunks);
             SaveReceivedAudioAsync(combinedData, srcSampleRate, sourcePlayerNickName);
 
-            // Nettoyer
             receivedChunksByPlayer.Remove(sourcePlayerNickName);
             expectedChunkCountByPlayer.Remove(sourcePlayerNickName);
         }
@@ -593,23 +566,20 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #endregion
 
-    #region Boucle 2: Commandes de lecture
+    #region Mimic commands
 
     /// <summary>
-    ///     RPC: Le Master demande à un joueur spécifique de jouer un son d'un joueur source.
-    ///     Appelé depuis EnemyWhispral.AttachedState.
+    ///     Sent by the Master from EnemyWhispral.AttachedState; only the Victim's client acts on it.
     /// </summary>
     [PunRPC]
     public void PlayVoiceCommandRPC(int targetViewID, string sourcePlayerNickName, bool applyFilter)
     {
-        // Seul le joueur ciblé joue le son
         var localPlayer = PlayerAvatar.instance;
         if (!localPlayer || localPlayer.photonView.ViewID != targetViewID)
         {
             return;
         }
 
-        // Vérifier si on a une hallucination active pour ce joueur
         var hallucinationDebuff = localPlayer.GetComponent<DroidDebuff>();
         if (hallucinationDebuff != null && hallucinationDebuff.IsActive)
         {
@@ -622,9 +592,6 @@ public sealed class WhispralMimics : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Méthode publique pour que EnemyWhispral puisse envoyer une commande de lecture.
-    /// </summary>
     public void SendPlayVoiceCommand(int targetViewID, string sourcePlayerName, bool applyFilter)
     {
         if (!PhotonNetwork.IsConnectedAndReady)
@@ -636,9 +603,6 @@ public sealed class WhispralMimics : MonoBehaviour
         PhotonView.RPC(nameof(PlayVoiceCommandRPC), RpcTarget.All, targetViewID, sourcePlayerName, applyFilter);
     }
 
-    /// <summary>
-    ///     Retourne la liste des joueurs ayant des sons stockés localement.
-    /// </summary>
     public string[] GetAvailablePlayerIds()
     {
         return wavFileManager?.GetAllPlayerNickNames() ?? Array.Empty<string>();
@@ -673,9 +637,6 @@ public sealed class WhispralMimics : MonoBehaviour
         };
     }
 
-    /// <summary>
-    ///     Joue un son à la position d'un Transform spécifique (pour les hallucinations).
-    /// </summary>
     public void PlayAudioAtTransform(Transform target, string sourcePlayerNickName, bool applyFilter)
     {
         if (target == null)
@@ -704,7 +665,7 @@ public sealed class WhispralMimics : MonoBehaviour
         audioSource.enabled = true;
         ConfigureAudioSource(audioSource, clip);
 
-        // Ajouter l'occlusion audio (murs) comme les vrais joueurs
+        // Wall occlusion, as on a real player's voice.
         var lowPassFilter = target.gameObject.GetOrAddComponent<AudioLowPassFilter>();
         var lowPassLogic = target.gameObject.GetOrAddComponent<AudioLowPassLogic>();
         lowPassLogic.ForceStart = true;
@@ -731,7 +692,7 @@ public sealed class WhispralMimics : MonoBehaviour
         source.bypassListenerEffects = false;
         source.bypassReverbZones = false;
 
-        // Courbe custom du prefab Voice: plein volume jusqu'à 20% de la distance, puis fade vers 0
+        // The Voice prefab's curve: full volume up to 20% of the distance, then down to 0.
         source.rolloffMode = AudioRolloffMode.Custom;
         source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, new AnimationCurve(
             new Keyframe(0.2f, 1f),
@@ -750,7 +711,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
         var go = source.gameObject;
 
-        // Détruire dans l'ordre inverse des dépendances (attendre 1 frame entre chaque)
+        // Unity refuses to remove a component another one depends on: dependents go first, a frame apart.
         var lowPassLogic = go.GetComponent<AudioLowPassLogic>();
         if (lowPassLogic != null)
         {
