@@ -33,6 +33,7 @@ namespace VepMod.Dev;
 ///       F3  — stun every Whispral
 ///       F4  — kill every Whispral
 ///       F5  — kill the local player
+///       Shift+F5 — revive every dead player (Master only: the game accepts a revive from the Master alone)
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
@@ -77,7 +78,11 @@ public sealed class DroidDevTools : MonoBehaviour
         if (Input.GetKeyDown(StunPreparingWhispralsKey)) StunWhisprals(true);
         if (Input.GetKeyDown(StunWhispralsKey)) StunWhisprals(false);
         if (Input.GetKeyDown(KillWhispralsKey)) KillWhisprals();
-        if (Input.GetKeyDown(KillLocalPlayerKey)) KillLocalPlayer();
+        if (Input.GetKeyDown(KillLocalPlayerKey))
+        {
+            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) ReviveDeadPlayers();
+            else KillLocalPlayer();
+        }
 
         _nearestRefreshTimer -= Time.deltaTime;
         if (_nearestRefreshTimer <= 0f)
@@ -321,6 +326,19 @@ public sealed class DroidDevTools : MonoBehaviour
         player.playerHealth.Hurt(int.MaxValue / 2, false);
     }
 
+    private static void ReviveDeadPlayers()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        foreach (var player in GameDirector.instance.PlayerList)
+        {
+            if (!player || !player.isDisabled) continue;
+
+            LOG.Info($"DevTools: reviving {player.playerName}.");
+            player.Revive();
+        }
+    }
+
     private static bool TryGetAimPoint(out Vector3 point)
     {
         var cam = Camera.main;
@@ -344,7 +362,7 @@ public sealed class DroidDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
-                 "F5 kill yourself\n";
+                 "F5 kill yourself | Shift+F5 revive the dead (Master)\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
