@@ -4,6 +4,9 @@
   "description": "A new enemy that makes you hallucinate your teammates.",
   "main": "index.js",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || exit 0",
+    "check": "node tooling/check.mjs",
+    "format:check": "node tooling/check.mjs format",
     "test": "echo \"Error: no test specified\" && exit 1",
     "release": "release-it"
   },

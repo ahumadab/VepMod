@@ -1,0 +1,9 @@
+#!/bin/sh
+branch=$(git branch --show-current)
+case "$branch" in
+develop | main)
+    echo "Commit on a <type>/<slug> branch created from develop, not on $branch." >&2
+    exit 1
+    ;;
+esac
+exec npm run --silent format:check -- --staged

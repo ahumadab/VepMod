@@ -1,0 +1,2 @@
+# Hooks run with sh, which fails on CRLF checked out by core.autocrlf.
+.githooks/* text eol=lf
