@@ -27,7 +27,34 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Create a GitHub issue. A spec gets the `spec` label (`--label spec`) and its tickets are attached to it as sub-issues: the
+project board's Tickets view groups tickets under their spec and leaves specs out, its Produit view lists the specs.
+
+## Project board
+
+Every issue lives on the [VepMod board](https://github.com/users/ahumadab/projects/3), whose Status column is `Todo`,
+`In Progress` or `Done`. GitHub moves an issue to `Todo` when it is added and to `Done` when it closes; `In Progress` is
+the agent's job.
+
+## Starting a ticket
+
+Before the first edit of a ticket's work:
+
+1. Branch from an up-to-date `develop`: `<type>/<number>-<slug>`, `<type>` being the Conventional Commits type of the
+   work (`feat/14-haunting`).
+2. Claim it: `gh issue edit <n> --add-assignee @me`.
+3. Move it to `In Progress` (adding an issue already on the board returns its existing item):
+
+   ```sh
+   item=$(gh project item-add 3 --owner ahumadab --url https://github.com/ahumadab/VepMod/issues/<n> --format json --jq .id)
+   gh project item-edit --id "$item" --project-id PVT_kwHOA5kLfc4Bm4jq \
+     --field-id PVTSSF_lAHOA5kLfc4Bm4jqzhlfsmI --single-select-option-id 7415fc26
+   ```
+
+## Finishing a ticket
+
+Push the branch and open the PR against `develop` with `Closes #<n>` in its body. Merging it closes the ticket, which
+moves it to `Done`.
 
 ## When a skill says "fetch the relevant ticket"
 
