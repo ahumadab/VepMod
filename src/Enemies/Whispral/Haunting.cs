@@ -63,12 +63,9 @@ public sealed class Haunting : MonoBehaviour
     {
         LOG.Debug($"{victim.playerName} is Haunted.");
 
-        // In singleplayer the local player is the Victim; Vanish and Hallucinations skip themselves there.
         if (IsVictimsClient())
         {
-            var vanish = gameObject.GetOrAddComponent<InvisiblePlayerDebuff>();
-            vanish.ApplyDebuff(true);
-            gameObject.GetOrAddComponent<DroidDebuff>().ApplyDebuff(true, vanish);
+            gameObject.GetOrAddComponent<Imitations>().Begin();
         }
         else
         {
@@ -82,16 +79,10 @@ public sealed class Haunting : MonoBehaviour
 
         if (IsVictimsClient())
         {
-            var vanish = GetComponent<InvisiblePlayerDebuff>();
-            var hallucinations = GetComponent<DroidDebuff>();
-            if (hallucinations)
+            var imitations = GetComponent<Imitations>();
+            if (imitations)
             {
-                hallucinations.ApplyDebuff(false, vanish);
-            }
-
-            if (vanish)
-            {
-                vanish.ApplyDebuff(false);
+                imitations.End();
             }
         }
         else

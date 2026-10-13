@@ -572,7 +572,7 @@ public sealed class WhispralMimics : MonoBehaviour
     ///     Sent by the Master from EnemyWhispral.AttachedState; only the Victim's client acts on it.
     /// </summary>
     [PunRPC]
-    public void PlayVoiceCommandRPC(int targetViewID, string sourcePlayerNickName, bool applyFilter)
+    public void PlayVoiceCommandRPC(int targetViewID, string imitatedPlayerNickName, bool applyFilter)
     {
         var localPlayer = PlayerAvatar.instance;
         if (!localPlayer || localPlayer.photonView.ViewID != targetViewID)
@@ -580,19 +580,16 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var hallucinationDebuff = localPlayer.GetComponent<DroidDebuff>();
-        if (hallucinationDebuff != null && hallucinationDebuff.IsActive)
+        var imitations = localPlayer.GetComponent<Imitations>();
+        var hallucination = imitations ? imitations.FindHallucination(imitatedPlayerNickName) : null;
+        if (hallucination)
         {
-            var droid = hallucinationDebuff.GetDroidByPlayerName(sourcePlayerNickName);
-            if (droid != null)
-            {
-                LOG.Debug($"Playing voice from {sourcePlayerNickName} on hallucination droid");
-                droid.PlayVoice(applyFilter);
-            }
+            LOG.Debug($"Playing voice from {imitatedPlayerNickName} on their Hallucination");
+            hallucination!.PlayVoice(applyFilter);
         }
     }
 
-    public void SendPlayVoiceCommand(int targetViewID, string sourcePlayerName, bool applyFilter)
+    public void SendPlayVoiceCommand(int targetViewID, string imitatedPlayerNickName, bool applyFilter)
     {
         if (!PhotonNetwork.IsConnectedAndReady)
         {
@@ -600,7 +597,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        PhotonView.RPC(nameof(PlayVoiceCommandRPC), RpcTarget.All, targetViewID, sourcePlayerName, applyFilter);
+        PhotonView.RPC(nameof(PlayVoiceCommandRPC), RpcTarget.All, targetViewID, imitatedPlayerNickName, applyFilter);
     }
 
     public string[] GetAvailablePlayerIds()
