@@ -11,7 +11,7 @@
 
 1. [Overview](#overview)
 2. [The Whispral](#the-whispral)
-3. [Fake Players (Hallucinations)](#fake-Players-hallucinations)
+3. [Hallucinations](#hallucinations)
 4. [Audio System](#audio-system)
 5. [Configuration Settings](#configuration-settings)
 6. [Effects on the Player](#effects-on-the-player)
@@ -49,23 +49,23 @@ When it detects a player, it approaches and attaches itself to them for a set du
 ### Interactions
 
 - The Whispral can be **stunned** by throwing objects at it
-- When stunned, it releases the player and all debuffs are cleared
+- When stunned, it releases the player and all effects end
 - If the player is stunned, the Whispral automatically detaches
 
 ---
 
-## Fake Player-Hallucinations
+## Hallucinations
 
 ### Description
 
-When a Whispral is attached to a player, they see **Fake Player** — hallucinatory copies of their teammates. These Fake Player:
+When a Whispral is attached to a player, they see **Hallucinations** — fake copies of their teammates. These Hallucinations:
 
 - Have the same **color** as the player they imitate
 - Display the same **name** (nameplate)
 - Reproduce realistic **footstep sounds**
 - Can **speak** using the imitated player’s voice
 
-### Fake Player States
+### Hallucination States
 
 | State | Description |
 |------|-------------|
@@ -79,15 +79,15 @@ When a Whispral is attached to a player, they see **Fake Player** — hallucinat
 
 ### “Angry Eyes” System
 
-Fake Players have an animated eyelid system:
+Hallucinations have an animated eyelid system:
 
-- When the player **don't looks at** a Fake Players, its eyes become “angry”
-- If the player looks the Fake Player, it stops being angry
-- When Stalk States are active, the Fake Player maintain the angry emote for 2 seconds before running away after the player see them.
+- When the player **doesn't look at** a Hallucination, its eyes become “angry”
+- If the player looks at the Hallucination, it stops being angry
+- When Stalk States are active, the Hallucination keeps the angry emote for 2 seconds before running away once the player sees it.
 
 ### Gaze Detection
 
-- The mod detects whether the player is looking at a Fake Players using the **camera dot product**
+- The mod detects whether the player is looking at a Hallucination using the **camera dot product**
 - Detection threshold: viewing angle < 30 degrees
 - Limited detection distance (30 units)
 
@@ -124,7 +124,7 @@ can be disabled in the config.
 
 ### Voice Playback
 
-While the Whispral is attached, Fake Playerss play voices at regular intervals:
+While the Whispral is attached, Hallucinations play voices at regular intervals:
 
 | Parameter | Min | Max | Default |
 |---------|-----|-----|---------|
@@ -187,22 +187,22 @@ When a Whispral attaches to you:
     - Their voice chat is muted
     - Their map tool animation becomes invisible
 
-2. **Fake Players Appearance**: Hallucinations appear instead
-    - One Fake Players per invisible player
+2. **Hallucinations Appearance**: Hallucinations appear instead
+    - One Hallucination per invisible player
     - Spawned 5–15m from the affected player
     - Precomputed positions to avoid freezes
 
 ### Other Players (Unaffected)
 
 Players who are not affected see:
-- The **dilated pupils** of the affected player (DilatedPupilsDebuff)
+- The **dilated pupils** of the affected player
 
 ---
 ## FAQ
 
 ### Q: Do other players see my hallucinations?
 
-No. Fake Players only exist for the affected player.
+No. Hallucinations only exist for the affected player.
 
 ### Q: How can I tell if a teammate is a hallucination?
 
@@ -216,7 +216,7 @@ No. The mod requires multiplayer, as hallucinations copy other players.
 
 ### Q: Are the voices really my teammates’ voices?
 
-Yes. The mod records voices during the session and replays them through Fake Players.
+Yes. The mod records voices during the session and replays them through Hallucinations.
 
 ### Q: How do I get rid of the Whispral?
 
@@ -226,7 +226,7 @@ Yes. The mod records voices during the session and replays them through Fake Pla
 
 ### Q: Is audio data saved?
 
-Audio samples are stored temporarily during the session.
+Yes. Audio samples are stored locally as WAV files in the game folder and kept between sessions, so hallucinations can speak right away in your next game. Only the most recent samples per player are kept (see Samples Per Player).
 
 ---
 
