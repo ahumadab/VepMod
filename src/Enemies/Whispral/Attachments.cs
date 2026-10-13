@@ -10,7 +10,7 @@ public enum HauntedTransition
 }
 
 /// <summary>
-///     The Whisprals attached to one Victim, keyed by the Whispral's PhotonView ViewID. Attaching and detaching are
+///     The Whisprals attached to one Victim, each keyed by an ID unique to it. Attaching and detaching are
 ///     idempotent per Whispral.
 /// </summary>
 public sealed class Attachments

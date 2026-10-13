@@ -42,7 +42,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     public EnemyWhispralAnim enemyWhispralAnim;
 
     [Header("Attach settings")]
-    [Tooltip("Temps pendant lequel l’ennemi reste collé au joueur.")]
+    [Tooltip("How long the Whispral stays attached to its Victim, in seconds.")]
     public float attachedDuration = 200f;
 
     [Space] public SpringQuaternion rotationSpring;
@@ -252,7 +252,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         var victim = SemiFunc.PlayerAvatarGetFromPhotonID(victimViewID);
         if (!victim)
         {
-            // A Victim who left the game took their Haunting with them.
+            // A Victim who left the game was no longer Haunted once their avatar was destroyed.
             LOG.Debug($"AttachmentRPC: no player with ViewID {victimViewID}.");
             return;
         }
@@ -276,7 +276,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
         else
         {
-            AttachmentRPC(victimViewID, photonView.ViewID, attached);
+            // Offline the game instantiates enemies without Photon, so every Whispral has ViewID 0.
+            AttachmentRPC(victimViewID, GetInstanceID(), attached);
         }
     }
 
@@ -302,7 +303,10 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         enemyWhispralAnim.Death();
         if (SemiFunc.IsMasterClientOrSingleplayer())
         {
-            enemy.EnemyParent.Despawn();
+            // Despawn deactivates this object at once: the FSM has to leave its state in this call, or a Whispral
+            // killed while attached never ends its Attachment.
+            Fsm.NextStateStateId = State.Despawn;
+            Fsm.Update();
         }
     }
 
@@ -713,8 +717,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private void SendVoiceCommand()
         {
-            var targetPlayer = Whispral.playerTarget;
-            if (targetPlayer == null) return;
+            var victim = Whispral.playerTarget;
+            if (victim == null) return;
 
             var localMimics = VepFinder.LocalMimics;
             if (!localMimics)
@@ -723,28 +727,26 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 return;
             }
 
-            var targetViewID = targetPlayer.photonView.ViewID;
-
-            var sourcePlayerNickName = ChooseRandomSourcePlayer(targetPlayer);
-            if (sourcePlayerNickName == null)
+            var imitatedPlayerNickName = ChooseRandomImitatedPlayer(victim);
+            if (imitatedPlayerNickName == null)
             {
-                LOG.Warning("No source player available for voice command.");
+                LOG.Warning("No Imitated Player available for voice command.");
                 return;
             }
 
             var applyFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
 
             LOG.Debug(
-                $"Sending voice command: target={targetPlayer.photonView.Owner.NickName}, source={sourcePlayerNickName}, filter={applyFilter}");
-            localMimics.SendPlayVoiceCommand(targetViewID, sourcePlayerNickName, applyFilter);
+                $"Sending voice command: Victim={victim.photonView.Owner.NickName}, Imitated Player={imitatedPlayerNickName}, filter={applyFilter}");
+            localMimics.SendPlayVoiceCommand(victim.photonView.ViewID, imitatedPlayerNickName, applyFilter);
         }
 
-        private static string? ChooseRandomSourcePlayer(PlayerAvatar targetPlayer)
+        private static string? ChooseRandomImitatedPlayer(PlayerAvatar victim)
         {
-            var targetNickName = targetPlayer.photonView.Owner?.NickName;
+            var victimNickName = victim.photonView.Owner?.NickName;
 
             var players = PhotonNetwork.PlayerList
-                .Where(p => !string.IsNullOrEmpty(p.NickName) && p.NickName != targetNickName)
+                .Where(p => !string.IsNullOrEmpty(p.NickName) && p.NickName != victimNickName)
                 .ToList();
 
             if (players.Count == 0) return null;

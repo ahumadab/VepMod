@@ -23,6 +23,9 @@ The link between one Whispral and its Victim, from the moment it attaches until 
 **Haunted**:
 The state of a Victim while at least one Attachment is ongoing; it ends only when the last Whispral lets go, and a revived Victim is not Haunted again.
 
+**Haunting**:
+One period during which a Victim is Haunted, from the first Attachment to the end of the last.
+
 **Effect**:
 One of the consequences a Victim suffers while Haunted: Vanish, Hallucinations, or Dilated Pupils.
 _Avoid_: Debuff

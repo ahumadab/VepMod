@@ -13,7 +13,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 
-  <!-- The Haunting core is plain C#: compiled from source, without the plugin or Unity (ADR-0001). -->
+  <!-- The Haunting core is plain C#: compiled from source, without referencing the plugin or Unity. -->
   <ItemGroup>
     <Compile Include="..\..\src\Enemies\Whispral\Attachments.cs" Link="Attachments.cs" />
   </ItemGroup>
