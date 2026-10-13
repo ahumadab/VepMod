@@ -47,7 +47,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     [Space] public SpringQuaternion rotationSpring;
 
-    // Context shared between states
     [HideInInspector] public Vector3 agentDestination;
     [HideInInspector] public PlayerAvatar? playerTarget;
     [HideInInspector] public Transform? attachAnchor;
@@ -360,7 +359,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
         else if (CurrentState == State.GoToPlayer)
         {
-            // timer refreshed in PlayerGoTo
             Fsm.GetStateTyped<PlayerGoToState>(State.GoToPlayer)?.RefreshTimer();
         }
     }
@@ -383,7 +381,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     }
 
     /// <summary>
-    ///     Forces the detach, e.g. when the Victim turns into an object.
+    ///     E.g. when the Victim turns into an object.
     /// </summary>
     private void ForceDetach()
     {
@@ -419,8 +417,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
 
         /// <summary>
-        ///     Clears the Effects if attached to the Victim. Call it when leaving Attached or PrepareAttach without going
-        ///     through Detach.
+        ///     For leaving Attached or PrepareAttach without going through Detach.
         /// </summary>
         protected void CleanupAttachmentIfNeeded(State previous)
         {
@@ -774,7 +771,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             if (CheckLeaveState()) return;
             CheckDetachState();
 
-            // Loop 2: the Master sends playback commands
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             voiceTimer -= Time.deltaTime;
             if (!(voiceTimer <= 0f)) return;

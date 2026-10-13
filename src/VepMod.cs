@@ -42,11 +42,11 @@ public class VepMod : BaseUnityPlugin
     public static ConfigEntry<float> ConfigVoiceVolume;
     public static ConfigEntry<int> ConfigSamplingRate;
 
-    // Loop 1: Voice Samples shared between clients
+    // Voice Sample sharing between clients
     public static BoundMinMaxRange<float> ShareDelay;
     public static ConfigEntry<int> ConfigSamplesPerPlayer;
 
-    // Loop 2: playback commands (while Haunted)
+    // Mimic commands (while Haunted)
     public static BoundMinMaxRange<float> VoiceDelay;
     public static ConfigEntry<bool> ConfigVoiceFilterEnabled;
 
@@ -98,7 +98,7 @@ public class VepMod : BaseUnityPlugin
         // General settings
         ConfigVoiceVolume = Config.BindRange("General", "Volume", ConfigRanges.Volume, "Volume of the mimic voices.");
 
-        // Loop 1: Voice Samples shared between clients
+        // Voice Sample sharing between clients
         ShareDelay = Config.BindMinMax("Audio Sharing",
             "Share Min Delay", "Share Max Delay", ConfigRanges.ShareDelay,
             "Minimum time between sharing audio clips with other players.",
@@ -106,7 +106,7 @@ public class VepMod : BaseUnityPlugin
         ConfigSamplesPerPlayer = Config.BindRange("Audio Sharing", "Samples Per Player", ConfigRanges.SamplesPerPlayer,
             "Maximum number of audio samples stored per player.");
 
-        // Loop 2: playback commands (while Haunted)
+        // Mimic commands (while Haunted)
         VoiceDelay = Config.BindMinMax("Voice Playback",
             "Voice Min Delay", "Voice Max Delay", ConfigRanges.VoiceDelay,
             "Minimum time between voice playback commands during Whispral debuff.",

@@ -36,9 +36,8 @@ public static class DroidPrefabLoader
         }
 
         IsLoading = true;
-        LOG.Info("Starting async preload of Droid prefab...");
+        LOG.Info("Starting async preload of Hallucination prefab...");
 
-        // 1. The bundle embedded in the DLL
         var embeddedLoaded = false;
         using (var stream = typeof(DroidPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
         {
@@ -72,13 +71,12 @@ public static class DroidPrefabLoader
             }
         }
 
-        // 2. The bundle file on disk
         if (!embeddedLoaded)
         {
             var bundlePath = FindBundlePath();
             if (string.IsNullOrEmpty(bundlePath))
             {
-                LOG.Warning("VepMod AssetBundle not found - Droid hallucinations disabled");
+                LOG.Warning("VepMod AssetBundle not found - Hallucinations disabled");
                 FinishLoading(false, onComplete);
                 yield break;
             }
@@ -103,12 +101,11 @@ public static class DroidPrefabLoader
         if (assetRequest.asset != null)
         {
             DroidPrefab = assetRequest.asset as GameObject;
-            LOG.Info("Droid prefab loaded directly from bundle");
+            LOG.Info("Hallucination prefab loaded directly from bundle");
             FinishLoading(true, onComplete);
             yield break;
         }
 
-        // Fallback: any .prefab asset whose path contains the prefab name.
         var allAssetNames = _bundle.GetAllAssetNames();
         LOG.Debug($"Bundle contains {allAssetNames.Length} assets");
 
@@ -122,14 +119,14 @@ public static class DroidPrefabLoader
                 if (prefabRequest.asset != null)
                 {
                     DroidPrefab = prefabRequest.asset as GameObject;
-                    LOG.Info($"Droid prefab loaded from: {assetName}");
+                    LOG.Info($"Hallucination prefab loaded from: {assetName}");
                     FinishLoading(true, onComplete);
                     yield break;
                 }
             }
         }
 
-        LOG.Error("Failed to load Droid prefab from bundle - all methods exhausted");
+        LOG.Error("Failed to load Hallucination prefab from bundle - all methods exhausted");
         FinishLoading(false, onComplete);
     }
 
@@ -142,7 +139,6 @@ public static class DroidPrefabLoader
 
     private static string? FindBundlePath()
     {
-        // 1. Next to this DLL
         var assemblyLocation = Assembly.GetExecutingAssembly().Location;
         if (!string.IsNullOrEmpty(assemblyLocation))
         {
@@ -161,7 +157,6 @@ public static class DroidPrefabLoader
             }
         }
 
-        // 2. BepInEx/plugins
         var bepInExPath = Path.Combine(Application.dataPath, "..", "BepInEx", "plugins");
         if (Directory.Exists(bepInExPath))
         {
@@ -169,7 +164,6 @@ public static class DroidPrefabLoader
             if (files.Length > 0) return files[0];
         }
 
-        // 3. Anywhere under the game folder
         var parentPath = Path.Combine(Application.dataPath, "..");
         if (Directory.Exists(parentPath))
         {

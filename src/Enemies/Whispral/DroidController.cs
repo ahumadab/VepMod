@@ -124,7 +124,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     }
 
     /// <summary>
-    ///     Toggles the cloned MapTool and its raised-hand pose. Called by CheckMapState on enter and exit.
+    ///     Also drives the raised-hand pose.
     /// </summary>
     public void ShowMapTool(bool visible)
     {
