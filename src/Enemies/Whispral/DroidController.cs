@@ -41,6 +41,10 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     internal const float SprintSpeed = 5f;
     internal const float SprintChance = 0.5f;
 
+    // From the Victim when spawning, from the Hallucination itself when wandering.
+    internal const float SpawnDistanceMin = 5f;
+    internal const float SpawnDistanceMax = 15f;
+
     // Stalk settings (internal for FSM states)
     internal const float StalkMinDistance = 15f;
     internal const float StalkChance = 0.1f;

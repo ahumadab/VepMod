@@ -9,22 +9,16 @@ using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
-/// <summary>
-///     Contrôleur de mouvement pour HallucinationDroid.
-///     Gère la navigation, le pathfinding, la rotation et la synchronisation des visuels.
-/// </summary>
 public sealed class DroidMovementController : MonoBehaviour
 {
     private const float RotationSpeed = 10f;
     private const float VisualYOffset = 0.25f;
 
-    // Gravité appliquée au CharacterController. La navigation NavMesh ne gère que le
-    // déplacement horizontal ; la verticale est simulée ici pour que le droid tombe
-    // réellement des hauteurs au lieu de descendre à vitesse constante. L'accélération
-    // est lue sur Physics.gravity au runtime → identique à la gravité du jeu de base.
-    private const float GroundedStickSpeed = 2f; // m/s — colle le controller au sol et aux pentes
-    private const float MaxFallSpeed = 55f; // m/s — clamp anti-tunneling (jamais atteint en niveau)
-    private const float FallAnimDelay = 0.12f; // s en l'air avant de déclencher l'anim de chute
+    // The NavMesh drives horizontal motion only: gravity is simulated so a Hallucination falls from heights
+    // instead of descending at constant speed, with the game's own Physics.gravity.
+    private const float GroundedStickSpeed = 2f; // m/s, keeps the controller on the ground and slopes
+    private const float MaxFallSpeed = 55f; // m/s, anti-tunnelling clamp, never reached in a level
+    private const float FallAnimDelay = 0.12f; // s airborne before the fall animation starts
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidMovementController>();
 
@@ -42,49 +36,28 @@ public sealed class DroidMovementController : MonoBehaviour
     private Transform? _rigidbodyTransform;
     private int _savedAreaMask = NavMesh.AllAreas;
 
-    /// <summary>
-    ///     Indique si une destination pré-calculée est disponible.
-    /// </summary>
     public bool HasPrecomputedDestination => _precomputedDestination.HasValue;
 
-    /// <summary>
-    ///     Indique si une destination forward pré-calculée est disponible.
-    /// </summary>
     public bool HasPrecomputedForwardDestination => _precomputedForwardDestination.HasValue;
 
-    /// <summary>
-    ///     La rotation cible actuelle (pour le calcul de IsTurning).
-    /// </summary>
     public Quaternion TargetRotation { get; private set; } = Quaternion.identity;
 
-    /// <summary>
-    ///     Vélocité actuelle du mouvement.
-    /// </summary>
     public Vector3 CurrentVelocity => _currentVelocity;
 
     /// <summary>
-    ///     Indique si le droid est en chute (en l'air depuis assez longtemps et descendant).
-    ///     Pilote le bool 'Falling' de l'animator. Le délai évite le clignotement sur les marches.
+    ///     Drives the animator's 'Falling' bool; the airborne delay keeps it from flickering on stairs.
     /// </summary>
     public bool IsFalling => _charController != null
                              && !_charController.isGrounded
                              && _airborneTime >= FallAnimDelay
                              && _verticalVelocity < 0f;
 
-    /// <summary>Vitesse verticale courante (debug/dev tools).</summary>
     public float DebugVerticalVelocity => _verticalVelocity;
 
-    /// <summary>Le CharacterController touche-t-il le sol (debug/dev tools).</summary>
     public bool DebugIsGrounded => _charController != null && _charController.isGrounded;
 
-    /// <summary>
-    ///     Événement déclenché quand le controller sort du NavMesh.
-    /// </summary>
     public event Action? OnNavMeshError;
 
-    /// <summary>
-    ///     Retourne la distance entre le droid et le joueur local.
-    /// </summary>
     public float GetDistanceToPlayer()
     {
         var playerPos = DroidHelpers.GetLocalPlayerPosition();
@@ -92,9 +65,6 @@ public sealed class DroidMovementController : MonoBehaviour
         return Vector3.Distance(_controllerTransform.position, playerPos.Value);
     }
 
-    /// <summary>
-    ///     Vérifie si la destination a été atteinte.
-    /// </summary>
     public bool HasReachedDestination()
     {
         if (_navAgent == null || _navAgent.pathPending) return false;
@@ -105,9 +75,6 @@ public sealed class DroidMovementController : MonoBehaviour
         return !_navAgent.hasPath || distance <= _navAgent.stoppingDistance;
     }
 
-    /// <summary>
-    ///     Initialise le contrôleur de mouvement.
-    /// </summary>
     public void Initialize(
         Transform controllerTransform,
         Transform rigidbodyTransform,
@@ -122,9 +89,6 @@ public sealed class DroidMovementController : MonoBehaviour
         _savedAreaMask = areaMask;
     }
 
-    /// <summary>
-    ///     Fait tourner le droid pour regarder le joueur.
-    /// </summary>
     public void LookAtPlayer()
     {
         var player = PlayerAvatar.instance;
@@ -138,9 +102,6 @@ public sealed class DroidMovementController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Réinitialise le chemin de navigation.
-    /// </summary>
     public void ResetPath()
     {
         if (DroidHelpers.IsNavAgentValid(_navAgent))
@@ -149,9 +110,6 @@ public sealed class DroidMovementController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Définit la vitesse du NavAgent.
-    /// </summary>
     public void SetSpeed(float speed)
     {
         if (_navAgent != null)
@@ -160,44 +118,30 @@ public sealed class DroidMovementController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Démarre le pré-calcul d'une destination en coroutine.
-    /// </summary>
     public void StartPrecomputeDestination()
     {
         if (_isPrecomputingDestination || _precomputedDestination.HasValue) return;
         StartCoroutine(PrecomputeDestinationCoroutine());
     }
 
-    /// <summary>
-    ///     Démarre le pré-calcul d'une destination forward (dans la direction actuelle).
-    /// </summary>
     public void StartPrecomputeForwardDestination(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
     {
         if (_isPrecomputingForward) return;
-        // On invalide l'ancienne destination forward pour en calculer une nouvelle
         _precomputedForwardDestination = null;
         StartCoroutine(PrecomputeForwardDestinationCoroutine(minDistance, maxDistance, maxAngleDeviation));
     }
 
-    /// <summary>
-    ///     Réinitialise la destination forward pré-calculée.
-    /// </summary>
     public void ClearPrecomputedForwardDestination()
     {
         _precomputedForwardDestination = null;
     }
 
-    /// <summary>
-    ///     Synchronise la position du NavAgent avec le controller.
-    /// </summary>
     public void SyncNavAgentPosition(bool isMovementState)
     {
         if (_navAgent == null || _controllerTransform == null) return;
 
-        // Pendant une chute, le controller est volontairement éloigné du NavMesh : on ne
-        // resynchronise pas l'agent et on ne déclenche pas d'erreur tant qu'il n'a pas
-        // atterri, sinon une descente provoquerait un faux « off NavMesh » (retour Idle).
+        // A falling controller is off the NavMesh on purpose: resyncing before it lands would report a false
+        // off-NavMesh error and send the Hallucination back to Idle.
         if (_charController != null && !_charController.isGrounded) return;
 
         var controllerPos = _controllerTransform.position;
@@ -218,9 +162,6 @@ public sealed class DroidMovementController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Synchronise la position des visuels avec le controller.
-    /// </summary>
     public void SyncVisualsToController(Transform? animatorTransform)
     {
         if (_rigidbodyTransform == null || _controllerTransform == null) return;
@@ -235,9 +176,6 @@ public sealed class DroidMovementController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Définit la destination vers le joueur local.
-    /// </summary>
     public bool TrySetDestinationToPlayer()
     {
         var player = PlayerAvatar.instance;
@@ -257,9 +195,6 @@ public sealed class DroidMovementController : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    ///     Définit une destination pour fuir le joueur.
-    /// </summary>
     public bool TrySetFleeDestination(float fleeDistance)
     {
         var player = PlayerAvatar.instance;
@@ -283,9 +218,6 @@ public sealed class DroidMovementController : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    ///     Essaie de définir une destination aléatoire.
-    /// </summary>
     public bool TrySetRandomDestination()
     {
         if (_precomputedDestination.HasValue)
@@ -297,13 +229,8 @@ public sealed class DroidMovementController : MonoBehaviour
         return TrySetDestinationSync();
     }
 
-    /// <summary>
-    ///     Essaie de prolonger le chemin actuel dans la même direction (avec variation angulaire).
-    ///     Utilise la destination pré-calculée si disponible.
-    /// </summary>
     public bool TryExtendCurrentPath()
     {
-        // Utiliser la destination pré-calculée si disponible
         if (_precomputedForwardDestination.HasValue)
         {
             LOG.Debug($"TryExtendCurrentPath: Using precomputed forward destination at {_precomputedForwardDestination.Value}");
@@ -314,9 +241,6 @@ public sealed class DroidMovementController : MonoBehaviour
         return TryExtendCurrentPathSync();
     }
 
-    /// <summary>
-    ///     Calcul synchrone d'extension de chemin (fallback si pas de pré-calcul).
-    /// </summary>
     private bool TryExtendCurrentPathSync(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
     {
         if (_controllerTransform == null || !DroidHelpers.IsNavAgentValid(_navAgent))
@@ -325,13 +249,11 @@ public sealed class DroidMovementController : MonoBehaviour
             return false;
         }
 
-        // Utiliser la direction actuelle du mouvement
         var direction = _currentVelocity.normalized;
         var directionSource = "velocity";
 
         if (direction.sqrMagnitude < 0.01f)
         {
-            // Fallback: direction vers la destination actuelle
             direction = (_destination - _controllerTransform.position).normalized;
             directionSource = "destination";
         }
@@ -342,11 +264,9 @@ public sealed class DroidMovementController : MonoBehaviour
             return false;
         }
 
-        // Appliquer une déviation angulaire aléatoire
         var angleDeviation = UnityEngine.Random.Range(-maxAngleDeviation, maxAngleDeviation);
         direction = Quaternion.Euler(0f, angleDeviation, 0f) * direction;
 
-        // Chercher une destination dans cette direction
         var distance = UnityEngine.Random.Range(minDistance, maxDistance);
         var targetPos = _controllerTransform.position + direction * distance;
 
@@ -391,19 +311,12 @@ public sealed class DroidMovementController : MonoBehaviour
     }
 
     /// <summary>
-    ///     Met à jour le mouvement du droid.
-    ///     Le déplacement horizontal vient du NavMeshAgent (desiredVelocity), mais la
-    ///     verticale est une vraie gravité accumulée : tant que le controller n'est pas
-    ///     au sol elle accélère vers le bas (chute réaliste depuis les hauteurs), et une
-    ///     fois au sol une petite vitesse de « collage » le maintient plaqué aux pentes.
-    ///     La gravité est appliquée à chaque frame, même hors état de mouvement, pour que
-    ///     le droid se pose toujours.
+    ///     Applies gravity every frame, even outside movement states, so the Hallucination always lands.
     /// </summary>
     public void UpdateMovement(bool isMovementState)
     {
         if (_charController == null) return;
 
-        // Vitesse horizontale : pilotée par le NavMesh uniquement en état de mouvement.
         var horizontalVelocity = Vector3.zero;
         if (isMovementState && _navAgent != null && _navAgent.hasPath)
         {
@@ -416,7 +329,6 @@ public sealed class DroidMovementController : MonoBehaviour
             _currentVelocity = Vector3.zero;
         }
 
-        // Gravité verticale accumulée (accélération = celle du jeu de base).
         if (_charController.isGrounded)
         {
             _verticalVelocity = -GroundedStickSpeed;
@@ -434,9 +346,6 @@ public sealed class DroidMovementController : MonoBehaviour
         _charController.Move(motion * Time.deltaTime);
     }
 
-    /// <summary>
-    ///     Met à jour la rotation du droid.
-    /// </summary>
     public void UpdateRotation()
     {
         if (_controllerTransform == null) return;
@@ -462,8 +371,8 @@ public sealed class DroidMovementController : MonoBehaviour
         _isPrecomputingDestination = true;
 
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
-        var levelPoint = SemiFunc.LevelPointGet(controllerPos, WhispralDebuffManager.SpawnDistanceMin,
-                             WhispralDebuffManager.SpawnDistanceMax)
+        var levelPoint = SemiFunc.LevelPointGet(controllerPos, DroidController.SpawnDistanceMin,
+                             DroidController.SpawnDistanceMax)
                          ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null)
@@ -521,7 +430,8 @@ public sealed class DroidMovementController : MonoBehaviour
     {
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
 
-        var levelPoint = SemiFunc.LevelPointGet(controllerPos, 5f, 15f)
+        var levelPoint = SemiFunc.LevelPointGet(controllerPos, DroidController.SpawnDistanceMin,
+                             DroidController.SpawnDistanceMax)
                          ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null) return false;
@@ -562,7 +472,6 @@ public sealed class DroidMovementController : MonoBehaviour
             yield break;
         }
 
-        // Capturer la direction actuelle
         var direction = _currentVelocity.normalized;
         var directionSource = "velocity";
 
@@ -581,11 +490,9 @@ public sealed class DroidMovementController : MonoBehaviour
 
         yield return null;
 
-        // Appliquer une déviation angulaire aléatoire
         var angleDeviation = UnityEngine.Random.Range(-maxAngleDeviation, maxAngleDeviation);
         direction = Quaternion.Euler(0f, angleDeviation, 0f) * direction;
 
-        // Calculer la position cible
         var distance = UnityEngine.Random.Range(minDistance, maxDistance);
         var currentPos = _controllerTransform.position;
         var targetPos = currentPos + direction * distance;
@@ -594,7 +501,6 @@ public sealed class DroidMovementController : MonoBehaviour
 
         yield return null;
 
-        // Vérifier le NavMesh
         if (!NavMesh.SamplePosition(targetPos, out var hit, 10f, _savedAreaMask))
         {
             LOG.Debug($"PrecomputeForward: No NavMesh position found near {targetPos}");
@@ -604,7 +510,6 @@ public sealed class DroidMovementController : MonoBehaviour
 
         yield return null;
 
-        // Vérifier le path
         var path = new NavMeshPath();
         if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
         {
