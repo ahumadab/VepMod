@@ -2,9 +2,10 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { checkedExtensions, frenchCommentLines } from "./english-comments.mjs";
+import { touchedFiles } from "./touched-files.mjs";
 
 const [mode, scope] = process.argv.slice(2);
-const stagedOnly = scope === "--staged";
+const staged = scope === "--staged";
 const quiet = ["-v", "q", "-clp:ErrorsOnly"];
 
 function run(command, args, hint) {
@@ -15,16 +16,11 @@ function run(command, args, hint) {
     process.exit(status ?? 1);
 }
 
-function gitLines(...args) {
-    return execFileSync("git", args, { encoding: "utf8" }).split("\n").filter(Boolean);
-}
-
-// Existing code is brought to the rules when it is touched, never in a global pass.
-function touchedFiles(...patterns) {
-    if (stagedOnly) return gitLines("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", ...patterns);
-    const [base] = gitLines("merge-base", "HEAD", `origin/${process.env.GITHUB_BASE_REF || "develop"}`);
-    return gitLines("diff", "--name-only", "--diff-filter=ACMR", base, "--", ...patterns);
-}
+const base = staged
+    ? undefined
+    : execFileSync("git", ["merge-base", "HEAD", `origin/${process.env.GITHUB_BASE_REF || "develop"}`], {
+          encoding: "utf8",
+      }).trim();
 
 function checkFormat(files) {
     // An empty --include would check every file.
@@ -42,10 +38,10 @@ function checkEnglishComments(files) {
     process.exit(1);
 }
 
-checkFormat(touchedFiles("*.cs"));
+checkFormat(touchedFiles(["*.cs"], { staged, base }));
 if (mode === "format" || mode === "fix") process.exit(0);
 
-checkEnglishComments(touchedFiles(...checkedExtensions.map((extension) => `*${extension}`)));
+checkEnglishComments(touchedFiles(checkedExtensions.map((extension) => `*${extension}`), { staged, base }));
 run("node", ["--test", "tooling/**/*.test.mjs"]);
 run(
     "dotnet",

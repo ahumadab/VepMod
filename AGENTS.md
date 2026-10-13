@@ -4,6 +4,11 @@ REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/A
 
 Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04/Assets/VepMod/`. Read them before deciding whether a bundle references a class, field or clip; the built bundles in `Ressources/` are compressed. A script or clip GUID resolves through the `.meta` files under `../Repo_04/Assets/`.
 
+## In-game tests
+
+Before asking for an in-game test, log the transitions under test at `Debug` and give every action the tester cannot
+trigger at will a key in `src/Dev/DroidDevTools.cs`, whose header lists the keys.
+
 ## Coding standards
 
 Before writing, changing or reviewing code, read `CODING_STANDARDS.md` (module shape, lifecycle, network contract,

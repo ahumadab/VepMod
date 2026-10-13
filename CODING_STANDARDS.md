@@ -23,6 +23,8 @@ belongs to the tooling, not here.
 
 - Every state and every resource has one exit that cleans it up, reached whatever the reason for leaving. Cleanup copied
   into several exit paths is a finding.
+- A call that deactivates or destroys the object running a state machine (`EnemyParent.Despawn`, `SetActive(false)`,
+  `Destroy`) skips its state exits: the state machine leaves its state before that call.
 - A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.
 - Per-frame code does not allocate, and does not retry the same failure every frame.
 
