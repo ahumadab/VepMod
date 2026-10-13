@@ -12,6 +12,11 @@ test("flags French in PowerShell comments", () => {
     assert.deepEqual(frenchCommentLines("build.ps1", code), [1, 2]);
 });
 
+test("flags French without accents", () => {
+    const code = ["// Trouver le joueur cible", "// Contrôleur", "// Find the target player"].join("\n");
+    assert.deepEqual(frenchCommentLines("A.cs", code), [1, 2]);
+});
+
 test("leaves strings and English comments alone", () => {
     assert.deepEqual(frenchCommentLines("A.cs", 'Log("Déjà vu"); // checked'), []);
     assert.deepEqual(frenchCommentLines("build.ps1", "Write-Host 'Déjà vu' # checked"), []);

@@ -29,7 +29,8 @@ function touchedFiles(...patterns) {
 function checkFormat(files) {
     // An empty --include would check every file.
     if (files.length === 0) return;
-    run("dotnet", ["format", "whitespace", "--folder", "--verify-no-changes", "--include", ...files]);
+    const verify = mode === "fix" ? [] : ["--verify-no-changes"];
+    run("dotnet", ["format", "whitespace", "--folder", ...verify, "--include", ...files]);
 }
 
 function checkEnglishComments(files) {
@@ -42,7 +43,7 @@ function checkEnglishComments(files) {
 }
 
 checkFormat(touchedFiles("*.cs"));
-if (mode === "format") process.exit(0);
+if (mode === "format" || mode === "fix") process.exit(0);
 
 checkEnglishComments(touchedFiles(...checkedExtensions.map((extension) => `*${extension}`)));
 run("node", ["--test", "tooling/**/*.test.mjs"]);
