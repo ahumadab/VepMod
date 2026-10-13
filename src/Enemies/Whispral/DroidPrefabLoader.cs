@@ -2,19 +2,11 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Reflection;
-using REPOLib.Objects.Sdk;
 using UnityEngine;
 using VepMod.VepFramework;
-using Object = UnityEngine.Object;
-
-// ReSharper disable Unity.NoNullPatternMatching
 
 namespace VepMod.Enemies.Whispral;
 
-/// <summary>
-///     Charge le prefab du Droid
-///     Supporte le chargement asynchrone pour éviter les freezes.
-/// </summary>
 public static class DroidPrefabLoader
 {
     private const string BundleFileName = "vepmod_prefabs";
@@ -24,30 +16,17 @@ public static class DroidPrefabLoader
 
     private static AssetBundle? _bundle;
 
-    /// <summary>
-    ///     Le prefab Droid chargé, ou null si non disponible.
-    /// </summary>
     public static GameObject? DroidPrefab { get; private set; }
 
-    /// <summary>
-    ///     Indique si le prefab est disponible.
-    /// </summary>
     public static bool IsAvailable => DroidPrefab != null;
 
-    /// <summary>
-    ///     Indique si le chargement est en cours.
-    /// </summary>
     public static bool IsLoading { get; private set; }
 
     /// <summary>
-    ///     Indique si le chargement est terminé (succès ou échec).
+    ///     True once loading has ended, successfully or not.
     /// </summary>
     public static bool LoadCompleted { get; private set; }
 
-    /// <summary>
-    ///     Démarre le préchargement asynchrone du prefab.
-    ///     Doit être appelé au démarrage du mod via une coroutine.
-    /// </summary>
     public static IEnumerator PreloadAsync(Action<bool>? onComplete = null)
     {
         if (LoadCompleted || IsLoading)
@@ -59,7 +38,7 @@ public static class DroidPrefabLoader
         IsLoading = true;
         LOG.Info("Starting async preload of Droid prefab...");
 
-        // 1. Essayer de charger depuis la ressource embarquée dans la DLL
+        // 1. The bundle embedded in the DLL
         var embeddedLoaded = false;
         using (var stream = typeof(DroidPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
         {
@@ -93,7 +72,7 @@ public static class DroidPrefabLoader
             }
         }
 
-        // 2. Fallback: charger depuis le disque
+        // 2. The bundle file on disk
         if (!embeddedLoaded)
         {
             var bundlePath = FindBundlePath();
@@ -118,7 +97,6 @@ public static class DroidPrefabLoader
             LOG.Info($"AssetBundle loaded from file: {bundlePath}");
         }
 
-        // Essayer de charger le prefab directement
         var assetRequest = _bundle.LoadAssetAsync<GameObject>(DroidPrefabName);
         yield return assetRequest;
 
@@ -130,7 +108,7 @@ public static class DroidPrefabLoader
             yield break;
         }
 
-        // Méthode 2: Chercher dans tous les assets
+        // Fallback: any .prefab asset whose path contains the prefab name.
         var allAssetNames = _bundle.GetAllAssetNames();
         LOG.Debug($"Bundle contains {allAssetNames.Length} assets");
 
@@ -162,53 +140,9 @@ public static class DroidPrefabLoader
         onComplete?.Invoke(success);
     }
 
-    private static GameObject? GetPrefabFromContent(EnemyContent content)
-    {
-        var type = content.GetType();
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-        foreach (var prop in type.GetProperties(flags))
-        {
-            if (prop.PropertyType == typeof(GameObject) || prop.PropertyType.IsSubclassOf(typeof(Object)))
-            {
-                try
-                {
-                    if (prop.GetValue(content) is GameObject go && go != null)
-                    {
-                        return go;
-                    }
-                }
-                catch
-                {
-                    // Ignore
-                }
-            }
-        }
-
-        foreach (var field in type.GetFields(flags))
-        {
-            if (field.FieldType == typeof(GameObject) || field.FieldType.IsSubclassOf(typeof(Object)))
-            {
-                try
-                {
-                    if (field.GetValue(content) is GameObject go && go != null)
-                    {
-                        return go;
-                    }
-                }
-                catch
-                {
-                    // Ignore
-                }
-            }
-        }
-
-        return null;
-    }
-
     private static string? FindBundlePath()
     {
-        // 1. Chercher à partir du dossier de notre DLL
+        // 1. Next to this DLL
         var assemblyLocation = Assembly.GetExecutingAssembly().Location;
         if (!string.IsNullOrEmpty(assemblyLocation))
         {
@@ -227,7 +161,7 @@ public static class DroidPrefabLoader
             }
         }
 
-        // 2. Chercher dans BepInEx/plugins
+        // 2. BepInEx/plugins
         var bepInExPath = Path.Combine(Application.dataPath, "..", "BepInEx", "plugins");
         if (Directory.Exists(bepInExPath))
         {
@@ -235,7 +169,7 @@ public static class DroidPrefabLoader
             if (files.Length > 0) return files[0];
         }
 
-        // 3. Fallback
+        // 3. Anywhere under the game folder
         var parentPath = Path.Combine(Application.dataPath, "..");
         if (Directory.Exists(parentPath))
         {
@@ -244,21 +178,5 @@ public static class DroidPrefabLoader
         }
 
         return null;
-    }
-
-    /// <summary>
-    ///     Libère les ressources chargées.
-    /// </summary>
-    public static void Unload()
-    {
-        if (_bundle != null)
-        {
-            _bundle.Unload(false);
-            _bundle = null;
-        }
-
-        DroidPrefab = null;
-        IsLoading = false;
-        LoadCompleted = false;
     }
 }

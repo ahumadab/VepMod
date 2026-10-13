@@ -10,8 +10,7 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Gère les hallucinations de joueurs pour le joueur local affecté par le Whispral.
-///     Crée une hallucination pour chaque joueur rendu invisible.
+///     One Hallucination per Imitated Player of the local Victim.
 /// </summary>
 public sealed class DroidDebuff : MonoBehaviour
 {
@@ -27,7 +26,6 @@ public sealed class DroidDebuff : MonoBehaviour
     {
         if (!IsActive || _invisiblePlayerDebuff == null) return;
 
-        // Synchroniser les hallucinations avec les joueurs cachés
         SyncHallucinations();
     }
 
@@ -36,9 +34,6 @@ public sealed class DroidDebuff : MonoBehaviour
         DestroyAllHallucinations();
     }
 
-    /// <summary>
-    ///     Active ou désactive les hallucinations.
-    /// </summary>
     public void ApplyDebuff(bool active, InvisiblePlayerDebuff sourcePlayerDebuff)
     {
         if (!SemiFunc.IsMultiplayer())
@@ -61,9 +56,6 @@ public sealed class DroidDebuff : MonoBehaviour
         }
     }
 
-    /// <summary>
-    ///     Retourne le HallucinationDroid correspondant au nom du joueur, ou null.
-    /// </summary>
     public DroidController? GetDroidByPlayerName(string playerName)
     {
         foreach (var kvp in _droids)
@@ -81,14 +73,12 @@ public sealed class DroidDebuff : MonoBehaviour
     {
         LOG.Debug($"Creating hallucination for player {sourcePlayer.playerName}");
 
-        // Vérifier que le prefab LostDroid est disponible
         if (!DroidPrefabLoader.IsAvailable)
         {
-            LOG.Warning("LostDroid prefab not available - cannot create hallucination");
+            LOG.Warning("Hallucination prefab not available - cannot create hallucination");
             return;
         }
 
-        // Utiliser une position pré-calculée ou fallback sync
         var spawnPos = FindSpawnPosition();
         if (!spawnPos.HasValue)
         {
@@ -96,7 +86,6 @@ public sealed class DroidDebuff : MonoBehaviour
             return;
         }
 
-        // Créer l'hallucination en utilisant le prefab LostDroid
         var hallucination = DroidController.Create(sourcePlayer, spawnPos.Value);
         if (hallucination == null)
         {
@@ -154,7 +143,7 @@ public sealed class DroidDebuff : MonoBehaviour
 
     private Vector3? FindSpawnPosition()
     {
-        // Utiliser une position pré-calculée si disponible (pas de freeze)
+        // A precomputed position avoids the freeze of the synchronous search.
         if (_debuffManager != null)
         {
             var precomputed = _debuffManager.GetPrecomputedSpawnPosition();
@@ -165,7 +154,7 @@ public sealed class DroidDebuff : MonoBehaviour
             }
         }
 
-        // Fallback: recherche synchrone (peut causer un freeze)
+        // Synchronous search, which may freeze the game.
         LOG.Warning("No precomputed position available, falling back to sync search");
         var playerPos = PlayerAvatar.instance.transform.position;
 
@@ -186,7 +175,6 @@ public sealed class DroidDebuff : MonoBehaviour
     {
         var hiddenPlayers = _invisiblePlayerDebuff.HiddenPlayers;
 
-        // Ajouter les hallucinations manquantes
         foreach (var player in hiddenPlayers)
         {
             if (player && !_droids.ContainsKey(player))
@@ -195,7 +183,6 @@ public sealed class DroidDebuff : MonoBehaviour
             }
         }
 
-        // Supprimer les hallucinations pour les joueurs qui ne sont plus cachés ou dont l'hallucination a été détruite
         var toRemove = new List<PlayerAvatar>();
         foreach (var kvp in _droids)
         {

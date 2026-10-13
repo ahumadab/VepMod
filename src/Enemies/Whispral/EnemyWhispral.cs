@@ -41,13 +41,13 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     public EnemyWhispralAnim enemyWhispralAnim;
 
-    [Header("Attach settings")] [Tooltip("Temps pendant lequel l’ennemi reste collé au joueur.")]
+    [Header("Attach settings")]
+    [Tooltip("Temps pendant lequel l’ennemi reste collé au joueur.")]
     public float attachedDuration = 200f;
 
-    public EnemyWhispralAnim enemyWhispralAnima;
     [Space] public SpringQuaternion rotationSpring;
 
-    // Contexte partagé entre états
+    // Context shared between states
     [HideInInspector] public Vector3 agentDestination;
     [HideInInspector] public PlayerAvatar? playerTarget;
     [HideInInspector] public Transform? attachAnchor;
@@ -89,7 +89,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
 #endif
 
-        // Enregistrement des états
         Fsm.AddState(State.Spawn, new SpawnState());
         Fsm.AddState(State.Idle, new IdleState());
         Fsm.AddState(State.Roam, new RoamState());
@@ -115,7 +114,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         UpdateGrabAggroTimer();
 
-        // Transitions forcées par le système Enemy
+        // Transitions forced by the game's Enemy system
         CheckForStunState();
         CheckForDespawnState();
         RotationLogic();
@@ -251,7 +250,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             return;
         }
 
-        // Trouver le PlayerAvatar correspondant au targetViewID
         PlayerAvatar? targetPlayer = null;
         foreach (var player in GameDirector.instance.PlayerList)
         {
@@ -288,7 +286,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             return;
         }
 
-        // Trouver le joueur cible
         PlayerAvatar targetPlayer = null;
         foreach (var player in GameDirector.instance.PlayerList)
         {
@@ -301,7 +298,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         if (targetPlayer == null) return;
 
-        // Pré-calculer une position de spawn sur le client du joueur affecté
+        // The spawn position is precomputed on the Victim's client.
         var manager = targetPlayer.GetComponent<WhispralDebuffManager>();
         manager?.PrecomputeSpawnPosition();
     }
@@ -363,7 +360,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
         else if (CurrentState == State.GoToPlayer)
         {
-            // refresh du timer dans PlayerGoTo
+            // timer refreshed in PlayerGoTo
             Fsm.GetStateTyped<PlayerGoToState>(State.GoToPlayer)?.RefreshTimer();
         }
     }
@@ -386,7 +383,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     }
 
     /// <summary>
-    ///     Forcer le détachage (ex : quand le joueur passe en forme objet).
+    ///     Forces the detach, e.g. when the Victim turns into an object.
     /// </summary>
     private void ForceDetach()
     {
@@ -400,9 +397,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     #region États internes
 
-    /// <summary>
-    ///     Base commune pour tous les états, avec accès direct au Worker / Enemy.
-    /// </summary>
     private abstract class WhispralStateBase : StateMachineBase<StateMachine, State>.StateBase
     {
         protected StateMachine Fsm => Machine;
@@ -425,8 +419,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
 
         /// <summary>
-        ///     Nettoie les debuffs si on était attaché au joueur.
-        ///     À appeler quand on quitte l'état Attached/PrepareAttach sans passer par Detach.
+        ///     Clears the Effects if attached to the Victim. Call it when leaving Attached or PrepareAttach without going
+        ///     through Detach.
         /// </summary>
         protected void CleanupAttachmentIfNeeded(State previous)
         {
@@ -650,7 +644,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _precomputeTimer = 0f;
             _precomputedCount = 0;
 
-            // Pré-calculer immédiatement une première position
             PrecomputeSpawnPosition();
         }
 
@@ -670,7 +663,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 return;
             }
 
-            // Pré-calculer des positions à intervalles réguliers
             _precomputeTimer -= Time.deltaTime;
             if (_precomputeTimer <= 0f && _precomputedCount < MaxPrecomputedPositions)
             {
@@ -782,7 +774,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             if (CheckLeaveState()) return;
             CheckDetachState();
 
-            // BOUCLE 2 : Master envoie des commandes de lecture
+            // Loop 2: the Master sends playback commands
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
             voiceTimer -= Time.deltaTime;
             if (!(voiceTimer <= 0f)) return;
@@ -814,7 +806,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
             var targetViewID = targetPlayer.photonView.ViewID;
 
-            // Choisir un joueur source aléatoire
             var sourcePlayerNickName = ChooseRandomSourcePlayer(targetPlayer);
             if (sourcePlayerNickName == null)
             {
@@ -831,7 +822,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
         private static string? ChooseRandomSourcePlayer(PlayerAvatar targetPlayer)
         {
-            // Récupérer tous les joueurs disponibles, en excluant le joueur cible
             var targetNickName = targetPlayer.photonView.Owner?.NickName;
 
             var players = PhotonNetwork.PlayerList
