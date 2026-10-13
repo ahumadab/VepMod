@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs what CI runs: CI on GitHub cannot block a merge without branch protection.
+# A push of tags alone updates no branch CI would check.
+grep -qv '^refs/tags/' || exit 0
+exec npm run --silent check

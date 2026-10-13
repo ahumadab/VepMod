@@ -7,6 +7,8 @@ REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/A
 Before writing, changing or reviewing code, read `CODING_STANDARDS.md` (module shape, lifecycle, network contract,
 comments).
 
+Run `npm run check` before handing work back: it runs what the git hooks and CI run.
+
 ## Git workflow
 
 Gitflow, with `develop` as the default branch:

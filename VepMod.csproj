@@ -8,6 +8,10 @@
         <Version>1.0.0</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <PlatformTarget>x64</PlatformTarget>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- Rules the existing code still breaks: each one becomes an error once the code it fires on is fixed. -->
+        <WarningsNotAsErrors>$(WarningsNotAsErrors);CS8600;CS8601;CS8602;CS8603;CS8618;CS8625;CS9113;IDE0011;IDE0051;IDE0052;IDE1006;UNT0007;UNT0008</WarningsNotAsErrors>
     </PropertyGroup>
 
     <!-- Opt-out build variant: `dotnet build -p:VepModNoVad=true` produces a VAD-free plugin with
@@ -30,6 +34,7 @@
     <!-- Package References -->
     <ItemGroup>
         <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.Unity.Analyzers" Version="1.28.0" PrivateAssets="all"/>
         <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.5.0-beta.2" PrivateAssets="all" IncludeAssets="build"/>
         <PackageReference Include="Linkoid.Repo.Plugin.Build" Version="*" PrivateAssets="all"/>
         <PackageReference Include="Zehs.REPOLib" Version="4.*"/>
@@ -46,6 +51,8 @@
         <None Remove="node_modules\**"/>
         <None Remove="plugins\**"/>
         <None Remove="tests\**"/>
+        <None Remove="tooling\**"/>
+        <None Remove=".editorconfig;.gitattributes"/>
         <Compile Include="src\**\*.cs"/>
     </ItemGroup>
 
