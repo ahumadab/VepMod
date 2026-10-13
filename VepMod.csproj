@@ -51,8 +51,9 @@
         <None Remove="node_modules\**"/>
         <None Remove="plugins\**"/>
         <None Remove="tests\**"/>
-        <None Remove="tooling\**"/>
-        <None Remove=".editorconfig;.gitattributes"/>
+        <!-- Linkoid copies every None item into plugins/<Authors>-<Name>/ (BepInExDirectory is unset): only the build
+             output belongs there. -->
+        <None Update="@(None)" CopyToPluginOutputDirectory="Never"/>
         <Compile Include="src\**\*.cs"/>
     </ItemGroup>
 
