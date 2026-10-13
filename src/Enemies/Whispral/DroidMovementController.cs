@@ -311,8 +311,7 @@ public sealed class DroidMovementController : MonoBehaviour
     }
 
     /// <summary>
-    ///     Horizontal motion follows the NavMeshAgent's desiredVelocity; vertical motion is accumulated gravity,
-    ///     applied every frame, even outside movement states, so the Hallucination always lands.
+    ///     Applies gravity every frame, even outside movement states, so the Hallucination always lands.
     /// </summary>
     public void UpdateMovement(bool isMovementState)
     {

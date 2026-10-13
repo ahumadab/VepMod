@@ -20,7 +20,7 @@ public sealed class DroidDebuff : MonoBehaviour
     private static readonly VepLogger LOG = VepLogger.Create<DroidDebuff>();
 
     private readonly Dictionary<PlayerAvatar, DroidController> _droids = new();
-    private readonly List<PlayerAvatar> _staleSources = new();
+    private readonly List<PlayerAvatar> _staleImitatedPlayers = new();
     private InvisiblePlayerDebuff _invisiblePlayerDebuff;
     private Coroutine? _spawning;
 
@@ -68,15 +68,15 @@ public sealed class DroidDebuff : MonoBehaviour
         return null;
     }
 
-    // The spawn-point search runs a frame before the instantiation, and one Hallucination spawns per run: creating
-    // every Hallucination in the frame the Victim became Haunted froze the game.
-    private IEnumerator SpawnHallucination(PlayerAvatar sourcePlayer)
+    // One Hallucination per run, a frame after its spawn-point search: creating every Hallucination in the frame the
+    // Victim became Haunted froze the game.
+    private IEnumerator SpawnHallucination(PlayerAvatar imitatedPlayer)
     {
         var spawnPosition = FindSpawnPosition();
         yield return null;
 
-        var hallucination = sourcePlayer && spawnPosition.HasValue
-            ? DroidController.Create(sourcePlayer, spawnPosition.Value)
+        var hallucination = imitatedPlayer && spawnPosition.HasValue
+            ? DroidController.Create(imitatedPlayer, spawnPosition.Value)
             : null;
 
         if (hallucination == null)
@@ -86,8 +86,8 @@ public sealed class DroidDebuff : MonoBehaviour
         }
         else
         {
-            _droids[sourcePlayer] = hallucination;
-            LOG.Debug($"Hallucination of {sourcePlayer.playerName} spawned at {spawnPosition}");
+            _droids[imitatedPlayer] = hallucination;
+            LOG.Debug($"Hallucination of {imitatedPlayer.playerName} spawned at {spawnPosition}");
         }
 
         _spawning = null;
@@ -166,15 +166,15 @@ public sealed class DroidDebuff : MonoBehaviour
         {
             if (!kvp.Key || !kvp.Value || !hiddenPlayers.Contains(kvp.Key))
             {
-                _staleSources.Add(kvp.Key);
+                _staleImitatedPlayers.Add(kvp.Key);
             }
         }
 
-        foreach (var player in _staleSources)
+        foreach (var player in _staleImitatedPlayers)
         {
             DestroyHallucination(player);
         }
 
-        _staleSources.Clear();
+        _staleImitatedPlayers.Clear();
     }
 }
