@@ -29,12 +29,16 @@ public sealed class Haunting : MonoBehaviour
 
     public void Attach(int whispralViewID)
     {
-        Apply(attachments.Attach(whispralViewID));
+        var transition = attachments.Attach(whispralViewID);
+        LOG.Debug($"Whispral {whispralViewID} attached to {victim.playerName}: {transition}");
+        Apply(transition);
     }
 
     public void Detach(int whispralViewID)
     {
-        Apply(attachments.Detach(whispralViewID));
+        var transition = attachments.Detach(whispralViewID);
+        LOG.Debug($"Whispral {whispralViewID} detached from {victim.playerName}: {transition}");
+        Apply(transition);
     }
 
     private void Apply(HauntedTransition transition)

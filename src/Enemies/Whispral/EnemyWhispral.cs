@@ -305,6 +305,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             // Despawn deactivates this object at once: the FSM has to leave its state in this call, or a Whispral
             // killed while attached never ends its Attachment.
+            LOG.Debug($"Whispral {photonView.ViewID} killed in state {CurrentState}.");
             Fsm.NextStateStateId = State.Despawn;
             Fsm.Update();
         }
@@ -679,6 +680,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             Whispral.attachAnchor = SemiFunc.PlayerGetFaceEyeTransform(victim);
             // Kept as an ID: the Victim's avatar may be gone by the time the Attachment ends.
             victimViewID = victim.photonView.ViewID;
+            LOG.Debug($"Whispral {Whispral.photonView.ViewID} starts its Attachment to {victim.playerName}.");
             Whispral.ReportAttachment(victimViewID.Value, true);
         }
 
@@ -689,6 +691,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             Whispral.attachAnchor = null;
             if (victimViewID == null) return;
 
+            LOG.Debug($"Whispral {Whispral.photonView.ViewID} ends its Attachment to ViewID {victimViewID} (-> {next}).");
             Whispral.ReportAttachment(victimViewID.Value, false);
             victimViewID = null;
         }
@@ -879,6 +882,12 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     private class StunState : WhispralStateBase
     {
+        public override void OnStateEnter(State previous)
+        {
+            base.OnStateEnter(previous);
+            LOG.Debug($"Whispral {Whispral.photonView.ViewID} stunned in state {previous}.");
+        }
+
         public override void OnStateUpdate()
         {
             if (!Enemy.IsStunned())
