@@ -16,16 +16,15 @@ using VepMod.Patchs;
 namespace VepMod.Dev;
 
 /// <summary>
-///     Outils de dev pour tester rapidement la gravité / l'animation de chute du droid
-///     sans dépendre du flux Whispral/multi. Activé via le flag config
-///     "Developer / Enable Dev Tools". Attaché au GameObject du plugin.
+///     Dev tools to test a Hallucination's gravity and fall animation without a Whispral or a second player.
+///     Enabled by the "Developer / Enable Dev Tools" config flag; sits on the plugin's GameObject.
 ///
-///     Touches :
-///       F7  — Spawn un droid au point visé (clone le joueur local, marche en solo)
-///       F8  — Téléporte le droid le plus proche au point visé (le poser sur un rebord)
-///       F9  — Drop test : soulève le droid le plus proche et le lâche sur place
-///       F10 — Toggle de l'overlay HUD
-///       F11 — Despawn les droids spawnés par l'outil
+///     Keys:
+///       F7  — spawn a Hallucination of the local player at the aimed point (works in singleplayer)
+///       F8  — teleport the nearest Hallucination to the aimed point (to put it on a ledge)
+///       F9  — drop test: lift the nearest Hallucination and let it fall in place
+///       F10 — toggle the HUD overlay
+///       F11 — despawn the Hallucinations the tool spawned
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
@@ -38,10 +37,10 @@ public sealed class DroidDevTools : MonoBehaviour
     private const KeyCode HudKey = KeyCode.F10;
     private const KeyCode DespawnKey = KeyCode.F11;
 
-    private const float DropHeight = 6f; // m de soulèvement pour le drop test
-    private const float AimMaxDistance = 100f; // portée du raycast de visée
-    private const float NavSnapRadius = 5f; // rayon de snap NavMesh au spawn/teleport
-    private const float NearestRefreshInterval = 0.4f; // s entre deux rafraîchissements du cache
+    private const float DropHeight = 6f; // m, drop test lift
+    private const float AimMaxDistance = 100f; // m, aim raycast range
+    private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
+    private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidDevTools>();
 
@@ -84,7 +83,7 @@ public sealed class DroidDevTools : MonoBehaviour
             return;
         }
 
-        // Snap sur le NavMesh pour que le droid démarre sa navigation correctement.
+        // A Hallucination off the NavMesh cannot start navigating.
         var spawnPos = NavMesh.SamplePosition(point, out var hit, NavSnapRadius, NavMesh.AllAreas)
             ? hit.position
             : point;
@@ -157,9 +156,9 @@ public sealed class DroidDevTools : MonoBehaviour
 
 #if !VEPMOD_NO_VAD
     /// <summary>
-    ///     Rejoue tous les WAV captures (AudioFiles/) a travers le VAD de prod a la sensibilite
-    ///     courante, et logge accept/reject + ratio par fichier + agregat. Diagnostic mic-free :
-    ///     verifie la decision runtime (vraie DLL native chargee par le jeu) sur de vrais clips.
+    ///     Replays every captured WAV (AudioFiles/) through the production VAD at the current sensitivity, and logs
+    ///     accept or reject with the speech ratio per file, then the totals. A diagnostic without a microphone: it
+    ///     checks the runtime decision, with the real native DLL the game loads, on real Voice Samples.
     /// </summary>
     private void ReplayWavFolderThroughVad()
     {
@@ -209,7 +208,7 @@ public sealed class DroidDevTools : MonoBehaviour
     }
 
     /// <summary>
-    ///     Charge un WAV PCM16 mono ecrit par WavFileManager (en-tete canonique 44 octets).
+    ///     Reads a mono PCM16 WAV written by WavFileManager, with its canonical 44-byte header.
     /// </summary>
     private static bool TryLoadWav(string path, out float[] samples, out int sampleRate)
     {
@@ -219,7 +218,7 @@ public sealed class DroidDevTools : MonoBehaviour
         {
             var bytes = File.ReadAllBytes(path);
             if (bytes.Length <= 44) return false;
-            sampleRate = BitConverter.ToInt32(bytes, 24); // offset standard du sample rate WAV
+            sampleRate = BitConverter.ToInt32(bytes, 24); // standard WAV sample rate offset
             if (sampleRate <= 0) return false;
 
             var pcmLength = bytes.Length - 44;

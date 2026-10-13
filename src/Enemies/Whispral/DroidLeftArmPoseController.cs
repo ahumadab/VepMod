@@ -6,15 +6,12 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Clone de la logique de pose de PlayerAvatarLeftArm pour le droid AI.
-///     En vanilla, le bras gauche (qui porte la flashlight) est levé en
-///     'flashlightPose' tant que la lampe est allumée et que le joueur ne crawl
-///     pas, sinon il retombe en 'basePose'. Le droid a sa lampe TOUJOURS allumée
-///     et ne crawl jamais : on vise donc en permanence flashlightPose. Sans ce
-///     controller, le bras reste à la pose bakée du rig (souvent basePose, bras
-///     baissé) car le script source a été strippé au clonage.
-///
-///     On ignore le headRotation (offset pitch caméra) comme pour le bras droit.
+///     The arm pose logic of PlayerAvatarLeftArm, rebuilt for a Hallucination. In the game, the left arm, which
+///     holds the flashlight, rises to flashlightPose while the flashlight is on and the player is not crawling.
+///     A Hallucination's flashlight is always on and it never crawls, so the arm always aims at flashlightPose.
+///     The game script is stripped when the visuals are cloned; without this controller the arm would keep the
+///     rig's baked pose, usually the lowered basePose.
+///     headRotation (the camera pitch offset) is ignored, as for the right arm.
 /// </summary>
 public sealed class DroidLeftArmPoseController : MonoBehaviour
 {
@@ -55,7 +52,7 @@ public sealed class DroidLeftArmPoseController : MonoBehaviour
         _poseCurve = poseCurve;
         _poseSpeed = poseSpeed;
 
-        // Démarre à basePose et lerp vers flashlightPose (montée douce du bras au spawn).
+        // Starts at basePose so the arm rises smoothly when the Hallucination spawns.
         _poseOld = basePose;
         _poseCurrent = basePose;
         _poseLerp = 0f;

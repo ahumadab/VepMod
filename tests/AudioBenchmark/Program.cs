@@ -8,16 +8,16 @@ using AudioBenchmark.Validators;
 
 const string DEFAULT_DATASET_PATH = @"C:\Program Files (x86)\Steam\steamapps\common\REPO\REPO_Data\AudioFiles";
 
-// --- Seuils heuristiques pour auto-classification ---
-// Un fichier est AUTO-NOISE si TOUTES ces conditions sont vraies:
-const float AUTO_NOISE_MAX_RMS = 0.004f;        // RMS très faible -> quasi-silence
-const float AUTO_NOISE_MAX_PEAK = 0.02f;         // Aucun pic significatif
-const float AUTO_NOISE_MAX_SPEECH = 0.05f;       // VAD ne détecte quasi rien
+// --- Auto-classification thresholds ---
+// A file is AUTO-NOISE when ALL of these hold:
+const float AUTO_NOISE_MAX_RMS = 0.004f;        // near silence
+const float AUTO_NOISE_MAX_PEAK = 0.02f;         // no real peak
+const float AUTO_NOISE_MAX_SPEECH = 0.05f;       // VAD finds almost nothing
 
-// Un fichier est AUTO-SPEECH si TOUTES ces conditions sont vraies:
-const float AUTO_SPEECH_MIN_RMS = 0.025f;        // RMS clairement au-dessus du bruit
-const float AUTO_SPEECH_MIN_PEAK = 0.15f;        // Pics clairs
-const float AUTO_SPEECH_MIN_SPEECH = 0.50f;      // VAD détecte >50% de parole
+// A file is AUTO-SPEECH when ALL of these hold:
+const float AUTO_SPEECH_MIN_RMS = 0.025f;        // clearly above noise
+const float AUTO_SPEECH_MIN_PEAK = 0.15f;        // clear peaks
+const float AUTO_SPEECH_MIN_SPEECH = 0.50f;      // VAD finds >50% speech
 
 var datasetPath = args.Length > 0 ? args[0] : DEFAULT_DATASET_PATH;
 var labelsPath = args.Length > 1 ? args[1] : null;
@@ -37,7 +37,7 @@ if (!Directory.Exists(datasetPath))
     return 1;
 }
 
-// ===== Phase 1: Charger le dataset =====
+// ===== Phase 1: load the dataset =====
 Console.WriteLine("\n--- Phase 1: Chargement du dataset ---");
 var sw = Stopwatch.StartNew();
 var dataset = WavReader.LoadDataset(datasetPath);
@@ -50,20 +50,18 @@ if (dataset.Count == 0)
     return 1;
 }
 
-// Stats du dataset
 var players = dataset.GroupBy(w => w.PlayerName).OrderBy(g => g.Key).ToList();
 Console.WriteLine($"  Joueurs: {players.Count}");
 Console.WriteLine($"  Durée totale: {dataset.Sum(w => w.DurationSeconds):F1}s");
 Console.WriteLine($"  Durée moyenne: {dataset.Average(w => w.DurationSeconds):F2}s");
 Console.WriteLine($"  Sample rates: {string.Join(", ", dataset.Select(w => w.SampleRate).Distinct().OrderBy(x => x).Select(x => $"{x}Hz"))}");
 
-// ===== Phase 2: Analyse audio + VAD =====
+// ===== Phase 2: audio analysis and VAD =====
 Console.WriteLine("\n--- Phase 2: Analyse audio ---");
 
 using var vadDefault = new VadAudioValidator(VadValidationCriteria.Default);
 using var vadStrict = new VadAudioValidator(VadValidationCriteria.Strict);
 
-// Collecter les métriques brutes de chaque fichier
 var fileMetrics = new List<(WavFile wav, AudioAnalysisResult analysis, VadAnalysisResult vadDefault, VadAnalysisResult vadStrict)>();
 
 foreach (var wav in dataset)
@@ -76,7 +74,7 @@ foreach (var wav in dataset)
     fileMetrics.Add((wav, analysis, vadDefAnalysis, vadStrAnalysis));
 }
 
-// ===== Phase 3: Auto-classification heuristique =====
+// ===== Phase 3: heuristic auto-classification =====
 Console.WriteLine("\n--- Phase 3: Auto-classification ---");
 
 DatasetLabels labels;
@@ -84,7 +82,7 @@ var labelsOutputPath = Path.Combine(outputDir, "labels.json");
 
 if (labelsPath != null && File.Exists(labelsPath))
 {
-    // Charger les labels existants (potentiellement complétés manuellement)
+    // Existing labels may hold manual decisions.
     labels = DatasetLabels.Load(labelsPath);
     Console.WriteLine($"  Labels chargés depuis: {labelsPath}");
     Console.WriteLine($"  - Speech: {labels.Labels.Count(l => l.Label == AudioLabel.Speech)}");
@@ -93,7 +91,6 @@ if (labelsPath != null && File.Exists(labelsPath))
 }
 else
 {
-    // Générer les labels automatiques
     labels = new DatasetLabels
     {
         DatasetPath = datasetPath,
@@ -160,7 +157,7 @@ Console.WriteLine($"    BRUIT:  {totalNoise} ({autoNoiseCount} auto + {manualNoi
 Console.WriteLine($"    A VERIFIER: {unknownCount}");
 Console.WriteLine($"    Total labellisé: {totalSpeech + totalNoise}/{labels.TotalFiles}");
 
-// ===== Phase 4: Évaluation du pipeline avec les labels =====
+// ===== Phase 4: evaluate the pipelines against the labels =====
 Console.WriteLine("\n--- Phase 4: Évaluation du pipeline ---");
 
 if (unknownCount > 0)
@@ -171,16 +168,13 @@ if (unknownCount > 0)
     Console.WriteLine("  et re-exécutez: dotnet run -- [dataset_path] [labels.json]");
 }
 
-// Construire un lookup des labels par nom de fichier
 var labelLookup = labels.Labels.ToDictionary(l => l.FileName, l => l.Label);
 
-// Créer les validateurs à évaluer
 var preFilterGame = new AudioRecordingValidator(AudioValidationCriteria.Game);
 var preFilterDefault = new AudioRecordingValidator(AudioValidationCriteria.Default);
 var preFilterStrict = new AudioRecordingValidator(AudioValidationCriteria.Strict);
 var preFilterPermissive = new AudioRecordingValidator(AudioValidationCriteria.Permissive);
 
-// Évaluer chaque configuration du pipeline
 var configs = new List<(string Name, Func<WavFile, bool> Predicate)>
 {
     ("PreFilter Game", wav => preFilterGame.Validate(wav.Samples, wav.SampleRate).IsValid),
@@ -189,7 +183,7 @@ var configs = new List<(string Name, Func<WavFile, bool> Predicate)>
     ("PreFilter Permissive", wav => preFilterPermissive.Validate(wav.Samples, wav.SampleRate).IsValid),
 };
 
-// Ajouter les configs VAD avec différents seuils de speech ratio
+// VAD at several speech ratio thresholds
 foreach (var minSpeech in new[] { 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.40f, 0.50f, 0.60f })
 {
     var threshold = minSpeech;
@@ -197,39 +191,45 @@ foreach (var minSpeech in new[] { 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.40
     {
         var metrics = fileMetrics.First(m => m.wav.FileName == wav.FileName);
         return metrics.vadDefault.SpeechRatio >= threshold;
-    }));
+    }
+    ));
 }
 
-// Ajouter le pipeline combiné actuel (PreFilter permissif + VAD Strict)
+// Current combined pipeline: permissive pre-filter + strict VAD
 configs.Add(("Combined (actuel)", wav =>
 {
     var pf = new AudioRecordingValidator(new AudioValidationCriteria
     {
-        MinDurationSeconds = 0.3f, MinRms = 0.003f, MinPeakAmplitude = 0.01f,
-        MinNonSilenceRatio = 0.01f, SilenceThreshold = 0.002f
+        MinDurationSeconds = 0.3f,
+        MinRms = 0.003f,
+        MinPeakAmplitude = 0.01f,
+        MinNonSilenceRatio = 0.01f,
+        SilenceThreshold = 0.002f
     });
     if (!pf.Validate(wav.Samples, wav.SampleRate).IsValid) return false;
     var metrics = fileMetrics.First(m => m.wav.FileName == wav.FileName);
     return metrics.vadStrict.SpeechRatio >= 0.60f;
-}));
+}
+));
 
-// Ajouter le pipeline Game PreFilter + VAD Default
+// Game pre-filter + default VAD
 configs.Add(("Game + VAD>=0.10", wav =>
 {
     if (!preFilterGame.Validate(wav.Samples, wav.SampleRate).IsValid) return false;
     var metrics = fileMetrics.First(m => m.wav.FileName == wav.FileName);
     return metrics.vadDefault.SpeechRatio >= 0.10f;
-}));
+}
+));
 
-// Ajouter Game PreFilter + VAD avec seuil intermédiaire
+// Game pre-filter + VAD at an intermediate threshold
 configs.Add(("Game + VAD>=0.25", wav =>
 {
     if (!preFilterGame.Validate(wav.Samples, wav.SampleRate).IsValid) return false;
     var metrics = fileMetrics.First(m => m.wav.FileName == wav.FileName);
     return metrics.vadDefault.SpeechRatio >= 0.25f;
-}));
+}
+));
 
-// Filtrer uniquement les fichiers labellisés (Speech ou Noise)
 var labeledFiles = dataset.Where(w => labelLookup.TryGetValue(w.FileName, out var l) && l != AudioLabel.Unknown).ToList();
 
 if (labeledFiles.Count >= 10)
@@ -248,8 +248,7 @@ if (labeledFiles.Count >= 10)
             var actual = labelLookup[wav.FileName];
             var predicted = predicate(wav);
 
-            // predicted=true (Accept) -> on dit "c'est de la parole"
-            // actual=Speech -> c'est vraiment de la parole
+            // Positive means speech: predicted is the pipeline accepting, actual the label.
             if (predicted && actual == AudioLabel.Speech) tp++;
             else if (predicted && actual == AudioLabel.Noise) fp++;
             else if (!predicted && actual == AudioLabel.Speech) fn++;
@@ -280,7 +279,7 @@ else
     Console.WriteLine("  Labellisez au moins 10 fichiers dans labels.json et re-exécutez.");
 }
 
-// ===== Phase 5: Performance =====
+// ===== Phase 5: performance =====
 Console.WriteLine("\n--- Phase 5: Performance ---");
 var perfSw = Stopwatch.StartNew();
 foreach (var wav in dataset)
@@ -304,10 +303,9 @@ Console.WriteLine($"  VAD Default moyen:    {vadAvgMs:F3}ms/fichier");
 Console.WriteLine($"  Total combiné:        {preFilterAvgMs + vadAvgMs:F3}ms/fichier");
 Console.WriteLine($"  {(vadAvgMs < 50 ? "-> Compatible runtime Unity (< 50ms)" : "-> ATTENTION: pourrait causer des freezes")}");
 
-// ===== Export CSV et HTML =====
+// ===== CSV and HTML export =====
 Console.WriteLine("\n--- Exports ---");
 
-// CSV brut avec toutes les métriques
 var csvPath = Path.Combine(outputDir, "benchmark_results.csv");
 var csvLines = new List<string>
 {
@@ -341,7 +339,7 @@ foreach (var (wav, analysis, vadDef, vadStr) in fileMetrics)
 File.WriteAllLines(csvPath, csvLines);
 Console.WriteLine($"  CSV: {csvPath}");
 
-// HTML pour écoute manuelle
+// HTML report to label files by ear
 var htmlPath = Path.Combine(outputDir, "labeling_report.html");
 HtmlReportGenerator.Generate(htmlPath, labels, datasetPath);
 Console.WriteLine($"  HTML: {htmlPath}");
@@ -356,7 +354,6 @@ Console.WriteLine($"  Performance VAD: {vadAvgMs:F2}ms/fichier (compatible Unity
 
 if (labeledFiles.Count >= 10)
 {
-    // Trouver la meilleure config
     var bestF1 = 0f;
     var bestName = "";
     foreach (var (name, predicate) in configs)

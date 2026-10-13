@@ -3,10 +3,6 @@ using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
-/// <summary>
-///     Contrôleur du nameplate pour HallucinationDroid.
-///     Gère la création, la position et la visibilité du nom au-dessus du droid.
-/// </summary>
 public sealed class DroidNameplate : MonoBehaviour
 {
     private const float NameplateHeight = 1.9f;
@@ -21,9 +17,6 @@ public sealed class DroidNameplate : MonoBehaviour
     private WorldSpaceUIPlayerName? _nameplate;
     private PlayerAvatar _sourcePlayer = null!;
 
-    /// <summary>
-    ///     Initialise le contrôleur de nameplate.
-    /// </summary>
     public void Initialize(Transform controllerTransform, PlayerAvatar sourcePlayer)
     {
         _controllerTransform = controllerTransform;
@@ -33,7 +26,7 @@ public sealed class DroidNameplate : MonoBehaviour
     }
 
     /// <summary>
-    ///     Met à jour le nameplate (appelé dans LateUpdate).
+    ///     Called from LateUpdate.
     /// </summary>
     public void UpdateNameplate()
     {
@@ -43,21 +36,17 @@ public sealed class DroidNameplate : MonoBehaviour
         var cameraPos = Camera.main.transform.position;
         var distance = Vector3.Distance(worldPos, cameraPos);
 
-        // Vérifier si le droid est visible (pas de mur entre la caméra et le droid)
         var direction = worldPos - cameraPos;
         var isVisible = !Physics.Raycast(cameraPos, direction.normalized, distance,
             LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
 
-        // Alpha basé sur la distance (1 proche, 0 à MaxVisibleDistance+)
         var distanceAlpha = Mathf.Clamp01(1f - distance / MaxVisibleDistance);
         var targetAlpha = isVisible ? distanceAlpha : 0f;
 
-        // Lerp smooth
         var currentColor = _nameplate.text.color;
         var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * FadeSpeed);
         _nameplate.text.color = new Color(1f, 1f, 1f, newAlpha);
 
-        // Mettre à jour la position
         var screenPos = SemiFunc.UIWorldToCanvasPosition(worldPos);
         var rect = _nameplate.GetComponent<RectTransform>();
         if (rect != null)
@@ -65,7 +54,6 @@ public sealed class DroidNameplate : MonoBehaviour
             rect.anchoredPosition = screenPos;
         }
 
-        // Ajuster la taille selon la distance
         _nameplate.text.fontSize = Mathf.Clamp(MaxFontSize - distance, MinFontSize, MaxFontSize);
     }
 
@@ -81,7 +69,7 @@ public sealed class DroidNameplate : MonoBehaviour
 
         if (_nameplate != null)
         {
-            // Assigner le SourcePlayer pour éviter la destruction automatique
+            // WorldSpaceUIPlayerName destroys itself without a playerAvatar.
             _nameplate.playerAvatar = _sourcePlayer;
             _nameplate.text.text = _sourcePlayer.playerName;
         }

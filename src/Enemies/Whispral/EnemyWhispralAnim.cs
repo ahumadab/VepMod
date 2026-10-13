@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
 
@@ -17,18 +17,18 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>();
 
-    [Space] [SerializeField] private Enemy enemy;
+    [Space][SerializeField] private Enemy enemy;
     [SerializeField] private EnemyWhispral enemyWhispral;
 
-    [Space] [SerializeField] private Sound soundHurt;
+    [Space][SerializeField] private Sound soundHurt;
     [SerializeField] private Sound soundDeath;
 
-    [Space] [SerializeField] private Sound soundBreatheIn;
+    [Space][SerializeField] private Sound soundBreatheIn;
     [SerializeField] private Sound soundBreatheOut;
     [SerializeField] private Vector2 breathingDurationInRange;
     [SerializeField] private Vector2 breathingDurationOutRange;
 
-    [Space] [SerializeField] private GameObject visuals;
+    [Space][SerializeField] private GameObject visuals;
     [SerializeField] private GameObject rigidBody;
     protected override State DefaultState => State.NoBreathing;
 
@@ -105,15 +105,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     #region States
 
-    /// <summary>
-    ///     État "ne fait rien de spécial" côté anim/sons, coupe la respiration.
-    /// </summary>
     private sealed class NoBreathing(EnemyWhispralAnim owner) : StateMachineBase<StateMachine, State>.StateBase { }
 
-    /// <summary>
-    ///     État de respiration générique : joue un son au début, attend Duration, puis passe à NextState.
-    ///     Utilisé pour BreatheIn et BreatheOut.
-    /// </summary>
     private sealed class BreathingState(EnemyWhispralAnim owner, Sound sound, Vector2 durationRange, State nextState)
         : StateMachineBase<StateMachine, State>.StateBaseTransition(durationRange.x, nextState)
     {
@@ -153,7 +146,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         {
             base.OnStateExit(next);
             if (_audioSource) _audioSource.Stop();
-            if (next != _nextState) // Si on ne va pas à l’état suivant prévu, on coupe la respiration.
+            if (next != _nextState) // Breathing was interrupted before its planned next state.
             {
                 owner.Show(true);
             }

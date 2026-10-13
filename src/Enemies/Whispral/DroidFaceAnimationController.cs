@@ -6,8 +6,7 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Contrôleur d'animation pour HallucinationDroid.
-///     Gère les paupières fâchées, l'animation de parole et la détection du regard du joueur.
+///     A Hallucination's face: angry eyelids, talking animation, and the Victim's Gaze.
 /// </summary>
 public sealed class DroidFaceAnimationController : MonoBehaviour
 {
@@ -43,14 +42,8 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     private AudioSource? _talkingAudioSource;
     private bool _wasPlayerLooking;
 
-    /// <summary>
-    ///     Indique si le joueur regarde actuellement le droid.
-    /// </summary>
     public bool IsPlayerLookingAtMe { get; private set; }
 
-    /// <summary>
-    ///     Initialise le contrôleur d'animation.
-    /// </summary>
     public void Initialize(DroidController droidController, Transform controllerTransform)
     {
         _droidController = droidController;
@@ -58,7 +51,7 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     }
 
     /// <summary>
-    ///     Configure le système des paupières (appelé après setup).
+    ///     Called after setup.
     /// </summary>
     public void SetupEyelids(
         GameObject? eyelidsLeft,
@@ -80,16 +73,13 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
         _rightLowerEyelidRotationX = rightLowerX;
     }
 
-    /// <summary>
-    ///     Configure le système de talking animation.
-    /// </summary>
     public void SetupTalking(Transform headTopTransform)
     {
         _headTopTransform = headTopTransform;
     }
 
     /// <summary>
-    ///     Met à jour les animations (appelé dans LateUpdate).
+    ///     Called from LateUpdate.
     /// </summary>
     public void UpdateAnimations()
     {
@@ -103,7 +93,6 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
         if (_eyelidsLeft == null || _eyelidsRight == null) return;
         if (_leftUpperEyelidRotationX == null || _rightUpperEyelidRotationX == null) return;
 
-        // Transition de "pas regardé" à "regardé"
         if (IsPlayerLookingAtMe && !_wasPlayerLooking)
         {
             _angryTimer = _droidController.IsStalking ? StalkStareBeforeFlee : AngryEyesCooldown;
@@ -111,7 +100,6 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
 
         _wasPlayerLooking = IsPlayerLookingAtMe;
 
-        // Gestion du timer et de l'état angry
         if (IsPlayerLookingAtMe)
         {
             _angryTimer -= Time.deltaTime;
@@ -125,14 +113,12 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
             _isAngry = true;
         }
 
-        // Activer les paupières quand on devient angry
         if (_isAngry && !_eyelidsLeft.activeSelf)
         {
             _eyelidsLeft.SetActive(true);
             _eyelidsRight.SetActive(true);
         }
 
-        // Valeurs cibles
         var targetUpperClosed = _isAngry ? AngryExpression.UpperLidClosed : 0f;
         var targetLowerClosed = _isAngry ? AngryExpression.LowerLidClosed : 0f;
         var targetLeftAngle = _isAngry ? AngryExpression.UpperLidAngleLeft : 0f;
@@ -140,7 +126,6 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
 
         var lerpSpeed = Time.deltaTime * 8f;
 
-        // Animer les paupières supérieures
         _leftUpperEyelidRotationX.localRotation = Quaternion.Slerp(
             _leftUpperEyelidRotationX.localRotation,
             Quaternion.Euler(targetUpperClosed, 0f, 0f),
@@ -167,7 +152,6 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
                 lerpSpeed);
         }
 
-        // Animer les paupières inférieures
         if (_leftLowerEyelidRotationX != null)
         {
             _leftLowerEyelidRotationX.localRotation = Quaternion.Slerp(
@@ -184,7 +168,6 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
                 lerpSpeed);
         }
 
-        // Désactiver les paupières quand l'animation est terminée
         if (!_isAngry && _eyelidsLeft.activeSelf)
         {
             var currentAngle = Mathf.Abs(_leftUpperEyelidRotationX.localEulerAngles.x);

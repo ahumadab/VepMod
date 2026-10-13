@@ -13,7 +13,6 @@ $OutputDir     = Join-Path $PSScriptRoot "bin\Release\netstandard2.1"
 
 Write-Host "=== Build Release $Version ===" -ForegroundColor Cyan
 
-# 1. Build du projet en mode Release
 Write-Host "Building $ProjectName in Release mode..." -ForegroundColor Yellow
 dotnet build "$PSScriptRoot\$ProjectName.csproj" -c Release
 if ($LASTEXITCODE -ne 0) {
@@ -21,7 +20,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# 2. Definir les fichiers requis et verifier leur existence AVANT toute action
+# Every required file is checked before anything is written.
 $requiredFiles = @(
     @{ Source = Join-Path $OutputDir "$ProjectName.dll";                        Dest = "$ProjectName.dll" },
     @{ Source = Join-Path $OutputDir "WebRtcVadSharp.dll";                      Dest = "WebRtcVadSharp.dll" },
@@ -45,16 +44,13 @@ if ($missingFiles.Count -gt 0) {
     exit 1
 }
 
-# 3. Preparer le dossier dist/staging
 New-Item -ItemType Directory -Path $StagingDir -Force | Out-Null
 
-# 4. Copier les fichiers requis
 foreach ($file in $requiredFiles) {
     Copy-Item $file.Source -Destination (Join-Path $StagingDir $file.Dest) -Force
     Write-Host "  Copied $($file.Dest)" -ForegroundColor Green
 }
 
-# 5. Creer le ZIP
 $ZipPath = Join-Path $DistDir $ZipName
 Compress-Archive -Path "$StagingDir\*" -DestinationPath $ZipPath -Force
 Write-Host ""

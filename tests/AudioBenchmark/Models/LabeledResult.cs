@@ -4,35 +4,29 @@ using System.Text.Json.Serialization;
 namespace AudioBenchmark.Models;
 
 /// <summary>
-///     Classification ground truth d'un fichier audio.
+///     Ground truth of an audio file.
 /// </summary>
 public enum AudioLabel
 {
-    /// <summary>Pas encore classifié (cas ambigu nécessitant écoute manuelle).</summary>
+    /// <summary>Not classified yet: ambiguous, needs a listen.</summary>
     Unknown,
 
-    /// <summary>Contient de la vraie parole humaine intelligible.</summary>
+    /// <summary>Intelligible human speech.</summary>
     Speech,
 
-    /// <summary>Bruit de fond, souffle micro, silence, sons non-vocaux.</summary>
+    /// <summary>Background noise, mic breath, silence, non-vocal sounds.</summary>
     Noise
 }
 
-/// <summary>
-///     Source de la classification.
-/// </summary>
 public enum LabelSource
 {
-    /// <summary>Classifié automatiquement par heuristique (cas évident).</summary>
+    /// <summary>Classified by heuristic: an obvious case.</summary>
     Auto,
 
-    /// <summary>Classifié manuellement par écoute humaine.</summary>
+    /// <summary>Classified by a person listening.</summary>
     Manual
 }
 
-/// <summary>
-///     Label d'un fichier audio avec sa source et sa confiance.
-/// </summary>
 public sealed class FileLabel
 {
     public string FileName { get; set; } = "";
@@ -41,16 +35,13 @@ public sealed class FileLabel
     public LabelSource Source { get; set; } = LabelSource.Auto;
     public string Reason { get; set; } = "";
 
-    // Métriques pour aider à la décision manuelle
+    // Shown to help a manual decision
     public float Rms { get; set; }
     public float PeakAmplitude { get; set; }
     public float SpeechRatio { get; set; }
     public float DurationSeconds { get; set; }
 }
 
-/// <summary>
-///     Fichier de labels pour le dataset complet.
-/// </summary>
 public sealed class DatasetLabels
 {
     public string DatasetPath { get; set; } = "";

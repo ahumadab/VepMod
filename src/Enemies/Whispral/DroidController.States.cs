@@ -6,9 +6,6 @@ using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
 
-/// <summary>
-///     États FSM pour HallucinationDroid (partial class).
-/// </summary>
 public sealed partial class DroidController
 {
     private sealed class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
@@ -150,7 +147,7 @@ public sealed partial class DroidController
             var isMovementSwitch = previous is StateId.Wander or StateId.Sprint;
             if (isMovementSwitch)
             {
-                // Essayer de prolonger dans la même direction, sinon on garde la destination actuelle
+                // A failed extension keeps the current destination.
                 Machine.Owner.TryExtendCurrentPath();
             }
             else
@@ -165,7 +162,6 @@ public sealed partial class DroidController
             Machine.Owner.SetSpeed(Speed);
             SetMovementFlag(true);
 
-            // Lancer le premier pré-calcul forward
             Machine.Owner.StartPrecomputeForwardDestination();
         }
 
@@ -174,7 +170,6 @@ public sealed partial class DroidController
             base.OnStateExit(next);
             SetMovementFlag(false);
 
-            // Clear si on ne va pas vers un autre état de mouvement
             if (next is not (StateId.Wander or StateId.Sprint))
             {
                 Machine.Owner.ClearPrecomputedForwardDestination();
@@ -191,7 +186,6 @@ public sealed partial class DroidController
                 return;
             }
 
-            // Pré-calcul périodique de la destination forward
             _nextPrecomputeForward -= Time.deltaTime;
             if (_nextPrecomputeForward <= 0f)
             {
@@ -239,8 +233,7 @@ public sealed partial class DroidController
 
     private sealed class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
-        // Durées dérivées des anciens timings du clip LostDroidStand
-        // (4.65→5.5 raise, 5.5→6.93 look loop, 6.93→7.15 lower).
+        // From the former LostDroidStand animation timings (4.65→5.5 raise, 5.5→6.93 look loop, 6.93→7.15 lower).
         private const float RaiseDuration = 0.85f;
         private const float LowerDuration = 0.22f;
         private const float MinLookDuration = 0.5f;
@@ -258,9 +251,8 @@ public sealed partial class DroidController
             Machine.Owner.IsSprinting = false;
             Machine.Owner.ResetPath();
 
-            // Active la pose main levée + affiche le MapTool cloné. L'animator
-            // (laissé enabled) gère la transition vers le grabberPose via le bool
-            // Grabbing, piloté par DroidAvatarAnimationController qui lit WantsGrabbing.
+            // The animator, left enabled, moves to the grabber pose through its Grabbing bool, which
+            // DroidAvatarAnimationController drives from WantsGrabbing.
             Machine.Owner.ShowMapTool(true);
 
             _lookDuration = Random.Range(MinLookDuration, MaxLookDuration);
@@ -292,9 +284,7 @@ public sealed partial class DroidController
                 case Phase.Look:
                     if (_phaseTimer >= _lookDuration)
                     {
-                        // Dès qu'on entre en Lower on cache le MapTool et désactive
-                        // Grabbing → l'animator transitionne naturellement vers la
-                        // pose neutre pendant la durée Lower.
+                        // Clearing Grabbing now lets the animator ease back to the neutral pose during Lower.
                         Machine.Owner.ShowMapTool(false);
                         _currentPhase = Phase.Lower;
                         _phaseTimer = 0f;
@@ -319,9 +309,7 @@ public sealed partial class DroidController
             base.OnStateExit(next);
             LOG.Debug($"CheckMapState: EXIT -> {next}");
 
-            // Garde-fou : si la transition est forcée hors du flow normal
-            // (par ex. interruption par un autre state), s'assure que le MapTool
-            // est caché et la pose neutre rétablie.
+            // Another state can interrupt CheckMap before Lower.
             Machine.Owner.ShowMapTool(false);
         }
 
@@ -333,9 +321,6 @@ public sealed partial class DroidController
         }
     }
 
-    /// <summary>
-    ///     État de stalk : le droid court vers le joueur.
-    /// </summary>
     private sealed class StalkApproachState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const float MaxApproachTime = 30f;
@@ -403,8 +388,8 @@ public sealed partial class DroidController
     }
 
     /// <summary>
-    ///     État de stalk : le droid fixe le joueur tout en s'approchant.
-    ///     Si le joueur le regarde, il maintient le regard X secondes puis fuit.
+    ///     The Hallucination stares at the Victim while closing in; once the Victim's Gaze lands on it, it holds the
+    ///     stare for a while, then flees.
     /// </summary>
     private sealed class StalkStareState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
@@ -488,9 +473,6 @@ public sealed partial class DroidController
         }
     }
 
-    /// <summary>
-    ///     État de stalk : le droid fuit le joueur.
-    /// </summary>
     private sealed class StalkFleeState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
         private const float MaxFleeTime = 10f;

@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 using HarmonyLib;
 using Photon.Pun;
 using Photon.Voice;
@@ -15,7 +15,7 @@ internal class LocalVoiceFramedPatch
     {
         VepFinder.EnsureInitialized();
         if (IsNotReady()) return;
-        // Format SOURCE (micro), pas l'encodeur : c'est le format réel de buf.
+        // The microphone's format, not the encoder's: it is the real format of buf.
         var (sampleRate, channels) = VoiceFormatResolver.Resolve(__instance, buf.Length);
         VepFinder.LocalMimics.ProcessVoiceData(buf, sampleRate, channels);
     }

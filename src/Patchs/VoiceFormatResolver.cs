@@ -6,17 +6,16 @@ using VepMod.VepFramework;
 namespace VepMod.Patchs;
 
 /// <summary>
-///     Résout le format AUDIO SOURCE (micro) d'une voix Photon, c'est-à-dire le format réel des
-///     buffers poussés dans <c>LocalVoiceFramed&lt;short&gt;.PushDataAsync</c>.
+///     The microphone format of a Photon voice: the real format of the buffers pushed into
+///     <c>LocalVoiceFramed&lt;short&gt;.PushDataAsync</c>.
 ///
-///     Photon expose deux formats : l'encodeur/transmission (<c>Info.SamplingRate</c> /
-///     <c>Info.Channels</c>, ex. 48000 mono) et la source (<c>InputSamplingRate</c> /
-///     <c>InputChannels</c>, ex. 44100 stéréo = le vrai format du micro). Les données capturées
-///     sont au format SOURCE ; les étiqueter avec le format encodeur déforme la voix à la relecture.
+///     Photon has two formats: the encoder's (<c>Info.SamplingRate</c> / <c>Info.Channels</c>, e.g. 48000 mono)
+///     and the microphone's (<c>InputSamplingRate</c> / <c>InputChannels</c>, e.g. 44100 stereo). Captured data is
+///     in the microphone format; labelling it with the encoder format distorts the voice on playback.
 ///
-///     Le type déclarant exact des propriétés Input* n'étant pas garanti selon la version de
-///     PhotonVoice, on procède par réflexion défensive (pattern déjà utilisé pour tout l'accès
-///     interne Photon du mod), avec recoupement via <c>FrameDurationUs</c> et garde-fous.
+///     Which type declares the Input* properties varies across PhotonVoice versions, so they are read by
+///     defensive reflection, like every internal Photon access in the mod, and cross-checked against
+///     <c>FrameDurationUs</c>.
 /// </summary>
 public static class VoiceFormatResolver
 {
@@ -25,14 +24,11 @@ public static class VoiceFormatResolver
 
     private static readonly VepLogger LOG = VepLogger.Create("VoiceFormatResolver", true);
 
-    // Cache par instance de voix : la réflexion ne s'exécute qu'une fois par voix.
+    // Per voice instance: the reflection runs once per voice.
     private static readonly ConditionalWeakTable<object, Format> Cache = new();
 
-    /// <summary>
-    ///     Renvoie le format source (sampleRate, channels) de la voix, mis en cache par instance.
-    /// </summary>
-    /// <param name="voice">L'instance <c>LocalVoiceFramed&lt;short&gt;</c> (passée en object pour découpler).</param>
-    /// <param name="bufferLength">Taille du buffer de la frame courante (sert au recoupement temps réel).</param>
+    /// <param name="voice">A <c>LocalVoiceFramed&lt;short&gt;</c>, passed as object to stay decoupled from it.</param>
+    /// <param name="bufferLength">The current frame's buffer length, to derive the rate from the frame duration.</param>
     public static (int sampleRate, int channels) Resolve(object voice, int bufferLength)
     {
         if (voice == null)
@@ -62,7 +58,6 @@ public static class VoiceFormatResolver
             LOG.Warning($"Could not read voice Info: {ex.Message}");
         }
 
-        // --- Candidats bruts (pour diagnostic + résolution) ---
         var inputRate = TryGetInt(voice, "InputSamplingRate");
         var inputChannels = TryGetInt(voice, "InputChannels");
         var forceChannels = TryGetInt(voice, "ForceChannels");
@@ -70,10 +65,8 @@ public static class VoiceFormatResolver
         var encoderChannels = info != null ? TryGetInt(info, "Channels") : null;
         var frameDurationUs = info != null ? TryGetInt(info, "FrameDurationUs") : null;
 
-        // --- Channels source : priorité Input, sinon Force, sinon encodeur, sinon mono ---
         var channels = FirstPlausibleChannels(inputChannels, forceChannels, encoderChannels) ?? 1;
 
-        // --- SampleRate source : Input, sinon dérivé du temps réel, sinon encodeur ---
         int sampleRate;
         string rateSource;
         if (IsPlausibleRate(inputRate))
@@ -83,7 +76,6 @@ public static class VoiceFormatResolver
         }
         else if (frameDurationUs is > 0 && bufferLength > 0)
         {
-            // rate = (samples par canal) / (durée de frame en secondes)
             var perChannel = (double)bufferLength / channels;
             var derived = (int)Math.Round(perChannel * 1_000_000d / frameDurationUs.Value);
             if (IsPlausibleRate(derived))
@@ -141,8 +133,8 @@ public static class VoiceFormatResolver
     }
 
     /// <summary>
-    ///     Lit une propriété/champ entier (ou enum, dont la valeur sous-jacente est l'entier voulu —
-    ///     ex. l'enum SamplingRate de Photon vaut directement les Hz) en remontant la hiérarchie.
+    ///     Reads an int property or field, up the type hierarchy. Enums count: Photon's SamplingRate enum values are
+    ///     the rates in Hz.
     /// </summary>
     private static int? TryGetInt(object obj, string name)
     {

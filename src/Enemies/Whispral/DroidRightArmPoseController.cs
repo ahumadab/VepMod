@@ -6,10 +6,9 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Clone de la logique de pose de PlayerAvatarRightArm pour le droid AI.
-///     Interpole localEulerAngles de code_arm_r entre basePose et mapPose via
-///     une AnimationCurve, sans dépendance à PlayerAvatar source ou MapToolController.
-///     Pose cible pilotée par DroidController.WantsGrabbing.
+///     The arm pose logic of PlayerAvatarRightArm, rebuilt for a Hallucination without PlayerAvatar or
+///     MapToolController: code_arm_r goes from basePose to mapPose along an AnimationCurve while
+///     DroidController.WantsGrabbing is set.
 /// </summary>
 public sealed class DroidRightArmPoseController : MonoBehaviour
 {
