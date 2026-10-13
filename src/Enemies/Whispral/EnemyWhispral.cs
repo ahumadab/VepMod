@@ -279,7 +279,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     #endregion
 
-    #region Hooks Enemy (API publique)
+    #region Enemy hooks
 
     public void OnSpawn()
     {
@@ -368,7 +368,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     #endregion
 
-    #region États internes
+    #region States
 
     private abstract class WhispralStateBase : StateMachineBase<StateMachine, State>.StateBase
     {
