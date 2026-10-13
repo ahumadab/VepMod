@@ -6,7 +6,7 @@ plugins:
     infile: CHANGELOG.md
 git:
   commitMessage: "chore(version): increasing to ${version}"
-  # The one commit allowed on develop, which pre-commit refuses, until releases move to release/<version> branches.
+  # release-it commits the version bump on develop, which pre-commit refuses.
   commitArgs: ["--no-verify"]
 hooks:
   after:bump:

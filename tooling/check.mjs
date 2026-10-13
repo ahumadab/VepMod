@@ -1,9 +1,10 @@
-// The one check run by the git hooks and CI. `node tooling/check.mjs` runs every step and stops at the first failure;
-// `node tooling/check.mjs format --staged` only checks the formatting of the staged C# files.
+// The one check run by the git hooks and CI (AGENTS.md).
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 
-const [only, scope] = process.argv.slice(2);
+const [mode, scope] = process.argv.slice(2);
+const stagedOnly = scope === "--staged";
+const quiet = ["-v", "q", "-clp:ErrorsOnly"];
 
 function run(command, args, hint) {
     console.log(`> ${command} ${args.join(" ")}`);
@@ -17,9 +18,9 @@ function gitLines(...args) {
     return execFileSync("git", args, { encoding: "utf8" }).split("\n").filter(Boolean);
 }
 
-// Existing code is brought to the rules when it is touched: only the C# files the change touches are checked.
+// Existing code is brought to the rules when it is touched, never in a global pass.
 function touchedCsFiles() {
-    if (scope === "--staged") return gitLines("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.cs");
+    if (stagedOnly) return gitLines("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.cs");
     const [base] = gitLines("merge-base", "HEAD", `origin/${process.env.GITHUB_BASE_REF || "develop"}`);
     return gitLines("diff", "--name-only", "--diff-filter=ACMR", base, "--", "*.cs");
 }
@@ -30,7 +31,7 @@ function checkFormat(files) {
     run("dotnet", ["format", "whitespace", "--folder", "--verify-no-changes", "--include", ...files]);
 }
 
-// A heuristic: French accented letters inside // or block comments.
+// A heuristic, accepted as such: it only looks for French accented letters.
 function checkEnglishComments(files) {
     const comment = /\/\/.*|^\s*\/?\*.*/;
     const french = /[éèêàùç]/i;
@@ -47,27 +48,18 @@ function checkEnglishComments(files) {
 
 const files = touchedCsFiles();
 checkFormat(files);
-if (only === "format") process.exit(0);
+if (mode === "format") process.exit(0);
 
 checkEnglishComments(files);
 run(
     "dotnet",
-    ["build", "tooling/VepFrameworkIsolation/VepFrameworkIsolation.csproj", "-v", "q", "-clp:ErrorsOnly"],
-    "ADR-0001: VepFramework may only reference BepInEx, Unity and its own libraries, never the game, Photon or Whispral.",
+    ["build", "tooling/VepFrameworkIsolation/VepFrameworkIsolation.csproj", ...quiet],
+    "VepFramework references code it must not: see docs/adr/0001-vepframework-is-a-reusable-library.md.",
 );
 // NoVad first, so bin/ is left with the default plugin. The copy into a game profile is a developer-machine step.
 for (const noVad of ["true", "false"]) {
-    run("dotnet", [
-        "build",
-        "VepMod.csproj",
-        "-c",
-        "Debug",
-        `-p:VepModNoVad=${noVad}`,
-        "-p:CopyFilesToPluginOutputDirectoryOnBuild=false",
-        "-v",
-        "q",
-        "-clp:ErrorsOnly",
-    ]);
+    const variant = [`-p:VepModNoVad=${noVad}`, "-p:CopyFilesToPluginOutputDirectoryOnBuild=false"];
+    run("dotnet", ["build", "VepMod.csproj", "-c", "Debug", ...variant, ...quiet]);
 }
 for (const project of readdirSync("tests", { recursive: true }).filter((path) => path.endsWith(".csproj"))) {
     run("dotnet", ["test", `tests/${project}`, "-v", "q"]);
