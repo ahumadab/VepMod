@@ -2,12 +2,15 @@
 
 REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/Assembly-CSharp/`. Read it before using, patching or imitating a game class (`PlayerAvatar`, `SemiFunc`, `EnemyParent`…). The mod compiles against the `R.E.P.O.GameLibs.Steam` NuGet package, so on a mismatch the compiler wins over this copy.
 
+Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04/Assets/VepMod/`. Read them before deciding whether a bundle references a class, field or clip; the built bundles in `Ressources/` are compressed. A script or clip GUID resolves through the `.meta` files under `../Repo_04/Assets/`.
+
 ## Coding standards
 
 Before writing, changing or reviewing code, read `CODING_STANDARDS.md` (module shape, lifecycle, network contract,
 comments).
 
-Run `npm run check` before handing work back: it runs what the git hooks and CI run. The hooks are installed by
+Run `npm run check` before handing work back: it runs what the git hooks and CI run, and `npm run format` fixes the
+formatting it reports. The hooks are installed by
 `npm install`, so a fresh clone or worktree has none until then.
 
 ## Git workflow

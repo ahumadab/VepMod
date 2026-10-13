@@ -1,8 +1,8 @@
 import { extname } from "node:path";
 
-// A heuristic, accepted as such: it only looks for French accented letters in comments.
+// A heuristic, accepted as such: French accented letters, or French function words that English never uses alone.
 const commentByExtension = { ".cs": /\/\/.*|^\s*\/?\*.*/, ".ps1": /#.*/ };
-const french = /[éèêàùç]/i;
+const french = /[àâçéèêëîïôùûœ]|\b(le|la|les|des|du|une|pour|dans|avec|pas|est)\b/i;
 
 export const checkedExtensions = Object.keys(commentByExtension);
 
