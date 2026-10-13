@@ -18,9 +18,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
 
     private static readonly VepLogger LOG = VepLogger.Create<Imitations>();
 
-    // An Imitated Player maps to null until their Hallucination has spawned.
-    private readonly Dictionary<PlayerAvatar, DroidController?> _imitations = new();
-    private readonly Dictionary<PlayerAvatar, MapToolController?> _mapTools = new();
+    private readonly Dictionary<PlayerAvatar, Imitation> _imitations = new();
     private Coroutine? _spawning;
     private PlayerAvatar _victim = null!;
 
@@ -29,10 +27,10 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         _victim = GetComponent<PlayerAvatar>();
     }
 
-    // The game turns a hidden player's flashlight and map tool back on; they are hidden again after it.
+    // The game turns an Imitated Player's flashlight and map tool back on; they are hidden again after it.
     private void LateUpdate()
     {
-        foreach (var imitatedPlayer in _imitations.Keys)
+        foreach (var (imitatedPlayer, imitation) in _imitations)
         {
             if (!imitatedPlayer) continue;
 
@@ -43,7 +41,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
                 SetFlashlightVisible(imitatedPlayer, false);
             }
 
-            var mapTool = _mapTools[imitatedPlayer];
+            var mapTool = imitation.MapTool;
             if (mapTool && mapTool!.VisualTransform && mapTool.VisualTransform.gameObject.activeSelf)
             {
                 mapTool.VisualTransform.gameObject.SetActive(false);
@@ -72,9 +70,9 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
                 if (candidate.PlayerAvatar == player) mapTool = candidate;
             }
 
-            _imitations[player] = null;
-            _mapTools[player] = mapTool;
-            SetVisible(player, false);
+            var imitation = new Imitation(mapTool);
+            _imitations[player] = imitation;
+            SetVisible(player, imitation, false);
             LOG.Debug($"{player.playerName} is imitated for {_victim.playerName}");
         }
 
@@ -89,34 +87,32 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
             _spawning = null;
         }
 
-        foreach (var imitation in _imitations)
+        foreach (var (imitatedPlayer, imitation) in _imitations)
         {
-            EndImitation(imitation.Key, imitation.Value);
+            EndImitation(imitatedPlayer, imitation);
         }
 
         _imitations.Clear();
-        _mapTools.Clear();
     }
 
     // Photon calls this before it destroys the leaving player's avatar, which is still in the PlayerList here.
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
         var leavingPlayer = SemiFunc.PlayerAvatarGetFromPhotonPlayer(otherPlayer);
-        if (!leavingPlayer || !_imitations.TryGetValue(leavingPlayer, out var hallucination)) return;
+        if (!leavingPlayer || !_imitations.TryGetValue(leavingPlayer, out var imitation)) return;
 
         LOG.Debug($"{leavingPlayer.playerName} left the game");
-        EndImitation(leavingPlayer, hallucination);
+        EndImitation(leavingPlayer, imitation);
         _imitations.Remove(leavingPlayer);
-        _mapTools.Remove(leavingPlayer);
     }
 
     public DroidController? FindHallucination(string imitatedPlayerName)
     {
-        foreach (var imitation in _imitations)
+        foreach (var (imitatedPlayer, imitation) in _imitations)
         {
-            if (imitation.Key && imitation.Value && imitation.Key.playerName == imitatedPlayerName)
+            if (imitatedPlayer && imitation.Hallucination && imitatedPlayer.playerName == imitatedPlayerName)
             {
-                return imitation.Value;
+                return imitation.Hallucination;
             }
         }
 
@@ -136,16 +132,16 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         return false;
     }
 
-    private void EndImitation(PlayerAvatar imitatedPlayer, DroidController? hallucination)
+    private void EndImitation(PlayerAvatar imitatedPlayer, Imitation imitation)
     {
-        if (hallucination)
+        if (imitation.Hallucination)
         {
-            Destroy(hallucination!.gameObject);
+            Destroy(imitation.Hallucination!.gameObject);
         }
 
         if (imitatedPlayer)
         {
-            SetVisible(imitatedPlayer, true);
+            SetVisible(imitatedPlayer, imitation, true);
             LOG.Debug($"{imitatedPlayer.playerName} is no longer imitated for {_victim.playerName}");
         }
     }
@@ -156,11 +152,12 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     {
         foreach (var imitatedPlayer in imitatedPlayers)
         {
-            while (_imitations.ContainsKey(imitatedPlayer))
+            while (imitatedPlayer && _imitations.TryGetValue(imitatedPlayer, out var imitation))
             {
                 var spawnPosition = FindSpawnPosition();
                 yield return null;
 
+                // The Imitated Player may have left the game during that frame.
                 if (!_imitations.ContainsKey(imitatedPlayer)) break;
 
                 var hallucination = spawnPosition.HasValue
@@ -168,7 +165,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
                     : null;
                 if (hallucination)
                 {
-                    _imitations[imitatedPlayer] = hallucination;
+                    imitation.Hallucination = hallucination;
                     var distance = Vector3.Distance(spawnPosition!.Value, _victim.transform.position);
                     LOG.Debug($"Hallucination of {imitatedPlayer.playerName} spawned {distance:F1} m from the Victim");
                     break;
@@ -202,7 +199,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         return levelPoint.transform.position;
     }
 
-    private void SetVisible(PlayerAvatar player, bool visible)
+    private static void SetVisible(PlayerAvatar player, Imitation imitation, bool visible)
     {
         if (player.playerAvatarVisuals && player.playerAvatarVisuals.meshParent)
         {
@@ -221,7 +218,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
             player.voiceChat.audioSource.mute = !visible;
         }
 
-        var mapTool = _mapTools[player];
+        var mapTool = imitation.MapTool;
         if (mapTool && mapTool!.VisualTransform)
         {
             mapTool.VisualTransform.gameObject.SetActive(visible);
@@ -238,6 +235,19 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         if (flashlight.halo)
         {
             flashlight.halo.enabled = visible;
+        }
+    }
+
+    private sealed class Imitation
+    {
+        public readonly MapToolController? MapTool;
+
+        // Null until it has spawned.
+        public DroidController? Hallucination;
+
+        public Imitation(MapToolController? mapTool)
+        {
+            MapTool = mapTool;
         }
     }
 }
