@@ -1,9 +1,7 @@
-﻿using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 #if DEBUG
 using VepMod.Dev;
 #endif
@@ -24,7 +22,7 @@ public static class ConfigRanges
     public static readonly RangeValue<int> SamplesPerPlayer = RangeValue.Int(5, 20, 20);
     public static readonly RangeValue<int> SamplingRate = RangeValue.Int(16000, 48000, 48000);
 
-    // Paires min/max liées - corrigent automatiquement si min > max
+    // Linked min/max pairs: corrected automatically when min > max
     public static readonly MinMaxRange<float> ShareDelay = MinMaxRange.Float(
         10f, 60f, 10f,
         10f, 120f, 30f);
@@ -33,7 +31,7 @@ public static class ConfigRanges
         6f, 30f, 8f,
         6f, 30f, 15f);
 
-    // Durée minimale d'enregistrement (garde-fou avant VAD)
+    // Guard applied before VAD
     public static readonly RangeValue<float> AudioMinDuration = RangeValue.Float(0.1f, 2f, 0.3f);
 }
 
@@ -41,42 +39,35 @@ public static class ConfigRanges
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
-    private static Harmony _harmony;
     public static ConfigEntry<float> ConfigVoiceVolume;
     public static ConfigEntry<int> ConfigSamplingRate;
 
-    // Boucle 1 : Partage des sons entre clients
+    // Voice Sample sharing between clients
     public static BoundMinMaxRange<float> ShareDelay;
     public static ConfigEntry<int> ConfigSamplesPerPlayer;
 
-    // Boucle 2 : Commandes de lecture (pendant debuff)
+    // Mimic commands (while Haunted)
     public static BoundMinMaxRange<float> VoiceDelay;
     public static ConfigEntry<bool> ConfigVoiceFilterEnabled;
 
 #if DEBUG
-    // Outils de développement (build dev uniquement, désactivés par défaut)
     public static ConfigEntry<bool> ConfigEnableDevTools;
 #endif
 
-    // Validation audio (VAD)
+    // Audio validation (VAD)
     public static ConfigEntry<float> ConfigAudioMinDuration;
 #if !VEPMOD_NO_VAD
     public static ConfigEntry<bool> ConfigVadEnabled;
     public static ConfigEntry<VadSensitivity> ConfigVadSensitivity;
 #endif
 
-    public static readonly Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
-
-    internal Harmony? Harmony { get; set; }
-
     private void Awake()
     {
-        _harmony = new Harmony("VepMod.Plugin");
         PreventDelete();
 
         InitConfig();
 
-        _harmony.PatchAll();
+        new Harmony("VepMod.Plugin").PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
 
 #if DEBUG
@@ -87,24 +78,17 @@ public class VepMod : BaseUnityPlugin
         }
 #endif
 
-        // Pr�charger le prefab LostDroid de mani�re asynchrone pour �viter les freezes
         StartCoroutine(DroidPrefabLoader.PreloadAsync(success =>
         {
             if (success)
             {
-                Logger.LogInfo("LostDroid prefab preloaded successfully.");
+                Logger.LogInfo("Hallucination prefab preloaded successfully.");
             }
             else
             {
-                Logger.LogWarning("LostDroid prefab preload failed - hallucinations may not work.");
+                Logger.LogWarning("Hallucination prefab preload failed - hallucinations may not work.");
             }
         }));
-    }
-
-    public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        Logger.LogInfo($"Scene loaded: {scene.name}");
-        // Code that runs when a new scene is loaded goes here
     }
 
     private void InitConfig()
@@ -114,7 +98,7 @@ public class VepMod : BaseUnityPlugin
         // General settings
         ConfigVoiceVolume = Config.BindRange("General", "Volume", ConfigRanges.Volume, "Volume of the mimic voices.");
 
-        // Boucle 1 : Partage des sons entre clients
+        // Voice Sample sharing between clients
         ShareDelay = Config.BindMinMax("Audio Sharing",
             "Share Min Delay", "Share Max Delay", ConfigRanges.ShareDelay,
             "Minimum time between sharing audio clips with other players.",
@@ -122,7 +106,7 @@ public class VepMod : BaseUnityPlugin
         ConfigSamplesPerPlayer = Config.BindRange("Audio Sharing", "Samples Per Player", ConfigRanges.SamplesPerPlayer,
             "Maximum number of audio samples stored per player.");
 
-        // Boucle 2 : Commandes de lecture (pendant debuff Whispral)
+        // Mimic commands (while Haunted)
         VoiceDelay = Config.BindMinMax("Voice Playback",
             "Voice Min Delay", "Voice Max Delay", ConfigRanges.VoiceDelay,
             "Minimum time between voice playback commands during Whispral debuff.",
@@ -159,10 +143,5 @@ public class VepMod : BaseUnityPlugin
         // Prevent the plugin from being deleted
         gameObject.transform.parent = null;
         gameObject.hideFlags = HideFlags.HideAndDontSave;
-    }
-
-    internal void Unpatch()
-    {
-        _harmony.UnpatchSelf();
     }
 }

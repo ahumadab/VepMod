@@ -16,12 +16,12 @@ using VepMod.VepFramework.Structures.FSM;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Hallucination basée sur le prefab LostDroid de WesleysEnemies.
-///     Se balade sans attaquer. Backbone non-visuelle du prefab :
-///     - Controller: NavMeshAgent + CharacterController (mouvement)
-///     - Rigidbody: transform suivi par les visuels
-///     Les visuels (Cube du prefab) sont supprimés et remplacés par un clone
-///     du PlayerAvatarVisuals du joueur source (cosmetics + couleurs inclus).
+///     Hallucination built on the MyDroid prefab of the embedded bundle; it wanders without attacking.
+///     Non-visual backbone of the prefab:
+///     - Controller: NavMeshAgent + CharacterController (movement)
+///     - Rigidbody: transform followed by the visuals
+///     The prefab visuals (Cube) are removed and replaced by a clone of the Imitated Player's
+///     PlayerAvatarVisuals (cosmetics and colors included).
 /// </summary>
 public sealed partial class DroidController : StateMachineComponent<DroidController, DroidController.StateId>
 {
@@ -75,8 +75,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     public bool HasChangedMovementState { get; set; }
 
     /// <summary>
-    ///     Drapeau lu par DroidAvatarAnimationController pour driver le bool 'Grabbing'
-    ///     de l'animator (qui déclenche la pose main levée). Activé pendant CheckMap.
+    ///     Read by DroidAvatarAnimationController to drive the animator's 'Grabbing' bool (the raised-hand pose).
+    ///     Set during CheckMap.
     /// </summary>
     public bool WantsGrabbing { get; set; }
 
@@ -92,18 +92,17 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     public bool IsInMovementState => DroidHelpers.IsMovementState(Fsm.CurrentStateStateId);
 
     /// <summary>
-    ///     Indique si le droid est en chute (relayé au bool 'Falling' de l'animator).
+    ///     Relayed to the animator's 'Falling' bool.
     /// </summary>
     public bool IsFalling => Movement != null && Movement.IsFalling;
 
-    /// <summary>Nom de l'état FSM courant (debug/dev tools).</summary>
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
     protected override StateId DefaultState => StateId.Idle;
 
     protected override void Awake()
     {
-        // Ne pas appeler base.Awake() ici - on initialise la FSM dans Initialize()
+        // base.Awake() is skipped: the FSM is built in Initialize().
     }
 
     protected override void Update()
@@ -125,8 +124,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     }
 
     /// <summary>
-    ///     Toggle la visibilité du MapTool cloné et le geste main levée associé.
-    ///     Appelé par CheckMapState à l'enter/exit.
+    ///     Also drives the raised-hand pose.
     /// </summary>
     public void ShowMapTool(bool visible)
     {
@@ -138,8 +136,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     #region Audio
 
     /// <summary>
-    ///     Joue le son enregistré du joueur source à la position du Controller.
-    ///     Utilise le WhispralMimics du joueur LOCAL (qui a les fichiers audio stockés).
+    ///     Uses the local player's WhispralMimics, which holds the Voice Bank of every player.
     /// </summary>
     public void PlayVoice(bool applyFilter = false)
     {
@@ -162,10 +159,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
 
     /// <summary>
-    ///     Téléporte le droid à une position monde (outils de dev). Désactive le
-    ///     CharacterController le temps du déplacement pour éviter les collisions
-    ///     parasites. Si la cible est en l'air, la gravité prendra le relais et le
-    ///     NavMesh se resynchronisera à l'atterrissage.
+    ///     Dev tools only. The CharacterController is disabled during the move to avoid stray collisions; a position
+    ///     in mid-air falls and resyncs with the NavMesh on landing.
     /// </summary>
     public void DebugTeleport(Vector3 worldPosition)
     {
@@ -248,14 +243,14 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     {
         if (!DroidPrefabLoader.IsAvailable)
         {
-            LOG.Warning("LostDroid prefab not available");
+            LOG.Warning("Hallucination prefab not available");
             return null;
         }
 
         var instance = Instantiate(DroidPrefabLoader.DroidPrefab, spawnPosition, Quaternion.identity);
         if (instance == null)
         {
-            LOG.Error("Failed to instantiate LostDroid prefab");
+            LOG.Error("Failed to instantiate Hallucination prefab");
             return null;
         }
 
@@ -393,13 +388,12 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     }
 
     /// <summary>
-    ///     Appelé par les animation events pour jouer un son de pas.
+    ///     Called by animation events.
     /// </summary>
     public void PlayMediumFootstep()
     {
         if (ControllerTransform == null) return;
-        // LOG.Debug($"PlayMediumFootstep -> calling droid at {ControllerTransform.position}");
-        // Position légèrement au-dessus du sol pour que le raycast trouve le matériau
+        // Slightly above the ground so the material raycast hits the floor.
         var footPosition = ControllerTransform.position + Vector3.up * 0.1f;
         Materials.Instance.Impulse(
             footPosition,
@@ -518,8 +512,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             if (component is NavMeshAgent) continue;
 
             if (fullTypeName.Contains("Photon") || typeName.Contains("Photon") ||
-                fullTypeName.Contains("Enemy") || fullTypeName.Contains("LostDroid") ||
-                typeName.Contains("Enemy") || typeName.Contains("LostDroid"))
+                fullTypeName.Contains("Enemy") || typeName.Contains("Enemy"))
             {
                 componentsToDestroy.Add(component);
                 continue;
@@ -590,11 +583,10 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             return;
         }
 
-        // Cube garde Animator + BloodDust + Hurt Collider. On retire seulement les
-        // composants joueur qui causent les NRE (PlayerAvatarVisuals + frères).
+        // Cube keeps its Animator, BloodDust and Hurt Collider; only the player components that throw NREs
+        // (PlayerAvatarVisuals and its siblings) go.
         DroidVisualsClone.SanitizeCube(cube);
 
-        // L'Animator survit à SanitizeCube (whitelist). On le récupère avant strip.
         Animator = cube.GetComponent<Animator>();
 
         DroidVisualsClone.StripExistingRig(cube);
@@ -610,9 +602,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             Animator.enabled = true;
             Animator.applyRootMotion = false;
 
-            // L'Animator a fait son Awake sur l'ancien [RIG] du prefab et cache les
-            // bindings de bones par path. Le swap de [RIG] casse ces bindings ; Rebind
-            // force Unity à re-résoudre les chemins de bones contre la nouvelle hiérarchie.
+            // The Animator ran its Awake on the prefab's old [RIG] and caches bone bindings by path. Swapping [RIG]
+            // breaks them; Rebind makes Unity resolve the bone paths against the new hierarchy.
             Animator.Rebind();
             Animator.Update(0f);
 
@@ -631,10 +622,9 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     {
         if (SourcePlayer == null || cloneRig == null) return;
 
-        // PlayerAvatarRightArm et PlayerEyes sont attachés sur le GameObject 'Player
-        // Visuals' (= sourcePlayer.playerAvatarVisuals.gameObject), pas sur le sous-GO
-        // 'Player Avatar Controller' où vit PlayerAvatar.cs. Donc GetComponentInChildren
-        // sur sourcePlayer ne les voit pas (frères, pas descendants).
+        // PlayerAvatarRightArm and PlayerEyes live on the 'Player Visuals' GameObject
+        // (sourcePlayer.playerAvatarVisuals.gameObject), a sibling of the 'Player Avatar Controller' that holds
+        // PlayerAvatar.cs, so GetComponentInChildren on sourcePlayer does not find them.
         var visuals = SourcePlayer.playerAvatarVisuals;
         if (visuals == null)
         {
@@ -642,8 +632,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             return;
         }
 
-        // Bras droit : lit les poses + curve sur le PlayerAvatarRightArm source,
-        // résout code_arm_r dans le clone par nom (bone unique).
         var sourceArm = visuals.GetComponent<PlayerAvatarRightArm>();
         if (sourceArm != null && sourceArm.rightArmTransform != null)
         {
@@ -665,9 +653,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarRightArm on source player");
         }
 
-        // Bras gauche (porte la flashlight) : lit flashlightPose + curve sur le
-        // PlayerAvatarLeftArm source, résout le bone dans le clone par nom. La lampe
-        // du droid étant toujours allumée, on vise en permanence flashlightPose.
+        // The Hallucination's flashlight is always on, so the left arm always aims for flashlightPose.
         var sourceLeftArm = visuals.GetComponent<PlayerAvatarLeftArm>();
         if (sourceLeftArm != null && sourceLeftArm.leftArmTransform != null)
         {
@@ -689,7 +675,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarLeftArm on source player");
         }
 
-        // Yeux : résout code_eye_left/right dans le clone, lookTarget dans le MapTool cloné.
         var sourceEyes = visuals.GetComponent<PlayerEyes>();
         if (sourceEyes != null && sourceEyes.eyeLeft != null && sourceEyes.eyeRight != null)
         {

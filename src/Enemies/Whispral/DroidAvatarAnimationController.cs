@@ -6,13 +6,8 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Pilote chaque frame les paramètres de l'Animator du clone du PlayerAvatar
-///     monté sur le LostDroid. Force à false tous les bools "joueur" que l'AI
-///     n'utilise pas (Crouching, Crawling, Jumping, Falling, Tumbling, Sliding,
-///     Grabbing, stun) pour débloquer les transitions du state machine, set les
-///     bools actifs depuis le FSM (Moving/Sprinting/Turning), tire l'impulse de
-///     sprint sur front montant, et module animator.speed comme
-///     PlayerAvatarVisuals.AnimationLogic().
+///     Drives, every frame, the Animator parameters of the PlayerAvatar clone mounted on the Hallucination, the way
+///     PlayerAvatarVisuals.AnimationLogic() does for a player.
 /// </summary>
 public sealed class DroidAvatarAnimationController : MonoBehaviour
 {
@@ -50,7 +45,6 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
 
         var isMovementState = _droid.IsInMovementState;
 
-        // Turning: calculé depuis l'angle entre la rotation actuelle et la cible.
         var turning = false;
         if (isMovementState && _droid.ControllerTransform != null && _droid.Movement != null)
         {
@@ -65,10 +59,8 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
         _animator.SetBool(SprintingKey, sprinting);
         _animator.SetBool(TurningKey, turning);
 
-        // 'Grabbing' est activé par DroidController.ShowMapTool() pendant CheckMap
-        // pour déclencher la pose main levée (transition animator vers grabberPose).
-        // Tous les autres bools "joueur" restent forcés à false pour que les
-        // transitions retombent proprement sur la branche locomotion.
+        // 'Grabbing' raises the hand during CheckMap (animator transition to grabberPose). Every other player bool the
+        // Hallucination never uses stays false, or the animator transitions would not fall back to locomotion.
         _animator.SetBool(GrabbingKey, _droid.WantsGrabbing);
         _animator.SetBool(CrouchingKey, false);
         _animator.SetBool(CrawlingKey, false);
@@ -76,21 +68,17 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
         _animator.SetBool(TumblingMoveKey, false);
         _animator.SetBool(SlidingKey, false);
         _animator.SetBool(JumpingKey, false);
-        // 'Falling' piloté par la gravité du DroidMovementController : joue l'animation
-        // de chute du joueur cloné quand le droid tombe d'une hauteur.
         _animator.SetBool(FallingKey, _droid.IsFalling);
         _animator.SetBool(StunKey, false);
 
-        // Trigger d'impulse sur front montant : déclenche le snap de sprint
-        // comme PlayerAvatarVisuals.cs:767.
+        // Fired on the rising edge, like PlayerAvatarVisuals.cs:767, for the sprint snap.
         if (sprinting && !_wasSprinting)
         {
             _animator.SetTrigger(SprintingImpulseKey);
         }
         _wasSprinting = sprinting;
 
-        // Modulation de animator.speed, simplifiée par rapport à
-        // PlayerAvatarVisuals.cs:853-866 (pas de bonus stat sprint pour l'AI).
+        // Simplified from PlayerAvatarVisuals.cs:853-866: the Hallucination has no sprint stat bonus.
         _animator.speed = AnimationSpeedMultiplier;
     }
 }
