@@ -60,3 +60,4 @@ for (const noVad of ["true", "false"]) {
 for (const project of readdirSync("tests", { recursive: true }).filter((path) => path.endsWith(".csproj"))) {
     run("dotnet", ["test", `tests/${project}`, "-v", "q"]);
 }
+console.log("check: OK");
