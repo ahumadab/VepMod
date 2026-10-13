@@ -7,9 +7,12 @@ public sealed class DroidNameplate : MonoBehaviour
 {
     private const float NameplateHeight = 1.9f;
     private const float MaxVisibleDistance = 8f;
-    private const float FadeSpeed = 5f;
+    private const float FadeSpeed = 25f;
     private const float MinFontSize = 8f;
     private const float MaxFontSize = 20f;
+
+    // Hallucination names have always peaked here, dimmer than a real teammate's nameplate (0.5).
+    private const float PeakAlpha = 0.2f;
 
     private static readonly VepLogger LOG = VepLogger.Create<DroidNameplate>();
 
@@ -41,7 +44,7 @@ public sealed class DroidNameplate : MonoBehaviour
             LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
 
         var distanceAlpha = Mathf.Clamp01(1f - distance / MaxVisibleDistance);
-        var targetAlpha = isVisible ? distanceAlpha : 0f;
+        var targetAlpha = isVisible ? distanceAlpha * PeakAlpha : 0f;
 
         var currentColor = _nameplate.text.color;
         var newAlpha = Mathf.Lerp(currentColor.a, targetAlpha, Time.deltaTime * FadeSpeed);
@@ -69,8 +72,9 @@ public sealed class DroidNameplate : MonoBehaviour
 
         if (_nameplate != null)
         {
-            // WorldSpaceUIPlayerName destroys itself without a playerAvatar.
-            _nameplate.playerAvatar = _sourcePlayer;
+            // The game only calls Show on the real player's nameplate, so its Update would fade this copy every frame,
+            // alive or dead, and pin it to the Imitated Player instead of the Hallucination.
+            _nameplate.enabled = false;
             _nameplate.text.text = _sourcePlayer.playerName;
         }
     }
