@@ -1,6 +1,7 @@
 // The one check run by the git hooks and CI (AGENTS.md).
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { checkedExtensions, frenchCommentLines } from "./english-comments.mjs";
 
 const [mode, scope] = process.argv.slice(2);
 const stagedOnly = scope === "--staged";
@@ -19,10 +20,10 @@ function gitLines(...args) {
 }
 
 // Existing code is brought to the rules when it is touched, never in a global pass.
-function touchedCsFiles() {
-    if (stagedOnly) return gitLines("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.cs");
+function touchedFiles(...patterns) {
+    if (stagedOnly) return gitLines("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", ...patterns);
     const [base] = gitLines("merge-base", "HEAD", `origin/${process.env.GITHUB_BASE_REF || "develop"}`);
-    return gitLines("diff", "--name-only", "--diff-filter=ACMR", base, "--", "*.cs");
+    return gitLines("diff", "--name-only", "--diff-filter=ACMR", base, "--", ...patterns);
 }
 
 function checkFormat(files) {
@@ -31,26 +32,20 @@ function checkFormat(files) {
     run("dotnet", ["format", "whitespace", "--folder", "--verify-no-changes", "--include", ...files]);
 }
 
-// A heuristic, accepted as such: it only looks for French accented letters.
 function checkEnglishComments(files) {
-    const comment = /\/\/.*|^\s*\/?\*.*/;
-    const french = /[éèêàùç]/i;
     const offenders = files.flatMap((file) =>
-        readFileSync(file, "utf8")
-            .split("\n")
-            .map((line, index) => (french.test(line.match(comment)?.[0] ?? "") ? `${file}:${index + 1}` : null))
-            .filter(Boolean),
+        frenchCommentLines(file, readFileSync(file, "utf8")).map((line) => `${file}:${line}`),
     );
     if (offenders.length === 0) return;
     console.error(`Comments are written in English (CODING_STANDARDS.md):\n  ${offenders.join("\n  ")}`);
     process.exit(1);
 }
 
-const files = touchedCsFiles();
-checkFormat(files);
+checkFormat(touchedFiles("*.cs"));
 if (mode === "format") process.exit(0);
 
-checkEnglishComments(files);
+checkEnglishComments(touchedFiles(...checkedExtensions.map((extension) => `*${extension}`)));
+run("node", ["--test", "tooling/**/*.test.mjs"]);
 run(
     "dotnet",
     ["build", "tooling/VepFrameworkIsolation/VepFrameworkIsolation.csproj", ...quiet],
