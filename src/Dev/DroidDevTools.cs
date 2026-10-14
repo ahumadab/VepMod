@@ -78,7 +78,7 @@ public sealed class DroidDevTools : MonoBehaviour
         if (Input.GetKeyDown(TeleportKey)) TeleportNearestToAim();
         if (Input.GetKeyDown(DropKey))
         {
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) MimicNearest();
+            if (ShiftHeld()) MimicNearest();
             else DropNearest();
         }
 
@@ -90,13 +90,13 @@ public sealed class DroidDevTools : MonoBehaviour
         if (Input.GetKeyDown(KillWhispralsKey)) KillWhisprals();
         if (Input.GetKeyDown(KillLocalPlayerKey))
         {
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) ReviveDeadPlayers();
+            if (ShiftHeld()) ReviveDeadPlayers();
             else KillLocalPlayer();
         }
 
         if (Input.GetKeyDown(HurtLocalPlayerKey))
         {
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) HealLocalPlayer();
+            if (ShiftHeld()) HealLocalPlayer();
             else HurtLocalPlayer();
         }
 
@@ -175,6 +175,11 @@ public sealed class DroidDevTools : MonoBehaviour
         var lifted = _nearest.ControllerTransform.position + Vector3.up * DropHeight;
         _nearest.DebugTeleport(lifted);
         LOG.Info($"DevTools: drop test — lifted droid by {DropHeight}m to {lifted}.");
+    }
+
+    private static bool ShiftHeld()
+    {
+        return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
     }
 
     private void MimicNearest()
@@ -406,7 +411,7 @@ public sealed class DroidDevTools : MonoBehaviour
         if (!_hudVisible) return;
 
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
-                 $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n" +
+                 $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n";

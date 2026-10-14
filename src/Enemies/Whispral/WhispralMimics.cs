@@ -83,6 +83,9 @@ public sealed class WhispralMimics : MonoBehaviour
     private const float MinDistance = 5f;
     private const float MaxDistance = 25f;
 
+    /// <summary>Name of the child GameObject that carries one Mimic's AudioSource under its Hallucination.</summary>
+    public const string MimicEmitterName = "Mimic";
+
     #endregion
 
     #region Private Fields
@@ -390,7 +393,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         if (_isRecording) return;
 
-        LOG.Debug($"StartRecording (_sampleRate={_sampleRate})");
+        LOG.Debug($"StartRecording (sampleRate={_sampleRate})");
         _audioBuffer = null;
         _bufferPosition = 0;
         _isRecording = true;
@@ -634,11 +637,11 @@ public sealed class WhispralMimics : MonoBehaviour
         };
     }
 
-    public void PlayAudioAtTransform(Transform target, string sourcePlayerNickName, bool applyFilter)
+    public void PlayAudioAtTransform(Transform hallucination, string sourcePlayerNickName, bool applyFilter)
     {
-        if (target == null)
+        if (hallucination == null)
         {
-            LOG.Warning("PlayAudioAtTransform: target is null");
+            LOG.Warning("PlayAudioAtTransform: hallucination is null");
             return;
         }
 
@@ -653,17 +656,15 @@ public sealed class WhispralMimics : MonoBehaviour
         var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, fileSampleRate, false);
         audioClip.SetData(processedSamples, 0);
 
-        PlayAtTransform(target, audioClip, sourcePlayerNickName);
+        PlayAtTransform(hallucination, audioClip, sourcePlayerNickName);
     }
 
-    /// <summary>
-    ///     Each Mimic gets its own emitter under <paramref name="target" />, so Mimics overlapping on one Hallucination
-    ///     never share an AudioSource, and the emitter goes with the Hallucination if it is destroyed first.
-    /// </summary>
-    private void PlayAtTransform(Transform target, AudioClip clip, string imitatedPlayerNickName)
+    // Each Mimic gets its own emitter, so Mimics overlapping on one Hallucination never share an AudioSource. Parented
+    // to the Hallucination, the emitter follows it and goes with it if it is destroyed first.
+    private void PlayAtTransform(Transform hallucination, AudioClip clip, string imitatedPlayerNickName)
     {
-        var emitter = new GameObject("Mimic");
-        emitter.transform.SetParent(target, false);
+        var emitter = new GameObject(MimicEmitterName);
+        emitter.transform.SetParent(hallucination, false);
 
         var audioSource = emitter.AddComponent<AudioSource>();
         ConfigureAudioSource(audioSource, clip);
@@ -677,11 +678,14 @@ public sealed class WhispralMimics : MonoBehaviour
 
         audioSource.Play();
 
+        var mimic = $"{imitatedPlayerNickName} on Hallucination {hallucination.GetInstanceID()}";
+        LOG.Debug($"Mimic of {mimic} started ({clip.length:F2}s)");
+
         var lifetime = clip.length + 0.1f;
-        LOG.Debug($"Mimic of {imitatedPlayerNickName} started ({clip.length:F2}s)");
         // Destroying the whole GameObject sidesteps Unity's refusal to remove a component another one requires.
         Destroy(emitter, lifetime);
-        StartCoroutine(LogMimicEnd(imitatedPlayerNickName, clip.length, lifetime));
+        Destroy(clip, lifetime);
+        StartCoroutine(LogMimicEnd(emitter, mimic, clip.length));
     }
 
     private void ConfigureAudioSource(AudioSource source, AudioClip clip)
@@ -709,10 +713,12 @@ public sealed class WhispralMimics : MonoBehaviour
     }
 
 
-    private static IEnumerator LogMimicEnd(string imitatedPlayerNickName, float length, float delay)
+    private static IEnumerator LogMimicEnd(GameObject emitter, string mimic, float length)
     {
-        yield return new WaitForSeconds(delay);
-        LOG.Debug($"Mimic of {imitatedPlayerNickName} ended ({length:F2}s)");
+        yield return new WaitForSeconds(length);
+        LOG.Debug(emitter != null
+            ? $"Mimic of {mimic} ended ({length:F2}s)"
+            : $"Mimic of {mimic} cut short: its Hallucination was destroyed");
     }
 
     #endregion

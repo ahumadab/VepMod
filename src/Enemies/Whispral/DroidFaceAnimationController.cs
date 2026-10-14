@@ -1,5 +1,4 @@
 using UnityEngine;
-using VepMod.VepFramework;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
@@ -19,8 +18,6 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     private const float TalkRotationMaxAngle = 25f;
     private const int SampleDataLength = 256;
     private const float StalkStareBeforeFlee = DroidController.StalkStareBeforeFlee / 0.66f;
-
-    private static readonly VepLogger LOG = VepLogger.Create<DroidFaceAnimationController>();
 
     // Angry eyes state
     private float _angryTimer;
@@ -211,7 +208,9 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
         var targetRotation = 0f;
         if (_talkingAudioSource == null && _controllerTransform != null)
         {
-            _talkingAudioSource = _controllerTransform.GetComponent<AudioSource>();
+            // Follows one Mimic at a time: the first emitter still under the Hallucination.
+            var emitter = _controllerTransform.Find(WhispralMimics.MimicEmitterName);
+            if (emitter != null) _talkingAudioSource = emitter.GetComponent<AudioSource>();
         }
 
         if (_talkingAudioSource != null && _talkingAudioSource.isPlaying)
