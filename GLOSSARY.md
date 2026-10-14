@@ -31,7 +31,7 @@ One of the consequences a Victim suffers while Haunted: Vanish, Hallucinations, 
 _Avoid_: Debuff
 
 **Vanish**:
-The Effect that hides every Imitated Player from the Victim: body, nameplate, flashlight, map tool and voice chat.
+The Effect that hides every Imitated Player from the Victim's eyes and ears: body, shadows, nameplate, flashlight, map tool, grabber, voice chat and chat TTS, body and grab sounds, their death and death head.
 _Avoid_: Invisibility, invisible player
 
 **Imitation**:

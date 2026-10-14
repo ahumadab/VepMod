@@ -34,6 +34,8 @@ namespace VepMod.Dev;
 ///       F4  — kill every Whispral
 ///       F5  — kill the local player
 ///       Shift+F5 — revive every dead player (Master only: the game accepts a revive from the Master alone)
+///       F12 — hurt the local player by 10
+///       Shift+F12 — heal the local player by 10
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
@@ -50,7 +52,9 @@ public sealed class DroidDevTools : MonoBehaviour
     private const KeyCode StunWhispralsKey = KeyCode.F3;
     private const KeyCode KillWhispralsKey = KeyCode.F4;
     private const KeyCode KillLocalPlayerKey = KeyCode.F5;
+    private const KeyCode HurtLocalPlayerKey = KeyCode.F12;
     private const float StunDuration = 5f; // s
+    private const int HealthStep = 10;
 
     private const float DropHeight = 6f; // m, drop test lift
     private const float AimMaxDistance = 100f; // m, aim raycast range
@@ -82,6 +86,12 @@ public sealed class DroidDevTools : MonoBehaviour
         {
             if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) ReviveDeadPlayers();
             else KillLocalPlayer();
+        }
+
+        if (Input.GetKeyDown(HurtLocalPlayerKey))
+        {
+            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) HealLocalPlayer();
+            else HurtLocalPlayer();
         }
 
         _nearestRefreshTimer -= Time.deltaTime;
@@ -326,6 +336,24 @@ public sealed class DroidDevTools : MonoBehaviour
         player.playerHealth.Hurt(int.MaxValue / 2, false);
     }
 
+    private static void HurtLocalPlayer()
+    {
+        var player = PlayerAvatar.instance;
+        if (player == null) return;
+
+        LOG.Info($"DevTools: hurting the local player by {HealthStep}.");
+        player.playerHealth.Hurt(HealthStep, false);
+    }
+
+    private static void HealLocalPlayer()
+    {
+        var player = PlayerAvatar.instance;
+        if (player == null) return;
+
+        LOG.Info($"DevTools: healing the local player by {HealthStep}.");
+        player.playerHealth.Heal(HealthStep);
+    }
+
     private static void ReviveDeadPlayers()
     {
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
@@ -362,7 +390,8 @@ public sealed class DroidDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
-                 "F5 kill yourself | Shift+F5 revive the dead (Master)\n";
+                 "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
+                 "F12 hurt yourself | Shift+F12 heal yourself\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
@@ -403,7 +432,7 @@ public sealed class DroidDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 280), sb, style);
+        GUI.Box(new Rect(10, 10, 440, 300), sb, style);
     }
 }
 #endif
