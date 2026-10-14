@@ -21,4 +21,4 @@ They wander around. Sometimes they stare at you. And they speak with your friend
 
 ## Developer Documentation
 
-- [VAD Integration](docs/vad-integration.md) — voice activity detection: benchmark methodology, results, and production implementation
+- [VAD Integration](docs/vad-integration.md) — voice activity detection: benchmark methodology and results, fail-open, packaging
