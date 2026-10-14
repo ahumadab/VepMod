@@ -23,7 +23,8 @@ public static class WavCodec
     private const short Channels = 1;
     private const short BitsPerSample = 16;
     private const short BytesPerSample = BitsPerSample / 8;
-    private const float FullScale = 32768f;
+    /// <summary>Of a 16-bit PCM sample.</summary>
+    internal const float FullScale = 32768f;
 
     public static byte[] Encode(VoiceSample sample)
     {

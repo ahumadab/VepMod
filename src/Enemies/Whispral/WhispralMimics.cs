@@ -3,15 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using VepMod.VepFramework;
-#if !VEPMOD_NO_VAD
-using VepMod.VepFramework.Audio;
-#endif
 using VepMod.VepFramework.Extensions;
 using Random = UnityEngine.Random;
 
@@ -20,7 +16,7 @@ using Random = UnityEngine.Random;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Records, shares and plays Voice Samples for Mimics, in two loops:
+///     Saves, shares and plays Voice Samples for Mimics, in two loops:
 ///     - every client shares its player's Voice Samples with all the others;
 ///     - the Master tells a Victim's client which Hallucination performs a Mimic.
 /// </summary>
@@ -48,30 +44,12 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        if (!InitializeReflectionFields())
-        {
-            return;
-        }
-
-        _sampleRate = VepMod.ConfigSamplingRate.Value;
-
-        StartCoroutine(WaitForVoiceChat(_playerAvatar));
-    }
-
-    private void OnDestroy()
-    {
-#if !VEPMOD_NO_VAD
-        _vadValidator?.Dispose();
-#endif
+        StartCoroutine(WaitForVoiceChat());
     }
 
     #endregion
 
     #region Constants
-
-    // Recording
-    private const int AudioBufferDurationSeconds = 6;
-    private const float SilenceTimeoutSeconds = 0.5f;
 
     // Network
     private const int ChunkSizeBytes = 8192;
@@ -91,32 +69,11 @@ public sealed class WhispralMimics : MonoBehaviour
     #region Private Fields
 
     private PlayerAvatar _playerAvatar;
-    private PlayerVoiceChat _playerVoiceChat;
-#if !VEPMOD_NO_VAD
-    private VadAudioValidator? _vadValidator;
 #if DEBUG
     /// <summary>Shown on the DroidDevTools HUD.</summary>
-    public VadValidationResult? LastVadResult { get; private set; }
-#endif
+    public string? LastCaptureVerdict { get; private set; }
 #endif
     private string _localPlayerNickName;
-
-    // Reflection fields
-    private FieldInfo? _voiceChatField;
-    private FieldInfo _recorderField;
-    private FieldInfo _isTalkingField;
-
-    // Recording
-    private float[]? _audioBuffer;
-    private int _bufferPosition;
-    private int _sampleRate;
-    private int _channelCount = 1;
-    private bool _isRecording;
-    private bool _capturingSpeech;
-    private bool _fileSaved;
-    private float _silenceTimer;
-    private byte[]? _lastSavedAudioBytes;
-    private bool _hasNewRecording;
 
     // Shared Voice Samples being received, per player
     private readonly Dictionary<string, List<byte[]?>> _receivedChunksByPlayer = new();
@@ -126,76 +83,26 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Initialization
 
-    private bool InitializeReflectionFields()
+    private IEnumerator WaitForVoiceChat()
     {
-        _voiceChatField = typeof(PlayerAvatar).GetField("voiceChat", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (_voiceChatField == null)
+        while (!_playerAvatar.voiceChat)
         {
-            LOG.Error("Could not find 'voiceChat' field in PlayerAvatar.");
-            return false;
-        }
-
-        _recorderField = typeof(PlayerVoiceChat).GetField("recorder", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (_recorderField == null)
-        {
-            LOG.Error("Could not find 'recorder' field in PlayerVoiceChat.");
-            return false;
-        }
-
-        _isTalkingField = typeof(PlayerVoiceChat).GetField("isTalking", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (_isTalkingField == null)
-        {
-            LOG.Error("Could not find 'isTalking' field in PlayerVoiceChat.");
-            return false;
-        }
-
-        return true;
-    }
-
-    private IEnumerator WaitForVoiceChat(PlayerAvatar playerAvatar)
-    {
-        while (!_playerVoiceChat)
-        {
-            if (_voiceChatField == null)
-            {
-                yield break;
-            }
-
-            _playerVoiceChat = (PlayerVoiceChat)_voiceChatField.GetValue(playerAvatar);
             yield return null;
         }
 
         LOG.Info("PlayerVoiceChat initialized.");
-        DetectSampleRate();
 
         // Every player's instance receives the sharing RPCs; only the local player's instance shares.
         if (SemiFunc.RunIsLevel())
         {
             _localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
-#if !VEPMOD_NO_VAD
-            if (VepMod.ConfigVadEnabled.Value)
-            {
-                try
-                {
-                    var sensitivity = VepMod.ConfigVadSensitivity.Value;
-                    var criteria = VadValidationCriteria.FromSensitivity(sensitivity);
-                    _vadValidator = new VadAudioValidator(criteria);
-                    LOG.Info($"VAD validation enabled (sensitivity={sensitivity}, speechRatio>={criteria.MinSpeechRatio:F2}).");
-                }
-                catch (Exception ex)
-                {
-                    LOG.Warning($"VAD initialization failed, recordings will not be filtered: {ex.Message}");
-                    _vadValidator = null;
-                }
-            }
-#endif
-
             if (PhotonView.IsMine)
             {
                 LOG.Info($"WhispralMimics initialized for local player: {_localPlayerNickName}");
 
                 StartCoroutine(ShareAudioLoop());
+                StartCoroutine(SaveCaptures());
             }
             else
             {
@@ -204,217 +111,68 @@ public sealed class WhispralMimics : MonoBehaviour
         }
     }
 
-    private void DetectSampleRate()
-    {
-        var recorder = _recorderField.GetValue(_playerVoiceChat);
-        if (recorder != null)
-        {
-            var recorderType = recorder.GetType();
-            var sampleRateProp = recorderType.GetProperty("SamplingRate")
-                                 ?? recorderType.GetProperty("RecordingSampleRate")
-                                 ?? recorderType.GetProperty("SamplingRateOverride");
-
-            if (sampleRateProp != null)
-            {
-                var value = sampleRateProp.GetValue(recorder);
-                if (value is int sr and > 0)
-                {
-                    _sampleRate = sr;
-                    LOG.Debug($"Detected sample rate: {_sampleRate} Hz");
-                    return;
-                }
-
-                if (value != null && value.GetType().IsEnum)
-                {
-                    _sampleRate = (int)value;
-                    LOG.Debug($"Detected enum sample rate: {_sampleRate} Hz");
-                    return;
-                }
-            }
-        }
-
-        if (_sampleRate <= 0)
-        {
-            _sampleRate = AudioSettings.outputSampleRate;
-            LOG.Warning($"Fallback to AudioSettings.outputSampleRate: {_sampleRate} Hz");
-        }
-    }
-
     #endregion
 
-    #region Recording
+    #region Capture validation
 
-    public void ProcessVoiceData(short[] voiceData, int frameSampleRate, int channels)
+    // The VAD and the disk write would stall the main thread, so they run in a background task.
+    private IEnumerator SaveCaptures()
     {
-        if (!_isRecording || !PhotonView.IsMine)
+        // A request or a Capture left from the previous level, or the lobby, is not this level's to share.
+        VepMod.VoiceRecorder.Clear();
+        var player = _playerAvatar.VoiceBankKey();
+        while (true)
         {
-            return;
-        }
-
-        var isTalking = (bool)_isTalkingField.GetValue(_playerVoiceChat);
-        if (isTalking && !_capturingSpeech)
-        {
-            _capturingSpeech = true;
-            _bufferPosition = 0;
-            _fileSaved = false;
-            _silenceTimer = 0f;
-            // Photon's own format, more reliable than inferring it from the frame length.
-            if (frameSampleRate > 0) _sampleRate = frameSampleRate;
-            _channelCount = channels >= 1 ? channels : 1;
-            LOG.Debug($"Speech detected, capturing audio ({_sampleRate} Hz, {_channelCount} ch, frame {voiceData.Length}).");
-        }
-
-        if (!_capturingSpeech)
-        {
-            return;
-        }
-
-        EnsureBufferAllocated();
-        CopyVoiceDataToBuffer(voiceData);
-
-        if (isTalking)
-        {
-            _silenceTimer = 0f;
-        }
-        else
-        {
-            var frameDurationSec = _sampleRate > 0 ? (float)(voiceData.Length / _channelCount) / _sampleRate : 0f;
-            _silenceTimer += frameDurationSec;
-            if (_silenceTimer >= SilenceTimeoutSeconds && _bufferPosition > 0 && !_fileSaved)
+            if (!VepMod.VoiceRecorder.TryTakeCapture(out var capture))
             {
-                LOG.Debug($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
-                FinalizeRecording();
-                return;
-            }
-        }
-
-        if (_audioBuffer != null && _bufferPosition >= _audioBuffer.Length && !_fileSaved)
-        {
-            FinalizeRecording();
-        }
-    }
-
-    private void EnsureBufferAllocated()
-    {
-        if (_audioBuffer != null) return;
-
-        _audioBuffer = new float[_sampleRate * AudioBufferDurationSeconds];
-        LOG.Debug(
-            $"Audio buffer allocated: {_audioBuffer.Length} samples ({_sampleRate} Hz, {_channelCount} ch, {AudioBufferDurationSeconds}s)");
-    }
-
-    private void CopyVoiceDataToBuffer(short[] voiceData)
-    {
-        if (_audioBuffer == null) return;
-
-        // Averaged down to mono: the rest of the pipeline (WAV, VAD, playback) is mono.
-        var frames = voiceData.Length / _channelCount;
-        var samplesToWrite = Mathf.Min(frames, _audioBuffer.Length - _bufferPosition);
-        for (var i = 0; i < samplesToWrite; i++)
-        {
-            var sum = 0f;
-            var baseIdx = i * _channelCount;
-            for (var c = 0; c < _channelCount; c++)
-            {
-                sum += voiceData[baseIdx + c];
+                yield return null;
+                continue;
             }
 
-            _audioBuffer[_bufferPosition + i] = sum / (_channelCount * 32768f);
-        }
-
-        _bufferPosition += samplesToWrite;
-    }
-
-    private void FinalizeRecording()
-    {
-        _isRecording = false;
-        _capturingSpeech = false;
-        _fileSaved = true;
-
-        if (_audioBuffer == null || _bufferPosition == 0) return;
-
-        var recordedData = new float[_bufferPosition];
-        Array.Copy(_audioBuffer, recordedData, _bufferPosition);
-
-        var duration = (float)_bufferPosition / _sampleRate;
-        if (duration < VepMod.ConfigAudioMinDuration.Value)
-        {
-            LOG.Debug($"Recording rejected: too short ({duration:F2}s < {VepMod.ConfigAudioMinDuration.Value}s)");
-            return;
-        }
-
-#if !VEPMOD_NO_VAD
-        if (_vadValidator != null)
-        {
-            // The trailing silence (up to SilenceTimeoutSeconds) would dilute the speech ratio and penalise short
-            // words, so the VAD analyses the speech only. The saved Voice Sample keeps its silence.
-            var vadData = recordedData;
-            var trailingSilenceSamples = Mathf.RoundToInt(_silenceTimer * _sampleRate);
-            if (trailingSilenceSamples > 0)
+            var minDuration = VepMod.ConfigAudioMinDuration.Value;
+            var saving = Task.Run(() => ValidateAndSave(capture, player, minDuration));
+            while (!saving.IsCompleted)
             {
-                var speechLen = _bufferPosition - trailingSilenceSamples;
-                if (speechLen >= _sampleRate / 10) // at least 0.1 s of speech
-                {
-                    vadData = new float[speechLen];
-                    Array.Copy(recordedData, vadData, speechLen);
-                }
+                yield return null;
             }
 
-            try
-            {
-                var vadResult = _vadValidator.Validate(vadData, _sampleRate);
+            var (verdict, wav) = saving.Result;
 #if DEBUG
-                LastVadResult = vadResult;
+            LastCaptureVerdict = verdict;
 #endif
-                if (!vadResult.IsValid)
-                {
-                    LOG.Debug($"Recording rejected (VAD): {vadResult.RejectionReason} - {vadResult.Analysis}");
-                    return;
-                }
-
-                LOG.Debug($"Recording passed VAD: {vadResult.Analysis}");
-            }
-            catch (Exception ex)
+            if (wav != null)
             {
-                // Accepting keeps a hiccup of the native VAD from disturbing the Photon voice thread.
-                LOG.Warning($"VAD Validate threw, accepting recording (fail-open): {ex.Message}");
+                yield return ShareAudioWithOthersAsync(wav, capture.Sample.SampleRate).AsCoroutine();
             }
         }
-#endif
-
-        LOG.Debug(
-            $"Recording validated and finalized: {_bufferPosition} samples ({duration:F2}s)");
-        SaveRecordingAsync(recordedData);
+        // ReSharper disable once IteratorNeverReturns
     }
 
-    private void StartRecording()
+    /// <summary>Runs in a background task.</summary>
+    /// <returns>The verdict for the HUD, and the WAV to share, null when the Capture is not a Voice Sample.</returns>
+    private static (string verdict, byte[]? wav) ValidateAndSave(Capture capture, PlayerKey player, float minDuration)
     {
-        if (_isRecording) return;
-
-        LOG.Debug($"StartRecording (sampleRate={_sampleRate})");
-        _audioBuffer = null;
-        _bufferPosition = 0;
-        _isRecording = true;
-        _capturingSpeech = false;
-        _fileSaved = false;
-    }
-
-    private async void SaveRecordingAsync(float[] audioData)
-    {
+        var verdict = "not validated";
         try
         {
-            var sample = new VoiceSample(audioData, _sampleRate);
-            var player = _playerAvatar.VoiceBankKey();
-            await Task.Run(() => VepMod.VoiceBanks.Save(player, sample));
+            var (accepted, detail) = CaptureValidation.Validate(capture, minDuration, VepMod.SpeechCheck);
+            verdict = $"{(accepted ? "accepted" : "rejected")} " +
+                      $"({capture.DurationSeconds:F2} s at {capture.Sample.SampleRate} Hz): {detail}";
+            if (!accepted)
+            {
+                LOG.Debug($"Capture {verdict}");
+                return (verdict, null);
+            }
 
-            _lastSavedAudioBytes = WavCodec.Encode(sample);
-            _hasNewRecording = true;
-
-            LOG.Debug($"Voice Sample saved in the Voice Bank of {player}, ready for sharing: {_lastSavedAudioBytes.Length} bytes");
+            VepMod.VoiceBanks.Save(player, capture.Sample);
+            var wav = WavCodec.Encode(capture.Sample);
+            LOG.Debug($"Capture {verdict}. Voice Sample saved in the Voice Bank of {player}.");
+            return (verdict, wav);
         }
         catch (Exception ex)
         {
-            LOG.Error($"Error saving recording: {ex.Message}");
+            LOG.Error($"Error validating or saving a Capture of {player}: {ex.Message}");
+            return (verdict, null);
         }
     }
 
@@ -431,25 +189,12 @@ public sealed class WhispralMimics : MonoBehaviour
             var delay = Random.Range(VepMod.ShareDelay.Min, VepMod.ShareDelay.Max);
             yield return new WaitForSeconds(delay);
 
-            StartRecording();
-
-            var timeout = AudioBufferDurationSeconds + 1f;
-            while (_isRecording && timeout > 0)
-            {
-                timeout -= 0.1f;
-                yield return new WaitForSeconds(0.1f);
-            }
-
-            if (_hasNewRecording && _lastSavedAudioBytes != null)
-            {
-                _hasNewRecording = false;
-                yield return ShareAudioWithOthersAsync(_lastSavedAudioBytes).AsCoroutine();
-            }
+            VepMod.VoiceRecorder.RequestCapture();
         }
         // ReSharper disable once IteratorNeverReturns
     }
 
-    private async Task ShareAudioWithOthersAsync(byte[] audioData)
+    private async Task ShareAudioWithOthersAsync(byte[] audioData, int sampleRate)
     {
         if (!PhotonNetwork.IsConnectedAndReady)
         {
@@ -458,7 +203,7 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
         var chunks = ChunkAudioData(audioData);
-        LOG.Debug($"Sharing audio: {audioData.Length} bytes in {chunks.Count} chunks");
+        LOG.Debug($"Voice Sample handed to sharing: {audioData.Length} bytes in {chunks.Count} chunks");
 
         for (var i = 0; i < chunks.Count; i++)
         {
@@ -469,7 +214,7 @@ public sealed class WhispralMimics : MonoBehaviour
             }
 
             PhotonView.RPC(nameof(ReceiveSharedAudioChunk), RpcTarget.Others,
-                chunks[i], i, chunks.Count, _localPlayerNickName, _sampleRate);
+                chunks[i], i, chunks.Count, _localPlayerNickName, sampleRate);
 
             await Task.Delay(ChunkDelayMs);
         }
@@ -710,7 +455,7 @@ public sealed class WhispralMimics : MonoBehaviour
             new Keyframe(1f, 0f)
         ));
 
-        source.outputAudioMixerGroup = _playerVoiceChat.mixerMicrophoneSound;
+        source.outputAudioMixerGroup = _playerAvatar.voiceChat.mixerMicrophoneSound;
     }
 
 

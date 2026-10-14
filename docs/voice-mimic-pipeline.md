@@ -43,6 +43,7 @@ flowchart TD
 **Rôle clé : `WhispralMimics`** est attaché à *chaque* `PlayerAvatar` (via
 `PlayerAvatarPatch`), mais :
 - la **boucle 1 d'enregistrement** ne tourne que pour le joueur **local** (`PhotonView.IsMine`) ;
+- le `VoiceRecorder` et le filtre de parole (VAD) sont uniques par client, tenus par le plugin ;
 - tous les clients **reçoivent et stockent** les sons des autres (pour pouvoir les rejouer) ;
 - la référence au mimics local est mise en cache dans `VepFinder.LocalMimics`.
 
@@ -107,9 +108,10 @@ un micro différent (16 k / 44.1 k / 48 k) sans déformation.
 
 ## 4. Boucle 1 — Capture, validation, partage
 
-### 4.1 Machine d'état de la capture (`ProcessVoiceData`)
+### 4.1 Machine d'état de la capture (`VoiceRecorder.PushFrame`)
 
-Appelée à chaque frame voix par le patch Photon (sur le **thread voix**, pas le thread Unity).
+Appelée à chaque frame voix par le patch Photon (sur le **thread voix**, pas le thread Unity). Le
+recorder ne fait qu'accumuler : chaque Capture terminée part dans une file thread-safe.
 
 ```mermaid
 stateDiagram-v2
@@ -126,7 +128,11 @@ stateDiagram-v2
     Finalisation --> Repos: l'extrait est traité puis sauvegardé
 ```
 
-### 4.2 Pipeline de finalisation (`FinalizeRecording`)
+### 4.2 Validation (`CaptureValidation.Validate`)
+
+Le thread principal vide la file (`WhispralMimics.SaveCaptures`) ; la validation, l'encodage et la
+sauvegarde tournent dans une tâche de fond, puis le Voice Sample accepté passe au partage sur le
+thread principal.
 
 ```mermaid
 flowchart TD
@@ -245,7 +251,6 @@ vraies voix du jeu.
 | Audio Quality | `Min Duration` | 0.3 s | Garde-fou durée (pré-VAD) |
 | Audio Quality | `VAD Enabled` | true | Active le filtrage de parole WebRTC |
 | Audio Quality | `VAD Sensitivity` | Balanced | Permissive / Balanced / Strict (voir `vad-integration.md`) |
-| Experimental | `Sampling Rate` | 48000 | Hint encodeur (le rate **source** réel est résolu automatiquement) |
 
 > Variante de build **sans VAD** (`-p:VepModNoVad=true`) : retire la dépendance WebRTC et tout le
 > code VAD ; la boucle 1 ne garde que le garde-fou de durée. Voir `vad-integration.md`.
@@ -258,10 +263,11 @@ vraies voix du jeu.
 |---|---|
 | `src/VepMod.cs` | Plugin BepInEx : config, Harmony, préchargement prefab |
 | `src/Patchs/PlayerAvatarPatch.cs` | Attache `WhispralMimics` ; définit `VepFinder.LocalMimics` |
-| `src/Patchs/LocalVoiceFramedPatch.cs` | Capte les frames micro → `ProcessVoiceData` |
+| `src/Patchs/LocalVoiceFramedPatch.cs` | Capte les frames micro → `VoiceRecorder.PushFrame` |
 | `src/Patchs/VoiceFormatResolver.cs` | Résout le format **source** (rate + canaux) |
 | `src/Patchs/VepFinder.cs` | Cache global du `WhispralMimics` local |
-| `src/Enemies/Whispral/WhispralMimics.cs` | Cœur : capture, VAD, partage (L1), réception, lecture (L2) |
+| `src/Enemies/Whispral/VoiceRecorder.cs` | Capture sur le thread voix, validation (durée + VAD) |
+| `src/Enemies/Whispral/WhispralMimics.cs` | Sauvegarde des Captures, partage (L1), réception, lecture (L2) |
 | `src/Enemies/Whispral/VoiceBanks.cs` | Voice Banks par Steam ID + rotation + migration des banques par pseudo |
 | `src/Enemies/Whispral/WavCodec.cs` | Seul codec WAV (PCM 16 bits mono), partagé avec AudioBenchmark |
 | `src/Patchs/VoiceBankMigrationPatch.cs` | Migre la banque par pseudo quand un joueur arrive |
@@ -269,5 +275,5 @@ vraies voix du jeu.
 | `src/VepFramework/Audio/VadAudioValidator.cs` | Filtre de parole WebRTC VAD |
 | `src/Enemies/Whispral/EnemyWhispral.cs` | FSM de l'ennemi ; envoie les commandes de lecture (L2) |
 | `src/Enemies/Whispral/DroidController.cs` | Hallucination ; `PlayVoice` → lecture sur le droid |
-| `src/Dev/DroidDevTools.cs` | Outils dev (DEBUG) : spawn droid, F6 replay VAD, HUD |
+| `src/Dev/DroidDevTools.cs` | Outils dev (DEBUG) : spawn droid, F6 replay VAD, Shift+F6 capture, HUD |
 ```
