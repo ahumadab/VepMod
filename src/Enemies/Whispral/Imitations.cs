@@ -123,7 +123,11 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     {
         foreach (var imitatedPlayer in _imitations.Keys)
         {
-            if (imitatedPlayer && imitatedPlayer.MaterialTrigger == materialTrigger) return true;
+            if (imitatedPlayer && imitatedPlayer.MaterialTrigger == materialTrigger)
+            {
+                LOG.Debug($"Footstep of {imitatedPlayer.playerName} muted for {_victim.playerName}");
+                return true;
+            }
         }
 
         return false;

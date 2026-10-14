@@ -189,12 +189,12 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     public void StartPrecomputeForwardDestination()
     {
-        Movement?.StartPrecomputeForwardDestination();
+        if (Movement != null) Movement.StartPrecomputeForwardDestination();
     }
 
     public void ClearPrecomputedForwardDestination()
     {
-        Movement?.ClearPrecomputedForwardDestination();
+        if (Movement != null) Movement.ClearPrecomputedForwardDestination();
     }
 
     public void StartPrecomputeDestination()
@@ -407,6 +407,12 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             true,
             _materialTrigger,
             Materials.HostType.OtherPlayer);
+
+        if (SourcePlayer)
+        {
+            var distance = Vector3.Distance(footPosition, SourcePlayer.transform.position);
+            LOG.Debug($"Footstep of the Hallucination of {SourcePlayer.playerName}, {distance:F1} m from them");
+        }
     }
 
     private void SetupNameplate()
@@ -627,8 +633,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         if (SourcePlayer == null || cloneRig == null) return;
 
         // PlayerAvatarRightArm and PlayerEyes live on the 'Player Visuals' GameObject
-        // (sourcePlayer.playerAvatarVisuals.gameObject), a sibling of the 'Player Avatar Controller' that holds
-        // PlayerAvatar.cs, so GetComponentInChildren on sourcePlayer does not find them.
+        // (playerAvatarVisuals.gameObject), a sibling of the 'Player Avatar Controller' that holds PlayerAvatar.cs, so
+        // GetComponentInChildren on the Imitated Player does not find them.
         var visuals = SourcePlayer.playerAvatarVisuals;
         if (visuals == null)
         {
