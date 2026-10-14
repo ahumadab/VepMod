@@ -41,8 +41,8 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var playerAvatar = GetComponent<PlayerAvatar>();
-        if (!playerAvatar)
+        _playerAvatar = GetComponent<PlayerAvatar>();
+        if (!_playerAvatar)
         {
             LOG.Error("PlayerAvatar not found.");
             return;
@@ -55,7 +55,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
         _sampleRate = VepMod.ConfigSamplingRate.Value;
 
-        StartCoroutine(WaitForVoiceChat(playerAvatar));
+        StartCoroutine(WaitForVoiceChat(_playerAvatar));
     }
 
     private void OnDestroy()
@@ -90,8 +90,8 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Private Fields
 
+    private PlayerAvatar _playerAvatar;
     private PlayerVoiceChat _playerVoiceChat;
-    private WavFileManager _wavFileManager;
 #if !VEPMOD_NO_VAD
     private VadAudioValidator? _vadValidator;
 #if DEBUG
@@ -168,11 +168,9 @@ public sealed class WhispralMimics : MonoBehaviour
         LOG.Info("PlayerVoiceChat initialized.");
         DetectSampleRate();
 
-        // Every player's instance receives the sharing RPCs, so each one needs the Voice Banks; only the local
-        // player's instance shares.
+        // Every player's instance receives the sharing RPCs; only the local player's instance shares.
         if (SemiFunc.RunIsLevel())
         {
-            _wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
             _localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
 #if !VEPMOD_NO_VAD
@@ -405,19 +403,14 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         try
         {
-            await _wavFileManager.SaveAsync(audioData, _sampleRate, _localPlayerNickName);
+            var sample = new VoiceSample(audioData, _sampleRate);
+            var player = VoiceBankKey(_playerAvatar);
+            await Task.Run(() => VepMod.VoiceBanks.Save(player, sample));
 
-            var audioBytes = AudioFilters.ConvertFloatsToBytes(audioData);
-
-            using var memoryStream = new MemoryStream();
-            using var writer = new BinaryWriter(memoryStream);
-            WavFileManager.WriteWavHeader(writer, audioData.Length, _sampleRate);
-            writer.Write(audioBytes);
-
-            _lastSavedAudioBytes = memoryStream.ToArray();
+            _lastSavedAudioBytes = WavCodec.Encode(sample);
             _hasNewRecording = true;
 
-            LOG.Debug($"Audio saved and ready for sharing: {_lastSavedAudioBytes.Length} bytes");
+            LOG.Debug($"Voice Sample saved in the Voice Bank of {player}, ready for sharing: {_lastSavedAudioBytes.Length} bytes");
         }
         catch (Exception ex)
         {
@@ -532,7 +525,7 @@ public sealed class WhispralMimics : MonoBehaviour
             LOG.Debug($"All chunks received from {sourcePlayerNickName}, saving audio.");
 
             var combinedData = CombineChunks(chunks!);
-            SaveReceivedAudioAsync(combinedData, srcSampleRate, sourcePlayerNickName);
+            SaveReceivedAudioAsync(combinedData);
 
             _receivedChunksByPlayer.Remove(sourcePlayerNickName);
             _expectedChunkCountByPlayer.Remove(sourcePlayerNickName);
@@ -554,17 +547,24 @@ public sealed class WhispralMimics : MonoBehaviour
         return result;
     }
 
-    private async void SaveReceivedAudioAsync(byte[] audioData, int srcSampleRate, string sourcePlayerNickName)
+    // The sender of a Voice Sample is the owner of the avatar whose PhotonView it arrives on (ADR-0006).
+    private async void SaveReceivedAudioAsync(byte[] wav)
     {
+        var player = VoiceBankKey(_playerAvatar);
         try
         {
-            await _wavFileManager.SaveFromBytesAsync(audioData, srcSampleRate, sourcePlayerNickName);
-            LOG.Debug($"Audio from {sourcePlayerNickName} saved successfully.");
+            await Task.Run(() => VepMod.VoiceBanks.Save(player, WavCodec.Decode(wav)));
+            LOG.Debug($"Voice Sample received from {player} saved in their Voice Bank.");
         }
         catch (Exception ex)
         {
-            LOG.Error($"Error saving audio from {sourcePlayerNickName}: {ex.Message}");
+            LOG.Error($"Error saving the Voice Sample received from {player}: {ex.Message}");
         }
+    }
+
+    internal static PlayerKey VoiceBankKey(PlayerAvatar player)
+    {
+        return new PlayerKey(player.steamID, player.playerName);
     }
 
     #endregion
@@ -603,18 +603,12 @@ public sealed class WhispralMimics : MonoBehaviour
         PhotonView.RPC(nameof(PlayVoiceCommandRPC), RpcTarget.All, targetViewID, imitatedPlayerNickName, applyFilter);
     }
 
-    public string[] GetAvailablePlayerIds()
-    {
-        return _wavFileManager?.GetAllPlayerNickNames() ?? Array.Empty<string>();
-    }
-
     #endregion
 
     #region Audio Processing & Playback
 
-    private float[] ProcessReceivedAudio(byte[] audioData, bool applyVoiceFilter, int receivedSampleRate)
+    private float[] ProcessReceivedAudio(float[] samples, bool applyVoiceFilter, int receivedSampleRate)
     {
-        var samples = AudioFilters.ConvertBytesToFloats(audioData);
         samples = AudioFilters.ApplyLowPassFilter(samples, receivedSampleRate);
 
         if (applyVoiceFilter)
@@ -637,7 +631,7 @@ public sealed class WhispralMimics : MonoBehaviour
         };
     }
 
-    public void PlayAudioAtTransform(Transform hallucination, string sourcePlayerNickName, bool applyFilter)
+    public void PlayAudioAtTransform(Transform hallucination, PlayerAvatar imitatedPlayer, bool applyFilter)
     {
         if (hallucination == null)
         {
@@ -645,18 +639,30 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var (audioData, fileSampleRate) = _wavFileManager.GetRandomFile(sourcePlayerNickName);
-        if (audioData == null)
+        var player = VoiceBankKey(imitatedPlayer);
+        VoiceSample? sample;
+        try
         {
-            LOG.Debug($"No audio found for player {sourcePlayerNickName}");
+            sample = VepMod.VoiceBanks.PickRandom(player);
+        }
+        catch (InvalidDataException ex)
+        {
+            LOG.Warning($"Unreadable Voice Sample in the Voice Bank of {player}: {ex.Message}");
             return;
         }
 
-        var processedSamples = ProcessReceivedAudio(audioData, applyFilter, fileSampleRate);
-        var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, fileSampleRate, false);
+        if (sample == null)
+        {
+            LOG.Debug($"No Voice Sample in the Voice Bank of {player}");
+            return;
+        }
+
+        LOG.Debug($"Picked a Voice Sample of {player} ({sample.Samples.Length} samples, {sample.SampleRate} Hz)");
+        var processedSamples = ProcessReceivedAudio(sample.Samples, applyFilter, sample.SampleRate);
+        var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, sample.SampleRate, false);
         audioClip.SetData(processedSamples, 0);
 
-        PlayAtTransform(hallucination, audioClip, sourcePlayerNickName);
+        PlayAtTransform(hallucination, audioClip, imitatedPlayer.playerName);
     }
 
     // Each Mimic gets its own emitter, so Mimics overlapping on one Hallucination never share an AudioSource. Parented

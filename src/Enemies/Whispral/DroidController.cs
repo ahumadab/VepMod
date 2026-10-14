@@ -140,7 +140,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     #region Audio
 
     /// <summary>
-    ///     Uses the local player's WhispralMimics, which holds the Voice Bank of every player.
+    ///     Uses the local player's WhispralMimics, which plays the Mimic.
     /// </summary>
     public void PlayVoice(bool applyFilter = false)
     {
@@ -156,7 +156,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             return;
         }
 
-        mimics.PlayAudioAtTransform(ControllerTransform, SourcePlayer.playerName, applyFilter);
+        mimics.PlayAudioAtTransform(ControllerTransform, SourcePlayer, applyFilter);
     }
 
     #endregion

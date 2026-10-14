@@ -170,7 +170,9 @@ sequenceDiagram
     end
 ```
 
-Le `WavFileManager` applique une **rotation** par joueur (max `ConfigSamplesPerPlayer`, supprime le
+Le store `VoiceBanks` (un seul par client, créé par le plugin) range chaque Voice Bank sous le Steam ID
+(`AudioFiles/steam_<id>/`, le pseudo en repli sans Steam, ADR-0006) et applique une **rotation** par joueur
+(max `ConfigSamplesPerPlayer`, supprime le
 plus ancien).
 
 ---
@@ -260,8 +262,10 @@ vraies voix du jeu.
 | `src/Patchs/VoiceFormatResolver.cs` | Résout le format **source** (rate + canaux) |
 | `src/Patchs/VepFinder.cs` | Cache global du `WhispralMimics` local |
 | `src/Enemies/Whispral/WhispralMimics.cs` | Cœur : capture, VAD, partage (L1), réception, lecture (L2) |
-| `src/Enemies/Whispral/WavFileManager.cs` | Stockage WAV par joueur + rotation |
-| `src/Enemies/Whispral/AudioFilters.cs` | Conversions, passe-bas, pitch, alien, fade/padding |
+| `src/Enemies/Whispral/VoiceBanks.cs` | Voice Banks par Steam ID + rotation + migration des banques par pseudo |
+| `src/Enemies/Whispral/WavCodec.cs` | Seul codec WAV (PCM 16 bits mono), partagé avec AudioBenchmark |
+| `src/Patchs/VoiceBankMigrationPatch.cs` | Migre la banque par pseudo quand un joueur arrive |
+| `src/Enemies/Whispral/AudioFilters.cs` | Passe-bas, pitch, alien, fade/padding |
 | `src/VepFramework/Audio/VadAudioValidator.cs` | Filtre de parole WebRTC VAD |
 | `src/Enemies/Whispral/EnemyWhispral.cs` | FSM de l'ennemi ; envoie les commandes de lecture (L2) |
 | `src/Enemies/Whispral/DroidController.cs` | Hallucination ; `PlayVoice` → lecture sur le droid |

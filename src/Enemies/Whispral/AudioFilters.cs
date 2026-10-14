@@ -6,8 +6,6 @@ public static class AudioFilters
 {
     private const float TwoPi = 2f * Mathf.PI;
 
-    private const float Int16MaxValue = 32768f;
-
     private const float AlienVibratoFrequency = 5f;
     private const float AlienVibratoDepth = 0.05f;
     private const float AlienRingModFrequency = 200f;
@@ -105,40 +103,6 @@ public static class AudioFilters
             {
                 result[i] = samples[readIndex];
             }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// 16-bit PCM to floats in [-1, 1].
-    /// </summary>
-    public static float[] ConvertBytesToFloats(byte[] byteArray)
-    {
-        var length = byteArray.Length / 2;
-        var result = new float[length];
-
-        for (var i = 0; i < length; i++)
-        {
-            var sample = (short)(byteArray[i * 2] | (byteArray[i * 2 + 1] << 8));
-            result[i] = sample / Int16MaxValue;
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Floats in [-1, 1] to 16-bit PCM.
-    /// </summary>
-    public static byte[] ConvertFloatsToBytes(float[] floatArray)
-    {
-        var result = new byte[floatArray.Length * 2];
-
-        for (var i = 0; i < floatArray.Length; i++)
-        {
-            var sample = (short)(floatArray[i] * short.MaxValue);
-            result[i * 2] = (byte)(sample & 0xFF);
-            result[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
         }
 
         return result;
