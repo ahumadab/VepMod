@@ -1,3 +1,4 @@
+using System;
 using BepInEx.Logging;
 using Logger = BepInEx.Logging.Logger;
 
@@ -38,22 +39,29 @@ public sealed class VepLogger
     {
         if (DebugEnabled)
         {
-            _log.LogDebug(message);
+            _log.LogDebug(Stamped(message));
         }
     }
 
     public void Info(string message)
     {
-        _log.LogInfo(message);
+        _log.LogInfo(Stamped(message));
     }
 
     public void Warning(string message)
     {
-        _log.LogWarning(message);
+        _log.LogWarning(Stamped(message));
     }
 
     public void Error(string message)
     {
-        _log.LogError(message);
+        _log.LogError(Stamped(message));
+    }
+
+    // BepInEx 5 writes no time. The UTC clock, unlike Time.time, is safe off the main thread and lines up the logs of
+    // two game instances.
+    private static string Stamped(string message)
+    {
+        return $"{DateTime.UtcNow:HH:mm:ss.fff} {message}";
     }
 }
