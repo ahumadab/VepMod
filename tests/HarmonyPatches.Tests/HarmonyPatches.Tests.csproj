@@ -16,9 +16,9 @@
   </ItemGroup>
 
   <!-- The plugin's own references, read as metadata only: the patches are checked, never run. Same versions as
-       VepMod.csproj. -->
+       VepMod.csproj. tooling/check.mjs reports the plugin's warnings from its own build, so this one hides them. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\VepMod.csproj" AdditionalProperties="CopyFilesToPluginOutputDirectoryOnBuild=false" />
+    <ProjectReference Include="..\..\VepMod.csproj" AdditionalProperties="CopyFilesToPluginOutputDirectoryOnBuild=false;RunAnalyzers=false;WarningLevel=0" />
     <PackageReference Include="BepInEx.Core" Version="5.*" IncludeAssets="compile" PrivateAssets="all" />
     <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
     <PackageReference Include="R.E.P.O.GameLibs.Steam" Version="*-*" IncludeAssets="compile" PrivateAssets="all" />
