@@ -26,6 +26,8 @@ belongs to the tooling, not here.
 - A call that deactivates or destroys the object running a state machine (`EnemyParent.Despawn`, `SetActive(false)`,
   `Destroy`) skips its state exits: the state machine leaves its state before that call.
 - A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.
+- Undoing a change to a game object gives back the value the game would hold now: recorded before the change, or
+  read from its owner's state (`FlashlightController.currentState`), not a hard-coded one.
 - Per-frame code does not allocate, and does not retry the same failure every frame.
 
 ## Network contract
