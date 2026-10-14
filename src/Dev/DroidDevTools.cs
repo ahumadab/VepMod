@@ -24,6 +24,7 @@ namespace VepMod.Dev;
 ///       F7  — spawn a Hallucination of the local player at the aimed point (works in singleplayer)
 ///       F8  — teleport the nearest Hallucination to the aimed point (to put it on a ledge)
 ///       F9  — drop test: lift the nearest Hallucination and let it fall in place
+///       Shift+F9 — the nearest Hallucination performs a Mimic (press twice in a row to overlap two)
 ///       F10 — toggle the HUD overlay
 ///       F11 — despawn the Hallucinations the tool spawned
 ///
@@ -75,7 +76,12 @@ public sealed class DroidDevTools : MonoBehaviour
 #endif
         if (Input.GetKeyDown(SpawnKey)) SpawnAtAim();
         if (Input.GetKeyDown(TeleportKey)) TeleportNearestToAim();
-        if (Input.GetKeyDown(DropKey)) DropNearest();
+        if (Input.GetKeyDown(DropKey))
+        {
+            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) MimicNearest();
+            else DropNearest();
+        }
+
         if (Input.GetKeyDown(HudKey)) _hudVisible = !_hudVisible;
         if (Input.GetKeyDown(DespawnKey)) DespawnAll();
         if (Input.GetKeyDown(SpawnWhispralKey)) SpawnWhispralAtAim();
@@ -169,6 +175,18 @@ public sealed class DroidDevTools : MonoBehaviour
         var lifted = _nearest.ControllerTransform.position + Vector3.up * DropHeight;
         _nearest.DebugTeleport(lifted);
         LOG.Info($"DevTools: drop test — lifted droid by {DropHeight}m to {lifted}.");
+    }
+
+    private void MimicNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to perform a Mimic.");
+            return;
+        }
+
+        _nearest.PlayVoice();
     }
 
     private void DespawnAll()

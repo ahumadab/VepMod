@@ -53,7 +53,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        sampleRate = VepMod.ConfigSamplingRate.Value;
+        _sampleRate = VepMod.ConfigSamplingRate.Value;
 
         StartCoroutine(WaitForVoiceChat(playerAvatar));
     }
@@ -61,7 +61,7 @@ public sealed class WhispralMimics : MonoBehaviour
     private void OnDestroy()
     {
 #if !VEPMOD_NO_VAD
-        vadValidator?.Dispose();
+        _vadValidator?.Dispose();
 #endif
     }
 
@@ -87,37 +87,37 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Private Fields
 
-    private PlayerVoiceChat playerVoiceChat;
-    private WavFileManager wavFileManager;
+    private PlayerVoiceChat _playerVoiceChat;
+    private WavFileManager _wavFileManager;
 #if !VEPMOD_NO_VAD
-    private VadAudioValidator? vadValidator;
+    private VadAudioValidator? _vadValidator;
 #if DEBUG
     /// <summary>Shown on the DroidDevTools HUD.</summary>
     public VadValidationResult? LastVadResult { get; private set; }
 #endif
 #endif
-    private string localPlayerNickName;
+    private string _localPlayerNickName;
 
     // Reflection fields
-    private FieldInfo? voiceChatField;
-    private FieldInfo recorderField;
-    private FieldInfo isTalkingField;
+    private FieldInfo? _voiceChatField;
+    private FieldInfo _recorderField;
+    private FieldInfo _isTalkingField;
 
     // Recording
-    private float[]? audioBuffer;
-    private int bufferPosition;
-    private int sampleRate;
-    private int channelCount = 1;
-    private bool isRecording;
-    private bool capturingSpeech;
-    private bool fileSaved;
-    private float silenceTimer;
-    private byte[]? lastSavedAudioBytes;
-    private bool hasNewRecording;
+    private float[]? _audioBuffer;
+    private int _bufferPosition;
+    private int _sampleRate;
+    private int _channelCount = 1;
+    private bool _isRecording;
+    private bool _capturingSpeech;
+    private bool _fileSaved;
+    private float _silenceTimer;
+    private byte[]? _lastSavedAudioBytes;
+    private bool _hasNewRecording;
 
     // Shared Voice Samples being received, per player
-    private readonly Dictionary<string, List<byte[]>> receivedChunksByPlayer = new();
-    private readonly Dictionary<string, int> expectedChunkCountByPlayer = new();
+    private readonly Dictionary<string, List<byte[]?>> _receivedChunksByPlayer = new();
+    private readonly Dictionary<string, int> _expectedChunkCountByPlayer = new();
 
     #endregion
 
@@ -125,22 +125,22 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private bool InitializeReflectionFields()
     {
-        voiceChatField = typeof(PlayerAvatar).GetField("voiceChat", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (voiceChatField == null)
+        _voiceChatField = typeof(PlayerAvatar).GetField("voiceChat", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (_voiceChatField == null)
         {
             LOG.Error("Could not find 'voiceChat' field in PlayerAvatar.");
             return false;
         }
 
-        recorderField = typeof(PlayerVoiceChat).GetField("recorder", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (recorderField == null)
+        _recorderField = typeof(PlayerVoiceChat).GetField("recorder", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (_recorderField == null)
         {
             LOG.Error("Could not find 'recorder' field in PlayerVoiceChat.");
             return false;
         }
 
-        isTalkingField = typeof(PlayerVoiceChat).GetField("isTalking", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (isTalkingField == null)
+        _isTalkingField = typeof(PlayerVoiceChat).GetField("isTalking", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (_isTalkingField == null)
         {
             LOG.Error("Could not find 'isTalking' field in PlayerVoiceChat.");
             return false;
@@ -151,14 +151,14 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private IEnumerator WaitForVoiceChat(PlayerAvatar playerAvatar)
     {
-        while (!playerVoiceChat)
+        while (!_playerVoiceChat)
         {
-            if (voiceChatField == null)
+            if (_voiceChatField == null)
             {
                 yield break;
             }
 
-            playerVoiceChat = (PlayerVoiceChat)voiceChatField.GetValue(playerAvatar);
+            _playerVoiceChat = (PlayerVoiceChat)_voiceChatField.GetValue(playerAvatar);
             yield return null;
         }
 
@@ -169,8 +169,8 @@ public sealed class WhispralMimics : MonoBehaviour
         // player's instance shares.
         if (SemiFunc.RunIsLevel())
         {
-            wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
-            localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
+            _wavFileManager = new WavFileManager(VepMod.ConfigSamplesPerPlayer.Value);
+            _localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
 
 #if !VEPMOD_NO_VAD
             if (VepMod.ConfigVadEnabled.Value)
@@ -179,20 +179,20 @@ public sealed class WhispralMimics : MonoBehaviour
                 {
                     var sensitivity = VepMod.ConfigVadSensitivity.Value;
                     var criteria = VadValidationCriteria.FromSensitivity(sensitivity);
-                    vadValidator = new VadAudioValidator(criteria);
+                    _vadValidator = new VadAudioValidator(criteria);
                     LOG.Info($"VAD validation enabled (sensitivity={sensitivity}, speechRatio>={criteria.MinSpeechRatio:F2}).");
                 }
                 catch (Exception ex)
                 {
                     LOG.Warning($"VAD initialization failed, recordings will not be filtered: {ex.Message}");
-                    vadValidator = null;
+                    _vadValidator = null;
                 }
             }
 #endif
 
             if (PhotonView.IsMine)
             {
-                LOG.Info($"WhispralMimics initialized for local player: {localPlayerNickName}");
+                LOG.Info($"WhispralMimics initialized for local player: {_localPlayerNickName}");
 
                 StartCoroutine(ShareAudioLoop());
             }
@@ -205,7 +205,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private void DetectSampleRate()
     {
-        var recorder = recorderField.GetValue(playerVoiceChat);
+        var recorder = _recorderField.GetValue(_playerVoiceChat);
         if (recorder != null)
         {
             var recorderType = recorder.GetType();
@@ -218,24 +218,24 @@ public sealed class WhispralMimics : MonoBehaviour
                 var value = sampleRateProp.GetValue(recorder);
                 if (value is int sr and > 0)
                 {
-                    sampleRate = sr;
-                    LOG.Debug($"Detected sample rate: {sampleRate} Hz");
+                    _sampleRate = sr;
+                    LOG.Debug($"Detected sample rate: {_sampleRate} Hz");
                     return;
                 }
 
                 if (value != null && value.GetType().IsEnum)
                 {
-                    sampleRate = (int)value;
-                    LOG.Debug($"Detected enum sample rate: {sampleRate} Hz");
+                    _sampleRate = (int)value;
+                    LOG.Debug($"Detected enum sample rate: {_sampleRate} Hz");
                     return;
                 }
             }
         }
 
-        if (sampleRate <= 0)
+        if (_sampleRate <= 0)
         {
-            sampleRate = AudioSettings.outputSampleRate;
-            LOG.Warning($"Fallback to AudioSettings.outputSampleRate: {sampleRate} Hz");
+            _sampleRate = AudioSettings.outputSampleRate;
+            LOG.Warning($"Fallback to AudioSettings.outputSampleRate: {_sampleRate} Hz");
         }
     }
 
@@ -245,25 +245,25 @@ public sealed class WhispralMimics : MonoBehaviour
 
     public void ProcessVoiceData(short[] voiceData, int frameSampleRate, int channels)
     {
-        if (!isRecording || !PhotonView.IsMine)
+        if (!_isRecording || !PhotonView.IsMine)
         {
             return;
         }
 
-        var isTalking = (bool)isTalkingField.GetValue(playerVoiceChat);
-        if (isTalking && !capturingSpeech)
+        var isTalking = (bool)_isTalkingField.GetValue(_playerVoiceChat);
+        if (isTalking && !_capturingSpeech)
         {
-            capturingSpeech = true;
-            bufferPosition = 0;
-            fileSaved = false;
-            silenceTimer = 0f;
+            _capturingSpeech = true;
+            _bufferPosition = 0;
+            _fileSaved = false;
+            _silenceTimer = 0f;
             // Photon's own format, more reliable than inferring it from the frame length.
-            if (frameSampleRate > 0) sampleRate = frameSampleRate;
-            channelCount = channels >= 1 ? channels : 1;
-            LOG.Debug($"Speech detected, capturing audio ({sampleRate} Hz, {channelCount} ch, frame {voiceData.Length}).");
+            if (frameSampleRate > 0) _sampleRate = frameSampleRate;
+            _channelCount = channels >= 1 ? channels : 1;
+            LOG.Debug($"Speech detected, capturing audio ({_sampleRate} Hz, {_channelCount} ch, frame {voiceData.Length}).");
         }
 
-        if (!capturingSpeech)
+        if (!_capturingSpeech)
         {
             return;
         }
@@ -273,13 +273,13 @@ public sealed class WhispralMimics : MonoBehaviour
 
         if (isTalking)
         {
-            silenceTimer = 0f;
+            _silenceTimer = 0f;
         }
         else
         {
-            var frameDurationSec = sampleRate > 0 ? (float)(voiceData.Length / channelCount) / sampleRate : 0f;
-            silenceTimer += frameDurationSec;
-            if (silenceTimer >= SilenceTimeoutSeconds && bufferPosition > 0 && !fileSaved)
+            var frameDurationSec = _sampleRate > 0 ? (float)(voiceData.Length / _channelCount) / _sampleRate : 0f;
+            _silenceTimer += frameDurationSec;
+            if (_silenceTimer >= SilenceTimeoutSeconds && _bufferPosition > 0 && !_fileSaved)
             {
                 LOG.Debug($"Silence detected for {SilenceTimeoutSeconds}s, finalizing early.");
                 FinalizeRecording();
@@ -287,7 +287,7 @@ public sealed class WhispralMimics : MonoBehaviour
             }
         }
 
-        if (audioBuffer != null && bufferPosition >= audioBuffer.Length && !fileSaved)
+        if (_audioBuffer != null && _bufferPosition >= _audioBuffer.Length && !_fileSaved)
         {
             FinalizeRecording();
         }
@@ -295,47 +295,47 @@ public sealed class WhispralMimics : MonoBehaviour
 
     private void EnsureBufferAllocated()
     {
-        if (audioBuffer != null) return;
+        if (_audioBuffer != null) return;
 
-        audioBuffer = new float[sampleRate * AudioBufferDurationSeconds];
+        _audioBuffer = new float[_sampleRate * AudioBufferDurationSeconds];
         LOG.Debug(
-            $"Audio buffer allocated: {audioBuffer.Length} samples ({sampleRate} Hz, {channelCount} ch, {AudioBufferDurationSeconds}s)");
+            $"Audio buffer allocated: {_audioBuffer.Length} samples ({_sampleRate} Hz, {_channelCount} ch, {AudioBufferDurationSeconds}s)");
     }
 
     private void CopyVoiceDataToBuffer(short[] voiceData)
     {
-        if (audioBuffer == null) return;
+        if (_audioBuffer == null) return;
 
         // Averaged down to mono: the rest of the pipeline (WAV, VAD, playback) is mono.
-        var frames = voiceData.Length / channelCount;
-        var samplesToWrite = Mathf.Min(frames, audioBuffer.Length - bufferPosition);
+        var frames = voiceData.Length / _channelCount;
+        var samplesToWrite = Mathf.Min(frames, _audioBuffer.Length - _bufferPosition);
         for (var i = 0; i < samplesToWrite; i++)
         {
             var sum = 0f;
-            var baseIdx = i * channelCount;
-            for (var c = 0; c < channelCount; c++)
+            var baseIdx = i * _channelCount;
+            for (var c = 0; c < _channelCount; c++)
             {
                 sum += voiceData[baseIdx + c];
             }
 
-            audioBuffer[bufferPosition + i] = sum / (channelCount * 32768f);
+            _audioBuffer[_bufferPosition + i] = sum / (_channelCount * 32768f);
         }
 
-        bufferPosition += samplesToWrite;
+        _bufferPosition += samplesToWrite;
     }
 
     private void FinalizeRecording()
     {
-        isRecording = false;
-        capturingSpeech = false;
-        fileSaved = true;
+        _isRecording = false;
+        _capturingSpeech = false;
+        _fileSaved = true;
 
-        if (audioBuffer == null || bufferPosition == 0) return;
+        if (_audioBuffer == null || _bufferPosition == 0) return;
 
-        var recordedData = new float[bufferPosition];
-        Array.Copy(audioBuffer, recordedData, bufferPosition);
+        var recordedData = new float[_bufferPosition];
+        Array.Copy(_audioBuffer, recordedData, _bufferPosition);
 
-        var duration = (float)bufferPosition / sampleRate;
+        var duration = (float)_bufferPosition / _sampleRate;
         if (duration < VepMod.ConfigAudioMinDuration.Value)
         {
             LOG.Debug($"Recording rejected: too short ({duration:F2}s < {VepMod.ConfigAudioMinDuration.Value}s)");
@@ -343,16 +343,16 @@ public sealed class WhispralMimics : MonoBehaviour
         }
 
 #if !VEPMOD_NO_VAD
-        if (vadValidator != null)
+        if (_vadValidator != null)
         {
             // The trailing silence (up to SilenceTimeoutSeconds) would dilute the speech ratio and penalise short
             // words, so the VAD analyses the speech only. The saved Voice Sample keeps its silence.
             var vadData = recordedData;
-            var trailingSilenceSamples = Mathf.RoundToInt(silenceTimer * sampleRate);
+            var trailingSilenceSamples = Mathf.RoundToInt(_silenceTimer * _sampleRate);
             if (trailingSilenceSamples > 0)
             {
-                var speechLen = bufferPosition - trailingSilenceSamples;
-                if (speechLen >= sampleRate / 10) // at least 0.1 s of speech
+                var speechLen = _bufferPosition - trailingSilenceSamples;
+                if (speechLen >= _sampleRate / 10) // at least 0.1 s of speech
                 {
                     vadData = new float[speechLen];
                     Array.Copy(recordedData, vadData, speechLen);
@@ -361,7 +361,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
             try
             {
-                var vadResult = vadValidator.Validate(vadData, sampleRate);
+                var vadResult = _vadValidator.Validate(vadData, _sampleRate);
 #if DEBUG
                 LastVadResult = vadResult;
 #endif
@@ -382,39 +382,39 @@ public sealed class WhispralMimics : MonoBehaviour
 #endif
 
         LOG.Debug(
-            $"Recording validated and finalized: {bufferPosition} samples ({duration:F2}s)");
+            $"Recording validated and finalized: {_bufferPosition} samples ({duration:F2}s)");
         SaveRecordingAsync(recordedData);
     }
 
     private void StartRecording()
     {
-        if (isRecording) return;
+        if (_isRecording) return;
 
-        LOG.Debug($"StartRecording (sampleRate={sampleRate})");
-        audioBuffer = null;
-        bufferPosition = 0;
-        isRecording = true;
-        capturingSpeech = false;
-        fileSaved = false;
+        LOG.Debug($"StartRecording (_sampleRate={_sampleRate})");
+        _audioBuffer = null;
+        _bufferPosition = 0;
+        _isRecording = true;
+        _capturingSpeech = false;
+        _fileSaved = false;
     }
 
     private async void SaveRecordingAsync(float[] audioData)
     {
         try
         {
-            await wavFileManager.SaveAsync(audioData, sampleRate, localPlayerNickName);
+            await _wavFileManager.SaveAsync(audioData, _sampleRate, _localPlayerNickName);
 
             var audioBytes = AudioFilters.ConvertFloatsToBytes(audioData);
 
             using var memoryStream = new MemoryStream();
             using var writer = new BinaryWriter(memoryStream);
-            WavFileManager.WriteWavHeader(writer, audioData.Length, sampleRate);
+            WavFileManager.WriteWavHeader(writer, audioData.Length, _sampleRate);
             writer.Write(audioBytes);
 
-            lastSavedAudioBytes = memoryStream.ToArray();
-            hasNewRecording = true;
+            _lastSavedAudioBytes = memoryStream.ToArray();
+            _hasNewRecording = true;
 
-            LOG.Debug($"Audio saved and ready for sharing: {lastSavedAudioBytes.Length} bytes");
+            LOG.Debug($"Audio saved and ready for sharing: {_lastSavedAudioBytes.Length} bytes");
         }
         catch (Exception ex)
         {
@@ -438,16 +438,16 @@ public sealed class WhispralMimics : MonoBehaviour
             StartRecording();
 
             var timeout = AudioBufferDurationSeconds + 1f;
-            while (isRecording && timeout > 0)
+            while (_isRecording && timeout > 0)
             {
                 timeout -= 0.1f;
                 yield return new WaitForSeconds(0.1f);
             }
 
-            if (hasNewRecording && lastSavedAudioBytes != null)
+            if (_hasNewRecording && _lastSavedAudioBytes != null)
             {
-                hasNewRecording = false;
-                yield return ShareAudioWithOthersAsync(lastSavedAudioBytes).AsCoroutine();
+                _hasNewRecording = false;
+                yield return ShareAudioWithOthersAsync(_lastSavedAudioBytes).AsCoroutine();
             }
         }
         // ReSharper disable once IteratorNeverReturns
@@ -473,7 +473,7 @@ public sealed class WhispralMimics : MonoBehaviour
             }
 
             PhotonView.RPC(nameof(ReceiveSharedAudioChunk), RpcTarget.Others,
-                chunks[i], i, chunks.Count, localPlayerNickName, sampleRate);
+                chunks[i], i, chunks.Count, _localPlayerNickName, _sampleRate);
 
             await Task.Delay(ChunkDelayMs);
         }
@@ -500,17 +500,17 @@ public sealed class WhispralMimics : MonoBehaviour
         int srcSampleRate)
     {
         // Sent to RpcTarget.Others, so this is only a safety net.
-        if (sourcePlayerNickName == localPlayerNickName) return;
+        if (sourcePlayerNickName == _localPlayerNickName) return;
 
         if (chunkIndex == 0)
         {
-            receivedChunksByPlayer[sourcePlayerNickName] = new List<byte[]>();
-            expectedChunkCountByPlayer[sourcePlayerNickName] = totalChunks;
+            _receivedChunksByPlayer[sourcePlayerNickName] = new List<byte[]?>();
+            _expectedChunkCountByPlayer[sourcePlayerNickName] = totalChunks;
             LOG.Debug(
                 $"Receiving shared audio from {sourcePlayerNickName}: {totalChunks} chunks at {srcSampleRate} Hz");
         }
 
-        if (!receivedChunksByPlayer.TryGetValue(sourcePlayerNickName, out var chunks))
+        if (!_receivedChunksByPlayer.TryGetValue(sourcePlayerNickName, out var chunks))
         {
             LOG.Warning($"Received chunk for unknown player: {sourcePlayerNickName}");
             return;
@@ -523,16 +523,16 @@ public sealed class WhispralMimics : MonoBehaviour
 
         chunks[chunkIndex] = chunk;
 
-        var expectedCount = expectedChunkCountByPlayer.GetValueOrDefault(sourcePlayerNickName, 0);
+        var expectedCount = _expectedChunkCountByPlayer.GetValueOrDefault(sourcePlayerNickName, 0);
         if (chunks.Count >= expectedCount && chunks.All(c => c != null))
         {
             LOG.Debug($"All chunks received from {sourcePlayerNickName}, saving audio.");
 
-            var combinedData = CombineChunks(chunks);
+            var combinedData = CombineChunks(chunks!);
             SaveReceivedAudioAsync(combinedData, srcSampleRate, sourcePlayerNickName);
 
-            receivedChunksByPlayer.Remove(sourcePlayerNickName);
-            expectedChunkCountByPlayer.Remove(sourcePlayerNickName);
+            _receivedChunksByPlayer.Remove(sourcePlayerNickName);
+            _expectedChunkCountByPlayer.Remove(sourcePlayerNickName);
         }
     }
 
@@ -555,7 +555,7 @@ public sealed class WhispralMimics : MonoBehaviour
     {
         try
         {
-            await wavFileManager.SaveFromBytesAsync(audioData, srcSampleRate, sourcePlayerNickName);
+            await _wavFileManager.SaveFromBytesAsync(audioData, srcSampleRate, sourcePlayerNickName);
             LOG.Debug($"Audio from {sourcePlayerNickName} saved successfully.");
         }
         catch (Exception ex)
@@ -602,7 +602,7 @@ public sealed class WhispralMimics : MonoBehaviour
 
     public string[] GetAvailablePlayerIds()
     {
-        return wavFileManager?.GetAllPlayerNickNames() ?? Array.Empty<string>();
+        return _wavFileManager?.GetAllPlayerNickNames() ?? Array.Empty<string>();
     }
 
     #endregion
@@ -642,7 +642,7 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var (audioData, fileSampleRate) = wavFileManager.GetRandomFile(sourcePlayerNickName);
+        var (audioData, fileSampleRate) = _wavFileManager.GetRandomFile(sourcePlayerNickName);
         if (audioData == null)
         {
             LOG.Debug($"No audio found for player {sourcePlayerNickName}");
@@ -653,18 +653,23 @@ public sealed class WhispralMimics : MonoBehaviour
         var audioClip = AudioClip.Create("HallucinationClip", processedSamples.Length, 1, fileSampleRate, false);
         audioClip.SetData(processedSamples, 0);
 
-        PlayAtTransform(target, audioClip);
+        PlayAtTransform(target, audioClip, sourcePlayerNickName);
     }
 
-    private void PlayAtTransform(Transform target, AudioClip clip)
+    /// <summary>
+    ///     Each Mimic gets its own emitter under <paramref name="target" />, so Mimics overlapping on one Hallucination
+    ///     never share an AudioSource, and the emitter goes with the Hallucination if it is destroyed first.
+    /// </summary>
+    private void PlayAtTransform(Transform target, AudioClip clip, string imitatedPlayerNickName)
     {
-        var audioSource = target.gameObject.GetOrAddComponent<AudioSource>();
-        audioSource.enabled = true;
+        var emitter = new GameObject("Mimic");
+        emitter.transform.SetParent(target, false);
+
+        var audioSource = emitter.AddComponent<AudioSource>();
         ConfigureAudioSource(audioSource, clip);
 
-        // Wall occlusion, as on a real player's voice.
-        var lowPassFilter = target.gameObject.GetOrAddComponent<AudioLowPassFilter>();
-        var lowPassLogic = target.gameObject.GetOrAddComponent<AudioLowPassLogic>();
+        // Wall occlusion, as on a real player's voice. Its RequireComponent adds the AudioLowPassFilter.
+        var lowPassLogic = emitter.AddComponent<AudioLowPassLogic>();
         lowPassLogic.ForceStart = true;
         lowPassLogic.AlwaysActive = true;
         lowPassLogic.Fetch = true;
@@ -672,7 +677,11 @@ public sealed class WhispralMimics : MonoBehaviour
 
         audioSource.Play();
 
-        StartCoroutine(DestroyAudioSourceAfterPlayback(audioSource, clip.length + 0.1f));
+        var lifetime = clip.length + 0.1f;
+        LOG.Debug($"Mimic of {imitatedPlayerNickName} started ({clip.length:F2}s)");
+        // Destroying the whole GameObject sidesteps Unity's refusal to remove a component another one requires.
+        Destroy(emitter, lifetime);
+        StartCoroutine(LogMimicEnd(imitatedPlayerNickName, clip.length, lifetime));
     }
 
     private void ConfigureAudioSource(AudioSource source, AudioClip clip)
@@ -696,34 +705,14 @@ public sealed class WhispralMimics : MonoBehaviour
             new Keyframe(1f, 0f)
         ));
 
-        source.outputAudioMixerGroup = playerVoiceChat.mixerMicrophoneSound;
+        source.outputAudioMixerGroup = _playerVoiceChat.mixerMicrophoneSound;
     }
 
 
-    private static IEnumerator DestroyAudioSourceAfterPlayback(AudioSource source, float delay)
+    private static IEnumerator LogMimicEnd(string imitatedPlayerNickName, float length, float delay)
     {
         yield return new WaitForSeconds(delay);
-
-        if (source == null) yield break;
-
-        var go = source.gameObject;
-
-        // Unity refuses to remove a component another one depends on: dependents go first, a frame apart.
-        var lowPassLogic = go.GetComponent<AudioLowPassLogic>();
-        if (lowPassLogic != null)
-        {
-            Destroy(lowPassLogic);
-            yield return null;
-        }
-
-        var lowPassFilter = go.GetComponent<AudioLowPassFilter>();
-        if (lowPassFilter != null)
-        {
-            Destroy(lowPassFilter);
-            yield return null;
-        }
-
-        if (source != null) Destroy(source);
+        LOG.Debug($"Mimic of {imitatedPlayerNickName} ended ({length:F2}s)");
     }
 
     #endregion
