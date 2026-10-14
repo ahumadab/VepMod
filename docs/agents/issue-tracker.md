@@ -58,6 +58,10 @@ Before the first edit of a ticket's work:
 Push the branch and open the PR against `develop` with `Closes #<n>` in its body. Merging it closes the ticket, which
 moves it to `Done`.
 
+A spec does not close with its last ticket: GitHub never closes a parent issue on its own. Once every sub-issue is
+closed (`gh api repos/ahumadab/VepMod/issues/<spec>/sub_issues --jq '.[].state'`), close the spec with a comment listing
+the tickets it shipped.
+
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --json title,body,labels,comments`.
