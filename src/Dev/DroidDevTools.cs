@@ -24,6 +24,7 @@ namespace VepMod.Dev;
 ///       F7  — spawn a Hallucination of the local player at the aimed point (works in singleplayer)
 ///       F8  — teleport the nearest Hallucination to the aimed point (to put it on a ledge)
 ///       F9  — drop test: lift the nearest Hallucination and let it fall in place
+///       Shift+F9 — the nearest Hallucination performs a Mimic (press twice in a row to overlap two)
 ///       F10 — toggle the HUD overlay
 ///       F11 — despawn the Hallucinations the tool spawned
 ///
@@ -75,7 +76,12 @@ public sealed class DroidDevTools : MonoBehaviour
 #endif
         if (Input.GetKeyDown(SpawnKey)) SpawnAtAim();
         if (Input.GetKeyDown(TeleportKey)) TeleportNearestToAim();
-        if (Input.GetKeyDown(DropKey)) DropNearest();
+        if (Input.GetKeyDown(DropKey))
+        {
+            if (ShiftHeld()) MimicNearest();
+            else DropNearest();
+        }
+
         if (Input.GetKeyDown(HudKey)) _hudVisible = !_hudVisible;
         if (Input.GetKeyDown(DespawnKey)) DespawnAll();
         if (Input.GetKeyDown(SpawnWhispralKey)) SpawnWhispralAtAim();
@@ -84,13 +90,13 @@ public sealed class DroidDevTools : MonoBehaviour
         if (Input.GetKeyDown(KillWhispralsKey)) KillWhisprals();
         if (Input.GetKeyDown(KillLocalPlayerKey))
         {
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) ReviveDeadPlayers();
+            if (ShiftHeld()) ReviveDeadPlayers();
             else KillLocalPlayer();
         }
 
         if (Input.GetKeyDown(HurtLocalPlayerKey))
         {
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) HealLocalPlayer();
+            if (ShiftHeld()) HealLocalPlayer();
             else HurtLocalPlayer();
         }
 
@@ -169,6 +175,23 @@ public sealed class DroidDevTools : MonoBehaviour
         var lifted = _nearest.ControllerTransform.position + Vector3.up * DropHeight;
         _nearest.DebugTeleport(lifted);
         LOG.Info($"DevTools: drop test — lifted droid by {DropHeight}m to {lifted}.");
+    }
+
+    private static bool ShiftHeld()
+    {
+        return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+    }
+
+    private void MimicNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to perform a Mimic.");
+            return;
+        }
+
+        _nearest.PlayVoice();
     }
 
     private void DespawnAll()
@@ -388,7 +411,7 @@ public sealed class DroidDevTools : MonoBehaviour
         if (!_hudVisible) return;
 
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
-                 $"F7 spawn | F8 teleport | F9 drop | F10 hud | F11 despawn\n" +
+                 $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n";
