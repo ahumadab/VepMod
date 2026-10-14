@@ -6,8 +6,10 @@ Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04
 
 ## In-game tests
 
-Before asking for an in-game test, log the transitions under test at `Debug` and give every action the tester cannot
-trigger at will a key in `src/Dev/DroidDevTools.cs`, whose header lists the keys.
+The tester confirms what the game shows; only the BepInEx logs show the state behind it (a Hallucination on the floor
+but off the NavMesh), and you read them after the test to confirm each acceptance criterion. So before asking for an
+in-game test, log at `Debug` every transition under test with the data that proves it, and give every action the tester
+cannot trigger at will a key in `src/Dev/DroidDevTools.cs`, whose header lists the keys.
 
 ## Coding standards
 

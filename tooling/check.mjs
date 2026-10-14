@@ -50,16 +50,17 @@ function buildWithoutWarningsIn(files, args) {
     );
     if (warnings.size === 0) return;
     console.error(`A touched file keeps no analyzer warning:\n  ${[...warnings].join("\n  ")}`);
-    process.exit(1);
+    process.exitCode = 1;
 }
 
+// A rule check reports and lets the run go on, so one run lists every finding; a failed build or test still stops it.
 function checkComments(files, pattern, rule) {
     const offenders = files.flatMap((file) =>
         commentLinesMatching(pattern, file, readFileSync(file, "utf8")).map((line) => `${file}:${line}`),
     );
     if (offenders.length === 0) return;
     console.error(`${rule}:\n  ${offenders.join("\n  ")}`);
-    process.exit(1);
+    process.exitCode = 1;
 }
 
 const touchedCode = touchedFiles(["*.cs"], { staged, base });
@@ -87,4 +88,5 @@ for (const noVad of ["true", "false"]) {
 for (const project of readdirSync("tests", { recursive: true }).filter((path) => path.endsWith(".csproj"))) {
     run("dotnet", ["test", `tests/${project}`, "-v", "q"]);
 }
+if (process.exitCode) process.exit();
 console.log("check: OK");
