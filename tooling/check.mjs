@@ -1,7 +1,7 @@
 // The one check run by the git hooks and CI (AGENTS.md).
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { avoidedWords, checkedExtensions, commentLinesMatching, french } from "./comments.mjs";
+import { avoidedWords, checkedExtensions, commentLinesMatching, french, stringLinesMatching } from "./comments.mjs";
 import { touchedFiles } from "./touched-files.mjs";
 
 const [mode, scope] = process.argv.slice(2);
@@ -31,9 +31,9 @@ function checkFormat(files) {
 
 
 // A rule check reports and lets the run go on, so one run lists every finding; a failed build or test still stops it.
-function checkComments(files, pattern, rule) {
+function checkLines(files, linesMatching, pattern, rule) {
     const offenders = files.flatMap((file) =>
-        commentLinesMatching(pattern, file, readFileSync(file, "utf8")).map((line) => `${file}:${line}`),
+        linesMatching(pattern, file, readFileSync(file, "utf8")).map((line) => `${file}:${line}`),
     );
     if (offenders.length === 0) return;
     console.error(`${rule}:\n  ${offenders.join("\n  ")}`);
@@ -45,11 +45,19 @@ checkFormat(touchedCode);
 if (mode === "format" || mode === "fix") process.exit(0);
 
 const commentedFiles = touchedFiles(checkedExtensions.map((extension) => `*${extension}`), { staged, base });
-checkComments(commentedFiles, french, "Comments are written in English (CODING_STANDARDS.md)");
-checkComments(
+const avoided = avoidedWords(readFileSync("GLOSSARY.md", "utf8"));
+checkLines(commentedFiles, commentLinesMatching, french, "Comments are written in English (CODING_STANDARDS.md)");
+checkLines(
     commentedFiles,
-    avoidedWords(readFileSync("GLOSSARY.md", "utf8")),
+    commentLinesMatching,
+    avoided,
     "Comments use the GLOSSARY.md terms, not the words it lists under Avoid",
+);
+checkLines(
+    commentedFiles,
+    stringLinesMatching,
+    avoided,
+    "Log messages and other strings use the GLOSSARY.md terms, not the words it lists under Avoid",
 );
 run("node", ["--test", "tooling/**/*.test.mjs"]);
 run(

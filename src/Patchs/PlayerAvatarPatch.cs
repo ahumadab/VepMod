@@ -18,6 +18,12 @@ internal class PlayerAvatarPatch
             return;
         }
 
+        // Two game instances on one PC write two logs: this line tells them apart.
+        if (__instance.photonView.IsMine)
+        {
+            LOG.Info($"Local player {PhotonNetwork.LocalPlayer.NickName}, Master: {PhotonNetwork.IsMasterClient}");
+        }
+
         __instance.gameObject.AddComponent<VoiceSampleSharing>();
         LOG.Debug($"Voice Sample sharing added to PlayerAvatar: {__instance.name}");
     }

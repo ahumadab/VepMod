@@ -168,17 +168,17 @@ public class VepMod : BaseUnityPlugin
         // Mimic commands (while Haunted)
         VoiceDelay = Config.BindMinMax("Voice Playback",
             "Voice Min Delay", "Voice Max Delay", ConfigRanges.VoiceDelay,
-            "Minimum time between voice playback commands during Whispral debuff.",
-            "Maximum time between voice playback commands during Whispral debuff.");
+            "Minimum time between Mimics while Haunted by a Whispral.",
+            "Maximum time between Mimics while Haunted by a Whispral.");
         ConfigVoiceFilterEnabled = Config.Bind("Voice Playback", "Voice Filter Enabled?", false,
             new ConfigDescription(
-                "Turning this will enable modifiable filters for which enemies can play back voices during the Whispral debuff."));
+                "Turning this will enable modifiable filters for which enemies can play back voices while Haunted by a Whispral."));
 
 #if DEBUG
         // Developer tools (dev build only, off by default)
         ConfigEnableDevTools = Config.Bind("Developer", "Enable Dev Tools", false,
             new ConfigDescription(
-                "Enables in-game developer tools for testing the droid: spawn/teleport/drop-test keybinds (F7-F11) and a debug HUD. For development only."));
+                "Enables in-game developer tools for testing Hallucinations: spawn/teleport/drop-test keybinds (F7-F11) and a debug HUD. For development only."));
 #endif
 
         // Audio validation (VAD)

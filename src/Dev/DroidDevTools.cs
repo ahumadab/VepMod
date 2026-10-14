@@ -132,7 +132,7 @@ public sealed class DroidDevTools : MonoBehaviour
         if (droid != null)
         {
             _spawned.Add(droid);
-            LOG.Info($"DevTools: spawned droid at {spawnPos} (total dev droids: {_spawned.Count}).");
+            LOG.Info($"DevTools: spawned a Hallucination at {spawnPos} (dev Hallucinations: {_spawned.Count}).");
         }
         else
         {
@@ -145,7 +145,7 @@ public sealed class DroidDevTools : MonoBehaviour
         RefreshNearest();
         if (_nearest == null)
         {
-            LOG.Warning("DevTools: no droid to teleport.");
+            LOG.Warning("DevTools: no Hallucination to teleport.");
             return;
         }
 
@@ -160,7 +160,7 @@ public sealed class DroidDevTools : MonoBehaviour
             : point;
 
         _nearest.DebugTeleport(target);
-        LOG.Info($"DevTools: teleported droid to {target}.");
+        LOG.Info($"DevTools: teleported the Hallucination to {target}.");
     }
 
     private void DropNearest()
@@ -168,13 +168,13 @@ public sealed class DroidDevTools : MonoBehaviour
         RefreshNearest();
         if (_nearest == null || _nearest.ControllerTransform == null)
         {
-            LOG.Warning("DevTools: no droid to drop.");
+            LOG.Warning("DevTools: no Hallucination to drop.");
             return;
         }
 
         var lifted = _nearest.ControllerTransform.position + Vector3.up * DropHeight;
         _nearest.DebugTeleport(lifted);
-        LOG.Info($"DevTools: drop test — lifted droid by {DropHeight}m to {lifted}.");
+        LOG.Info($"DevTools: drop test — lifted the Hallucination by {DropHeight}m to {lifted}.");
     }
 
     private static bool ShiftHeld()
@@ -208,7 +208,7 @@ public sealed class DroidDevTools : MonoBehaviour
 
         _spawned.Clear();
         _nearest = null;
-        LOG.Info($"DevTools: despawned {count} dev droid(s).");
+        LOG.Info($"DevTools: despawned {count} dev Hallucination(s).");
     }
 
 #if !VEPMOD_NO_VAD
@@ -405,7 +405,7 @@ public sealed class DroidDevTools : MonoBehaviour
     {
         if (!_hudVisible) return;
 
-        var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
+        var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command without a Hallucination (Master)\n" +
@@ -419,7 +419,7 @@ public sealed class DroidDevTools : MonoBehaviour
         if (_nearest != null && _nearest.Movement != null)
         {
             var m = _nearest.Movement;
-            sb += $"\nNearest droid:\n" +
+            sb += $"\nNearest Hallucination:\n" +
                   $"  State      : {_nearest.DebugStateName}\n" +
                   $"  Grounded   : {m.DebugIsGrounded}\n" +
                   $"  Falling    : {_nearest.IsFalling}\n" +
@@ -428,7 +428,7 @@ public sealed class DroidDevTools : MonoBehaviour
         }
         else
         {
-            sb += "\nNo droid in scene.";
+            sb += "\nNo Hallucination in scene.";
         }
 
         sb += $"\n\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";

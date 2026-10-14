@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { avoidedWords, commentLinesMatching, french } from "./comments.mjs";
+import { avoidedWords, commentLinesMatching, french, stringLinesMatching } from "./comments.mjs";
 
 const frenchCommentLines = (file, text) => commentLinesMatching(french, file, text);
 
@@ -35,4 +35,16 @@ test("flags the glossary's Avoid words in comments, apart or joined", () => {
         'Log("hidden player");',
     ].join("\n");
     assert.deepEqual(commentLinesMatching(avoidedWords(glossary), "A.cs", code), [1, 2, 3, 4]);
+});
+
+test("flags the glossary's Avoid words in C# strings", () => {
+    const avoided = avoidedWords("_Avoid_: Source player, droid");
+    const code = [
+        'LOG.Info("no droid to drop");',
+        'LOG.Debug($"Mimic of {sourcePlayer.playerName}");',
+        'var name = $"Hallucination_{player}"; // no droid here',
+        'LOG.Info("found \\"droids\\"");',
+    ].join("\n");
+    assert.deepEqual(stringLinesMatching(avoided, "A.cs", code), [1, 4]);
+    assert.deepEqual(stringLinesMatching(avoided, "build.ps1", "Write-Host \"droid\""), []);
 });

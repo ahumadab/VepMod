@@ -19,6 +19,19 @@ export function avoidedWords(glossary) {
     return new RegExp(`\\b(${terms.map((term) => term.split(/\s+/).join("[ _]?")).join("|")})s?\\b`, "i");
 }
 
+// The text of C# string literals (log messages, the dev HUD), without the code in interpolation holes.
+export function stringLinesMatching(pattern, file, text) {
+    if (extname(file) !== ".cs") return [];
+    const literalText = (literal) => literal.replace(/\{[^}]*\}/g, "");
+    return text
+        .split("\n")
+        .flatMap((line, index) =>
+            (line.match(/"(?:[^"\\]|\\.)*"/g) ?? []).some((literal) => pattern.test(literalText(literal)))
+                ? [index + 1]
+                : [],
+        );
+}
+
 export function commentLinesMatching(pattern, file, text) {
     const comment = commentByExtension[extname(file)];
     return text
