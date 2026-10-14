@@ -187,7 +187,7 @@ public sealed class DroidDevTools : MonoBehaviour
             return;
         }
 
-        _nearest.PlayVoice();
+        _nearest.PlayMimic(false);
     }
 
     private void DespawnAll()

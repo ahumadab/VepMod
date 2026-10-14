@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using VepMod.VepFramework;
 
-namespace VepMod.Patchs;
+namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     The microphone format of a Photon voice: the real format of the buffers pushed into

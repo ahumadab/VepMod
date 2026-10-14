@@ -1,6 +1,7 @@
 #nullable disable
 using HarmonyLib;
 using Photon.Voice;
+using VepMod.Enemies.Whispral;
 
 namespace VepMod.Patchs;
 

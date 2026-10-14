@@ -15,12 +15,12 @@ public sealed class DroidNameplate : MonoBehaviour
 
     private Transform _controllerTransform = null!;
     private WorldSpaceUIPlayerName? _nameplate;
-    private PlayerAvatar _sourcePlayer = null!;
+    private PlayerAvatar _imitatedPlayer = null!;
 
-    public void Initialize(Transform controllerTransform, PlayerAvatar sourcePlayer)
+    public void Initialize(Transform controllerTransform, PlayerAvatar imitatedPlayer)
     {
         _controllerTransform = controllerTransform;
-        _sourcePlayer = sourcePlayer;
+        _imitatedPlayer = imitatedPlayer;
 
         CreateNameplate();
     }
@@ -59,7 +59,7 @@ public sealed class DroidNameplate : MonoBehaviour
 
     private void CreateNameplate()
     {
-        if (_sourcePlayer == null || WorldSpaceUIParent.instance == null) return;
+        if (_imitatedPlayer == null || WorldSpaceUIParent.instance == null) return;
 
         var prefab = WorldSpaceUIParent.instance.playerNamePrefab;
         if (prefab == null) return;
@@ -72,7 +72,7 @@ public sealed class DroidNameplate : MonoBehaviour
             // The game only calls Show on the real player's nameplate, so its Update would fade this copy every frame,
             // alive or dead, and pin it to the Imitated Player instead of the Hallucination.
             _nameplate.enabled = false;
-            _nameplate.text.text = _sourcePlayer.playerName;
+            _nameplate.text.text = _imitatedPlayer.playerName;
         }
     }
 
