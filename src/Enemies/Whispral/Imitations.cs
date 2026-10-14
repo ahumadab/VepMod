@@ -14,7 +14,6 @@ namespace VepMod.Enemies.Whispral;
 public sealed class Imitations : MonoBehaviourPunCallbacks
 {
     private const float SpawnRetryDelay = 1f; // s
-    private const float FootstepMuteRadius = 2f; // m
 
     private static readonly VepLogger LOG = VepLogger.Create<Imitations>();
 
@@ -119,14 +118,12 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         return null;
     }
 
-    public bool IsNearImitatedPlayer(Vector3 position)
+    // Each PlayerAvatar plays its footsteps with its own MaterialTrigger, so the trigger identifies the emitter.
+    public bool IsImitatedPlayerFootstep(Materials.MaterialTrigger materialTrigger)
     {
         foreach (var imitatedPlayer in _imitations.Keys)
         {
-            if (imitatedPlayer && Vector3.Distance(position, imitatedPlayer.transform.position) <= FootstepMuteRadius)
-            {
-                return true;
-            }
+            if (imitatedPlayer && imitatedPlayer.MaterialTrigger == materialTrigger) return true;
         }
 
         return false;
