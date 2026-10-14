@@ -56,7 +56,7 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public bool DebugIsGrounded => _charController != null && _charController.isGrounded;
 
-    private bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
+    internal bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
 
     public event Action? OnNavMeshError;
 

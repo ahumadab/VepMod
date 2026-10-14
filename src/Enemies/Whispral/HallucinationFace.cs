@@ -41,7 +41,7 @@ public sealed class HallucinationFace : MonoBehaviour
 
     public bool IsPlayerLookingAtMe { get; private set; }
 
-    public void Initialize(Hallucination hallucination, Transform controllerTransform)
+    public void Initialize(Hallucination hallucination)
     {
         _hallucination = hallucination;
         _controllerTransform = hallucination.ControllerTransform;

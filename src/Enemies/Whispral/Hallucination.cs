@@ -92,8 +92,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
 
     public bool IsInMovementState =>
-        Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint or StateId.StalkApproach or StateId.StalkStare
-            or StateId.StalkFlee;
+        Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint || IsStalking;
 
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
@@ -106,7 +105,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     protected override void Update()
     {
-        if (Movement == null || _navAgent == null || !_navAgent.isOnNavMesh) return;
+        if (Movement == null || !Movement.IsOnNavMesh) return;
         if (ControllerTransform == null) return;
 
         Fsm.Update();
@@ -201,7 +200,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private void SetupAnimationController()
     {
         _face = gameObject.AddComponent<HallucinationFace>();
-        _face.Initialize(this, ControllerTransform);
+        _face.Initialize(this);
 
         if (_animator != null)
         {
