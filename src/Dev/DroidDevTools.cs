@@ -71,7 +71,11 @@ public sealed class DroidDevTools : MonoBehaviour
         if (Input.GetKeyDown(SpawnWhispralKey)) SpawnWhispralAtAim();
         if (Input.GetKeyDown(StunPreparingWhispralsKey)) StunWhisprals(true);
         if (Input.GetKeyDown(StunWhispralsKey)) StunWhisprals(false);
-        if (Input.GetKeyDown(KillWhispralsKey)) KillWhisprals();
+        if (Input.GetKeyDown(KillWhispralsKey))
+        {
+            if (ShiftHeld()) SendMimicCommandsWithoutHallucination();
+            else KillWhisprals();
+        }
         if (Input.GetKeyDown(KillLocalPlayerKey))
         {
             if (ShiftHeld()) ReviveDeadPlayers();
@@ -325,6 +329,21 @@ public sealed class DroidDevTools : MonoBehaviour
         }
     }
 
+    // Names the Victim as the Imitated Player: a Victim is never imitated, so no Hallucination plays it.
+    private static void SendMimicCommandsWithoutHallucination()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        foreach (var whispral in FindObjectsOfType<EnemyWhispral>())
+        {
+            var victim = whispral.playerTarget;
+            if (whispral.CurrentState != EnemyWhispral.State.Attached || victim == null) continue;
+
+            LOG.Info($"DevTools: Mimic command without a Hallucination to {victim.playerName}.");
+            whispral.SendMimicCommand(victim, victim, false);
+        }
+    }
+
     private static void KillLocalPlayer()
     {
         var player = PlayerAvatar.instance;
@@ -389,6 +408,7 @@ public sealed class DroidDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — droids: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
+                 "Shift+F4 Mimic command without a Hallucination (Master)\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n" +
                  "Shift+F6 capture your voice now\n";

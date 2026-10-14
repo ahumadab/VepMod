@@ -267,6 +267,14 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
     }
 
+    /// <summary>Master only.</summary>
+    internal void SendMimicCommand(PlayerAvatar victim, PlayerAvatar imitatedPlayer, bool voiceFilter)
+    {
+        LOG.Debug($"Mimic command: Victim={victim.playerName}, Imitated Player={imitatedPlayer.playerName}, " +
+                  $"voice filter={voiceFilter}");
+        _photonView.RPC(nameof(MimicRPC), victim.photonView.Owner, imitatedPlayer.photonView.ViewID, voiceFilter);
+    }
+
     // Sent to the Victim's client only.
     [PunRPC]
     private void MimicRPC(int imitatedPlayerViewID, bool voiceFilter, PhotonMessageInfo _info = default)
@@ -754,11 +762,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             }
 
             var voiceFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
-
-            LOG.Debug($"Mimic command: Victim={victim.playerName}, Imitated Player={imitatedPlayer.playerName}, " +
-                      $"voice filter={voiceFilter}");
-            Whispral._photonView.RPC(nameof(MimicRPC), victim.photonView.Owner, imitatedPlayer.photonView.ViewID,
-                voiceFilter);
+            Whispral.SendMimicCommand(victim, imitatedPlayer, voiceFilter);
         }
 
         private static PlayerAvatar? ChooseRandomImitatedPlayer(PlayerAvatar victim)
