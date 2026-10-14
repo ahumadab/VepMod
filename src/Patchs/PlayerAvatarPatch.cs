@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 using HarmonyLib;
 using Photon.Pun;
 using VepMod.Enemies.Whispral;
@@ -36,6 +36,7 @@ internal class PlayerAvatarPatch
             return;
         }
 
+        VepFinder.EnsureInitialized();
         VepFinder.LocalMimics = mimics;
         LOG.Info($"Set LocalMimics for local PlayerAvatar: {__instance.name}");
     }

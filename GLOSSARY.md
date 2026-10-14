@@ -58,6 +58,9 @@ _Avoid_: Host
 
 ### Voice
 
+**Capture**:
+A stretch of the local player's voice taken from the voice chat, from the moment they talk until half a second of silence or six seconds; it becomes a Voice Sample only if it passes the duration and speech checks.
+
 **Voice Sample**:
 A short recording of a player's real voice, kept only if it contains speech, and shared with every other player.
 _Avoid_: Clip, recording, extract

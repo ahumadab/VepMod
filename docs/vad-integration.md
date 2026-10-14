@@ -116,12 +116,13 @@ VAD becomes the bottleneck. The VAD alone with a low threshold outperforms all c
 ### Pipeline
 
 ```
-ProcessVoiceData (voice frames from Photon)
-    └── FinalizeRecording
+VoiceRecorder.PushFrame (Photon voice thread)  →  Capture queued
+WhispralMimics.SaveCaptures (main thread)      →  dequeues, then in a background task:
+    └── CaptureValidation.Validate
             ├── duration guard      →  reject if < ConfigAudioMinDuration (default 0.3s)
-            ├── trim trailing silence (analysis only — saved clip stays full)
-            ├── VAD.Validate()      →  reject if speechRatio < threshold (sensitivity-dependent)
-            └── SaveRecordingAsync
+            ├── trim trailing silence (analysis only — the Voice Sample stays full)
+            └── SpeechCheck (VAD)   →  reject if speechRatio < threshold (sensitivity-dependent)
+    └── VoiceBanks.Save, WavCodec.Encode  →  handed to sharing on the main thread
 ```
 
 The VAD is the **sole content filter** — the previous RMS/Peak pre-filter was removed (the
@@ -133,8 +134,9 @@ accepting everything).
 | File | Role |
 |---|---|
 | `src/VepFramework/Audio/VadAudioValidator.cs` | VAD wrapper — `VadValidationCriteria`, `VadSensitivity`, `FromSensitivity`, resampling, dispose lock |
-| `src/Enemies/Whispral/WhispralMimics.cs` | Recording pipeline — VAD-only, trailing-silence trim, fail-open `try/catch` |
-| `src/VepMod.cs` | Config entries (`ConfigVadEnabled`, `ConfigVadSensitivity`, `ConfigAudioMinDuration`) |
+| `src/Enemies/Whispral/VoiceRecorder.cs` | `VoiceRecorder` (voice thread) and `CaptureValidation` — trailing-silence trim, fail-open `try/catch` |
+| `src/Enemies/Whispral/WhispralMimics.cs` | Drains the Captures, validates and saves them in a background task |
+| `src/VepMod.cs` | Config entries (`ConfigVadEnabled`, `ConfigVadSensitivity`, `ConfigAudioMinDuration`), the one VAD handle |
 | `VepMod.csproj` | Build config — WebRtcVadSharp 1.3.2, PlatformTarget x64, test exclusion |
 
 `CombinedAudioValidator.cs`, `AudioRecordingValidator.cs` and `AudioAnalyzer.cs` were **deleted**
@@ -164,7 +166,7 @@ public static VadValidationCriteria FromSensitivity(VadSensitivity sensitivity)
     };
     return new VadValidationCriteria
     {
-        MinDurationSeconds = 0f,                    // duration guard is upstream (WhispralMimics)
+        MinDurationSeconds = 0f,                    // duration guard is upstream (CaptureValidation)
         MinSpeechRatio     = ratio,
         OperatingMode      = OperatingMode.HighQuality,
         FrameLength        = FrameLength.Is20ms,
@@ -173,16 +175,16 @@ public static VadValidationCriteria FromSensitivity(VadSensitivity sensitivity)
 }
 ```
 
-`MinDurationSeconds = 0f` intentionally: `WhispralMimics.FinalizeRecording` reads
+`MinDurationSeconds = 0f` intentionally: `CaptureValidation.Validate` checks
 `ConfigAudioMinDuration` before calling VAD, keeping the duration threshold user-configurable
 without duplicating it inside the VAD criteria.
 
 ### Trailing-silence trim
 
-`FinalizeRecording` captures up to `SilenceTimeoutSeconds` (0.5s) of trailing silence. That silence
-is trimmed (using `silenceTimer`) from the buffer passed to the VAD so it doesn't dilute the speech
-ratio and penalize short utterances. The saved/shared clip keeps the full buffer — only the VAD
-analysis window is trimmed. A 0.1s floor avoids degenerate analysis windows.
+A Capture ends with up to 0.5s of trailing silence, whose length it carries. That silence is trimmed
+from the buffer passed to the VAD so it doesn't dilute the speech ratio and penalize short
+utterances. The saved/shared Voice Sample keeps the full buffer — only the VAD analysis window is
+trimmed. A 0.1s floor avoids degenerate analysis windows.
 
 ### WebRtcVadSharp — deployment
 
@@ -205,32 +207,18 @@ behavior may change across versions.
 
 ### VAD instantiation — try/catch fallback
 
-```csharp
-if (VepMod.ConfigVadEnabled.Value)
-{
-    try
-    {
-        var sensitivity = VepMod.ConfigVadSensitivity.Value;
-        var criteria = VadValidationCriteria.FromSensitivity(sensitivity);
-        vadValidator = new VadAudioValidator(criteria);
-        LOG.Info($"VAD validation enabled (sensitivity={sensitivity}, speechRatio>={criteria.MinSpeechRatio:F2}).");
-    }
-    catch (Exception ex)
-    {
-        LOG.Warning($"VAD initialization failed, recordings will not be filtered: {ex.Message}");
-        vadValidator = null;
-    }
-}
-```
+`VepMod.CreateSpeechCheck` builds the one VAD handle of the client at plugin load, when
+`ConfigVadEnabled` is on, and logs it once. The sensitivity is read then, so changing it takes a
+restart.
 
 If `WebRtcVad.dll` (native x64) is absent or fails to load (e.g. on x86 or a broken install),
-the constructor throws a `DllNotFoundException`. The catch sets `vadValidator = null` and the
-pipeline continues without speech filtering — recordings are accepted as-is, the mod still works.
+the constructor throws a `DllNotFoundException`. The catch leaves `VepMod.SpeechCheck` null and the
+pipeline continues without speech filtering — Captures are accepted as-is, the mod still works.
 
-There are **two** fail-open layers: this one at init, and a second `try/catch` around the runtime
-`vadValidator.Validate(...)` call (`ProcessVoiceData` runs on the Photon voice thread, so a native
-hiccup must not break voice transmission — on exception the recording is accepted). The native VAD
-is also guarded by a lock so `Dispose()` (OnDestroy, Unity thread) cannot free it mid-`Validate()`.
+There are **two** fail-open layers: this one at init, and a second `try/catch` in
+`CaptureValidation.Validate` around the speech check (on exception the Capture is accepted). The
+native VAD is also guarded by a lock so `Dispose()` (plugin `OnDestroy`, Unity thread) cannot free it
+mid-`Validate()` in a background task.
 
 ---
 
@@ -311,21 +299,23 @@ Removed configs (no longer exist): `AudioMinRms`, `AudioMinPeak`, `AudioMinNonSi
 ```
 VepMod.Awake()
 │
+├── VoiceRecorder, SpeechCheck (new VadAudioValidator, once per client)   [try/catch]
+│
+LocalVoiceFramedPatch (Photon voice thread)
+│     └── VoiceRecorder.PushFrame(isTalking, pcm, rate, channels) → Capture queued
+│
 WhispralMimics (MonoBehaviour, one per PlayerAvatar)
 │
 ├── Awake()
 │     └── StartCoroutine(WaitForVoiceChat)
-│           ├── new VadAudioValidator(FromSensitivity(config))   [try/catch]
-│           └── StartCoroutine(ShareAudioLoop)      [local player only]
+│           └── ShareAudioLoop, SaveCaptures      [local player only]
 │
 ├── Loop 1 — ShareAudioLoop (coroutine, local player only)
-│     ├── StartRecording()
-│     ├── ProcessVoiceData(short[])   ← called by Photon voice pipeline
-│     │     └── FinalizeRecording()
-│     │           ├── duration < ConfigAudioMinDuration → reject
-│     │           ├── trim trailing silence (analysis only)
-│     │           ├── vadValidator.Validate() → reject if not enough speech [fail-open]
-│     │           └── SaveRecordingAsync() → VoiceBanks + hasNewRecording flag
+│     └── VoiceRecorder.RequestCapture()
+│
+├── SaveCaptures (coroutine, local player only)
+│     ├── VoiceRecorder.TryTakeCapture()
+│     ├── background task: CaptureValidation.Validate() [fail-open], VoiceBanks.Save(), WavCodec.Encode()
 │     └── ShareAudioWithOthersAsync() → Photon RPC chunks to other players
 │
 ├── RPC ReceiveSharedAudioChunk()     ← all clients

@@ -75,8 +75,8 @@ public sealed class VadAudioValidator : IDisposable
 
         lock (_gate)
         {
-            // OnDestroy, on the Unity thread, can dispose the validator while Validate runs on the Photon voice
-            // thread: accepting beats calling a native VAD that is already freed.
+            // OnDestroy, on the Unity thread, can dispose the validator while Validate runs in a background task:
+            // accepting beats calling a native VAD that is already freed.
             if (_disposed)
             {
                 return VadValidationResult.Accepted(new VadAnalysisResult(duration, totalFrames, 0, 0f));
@@ -247,8 +247,7 @@ public sealed class VadValidationCriteria
     ///       Permissive 0.20 -> recall 99% / precision 80%
     ///       Balanced   0.40 -> recall 97% / precision 85% (best F1)
     ///       Strict     0.60 -> recall 90% / precision 89%
-    ///     MinDurationSeconds is 0: WhispralMimics checks the duration upstream, from ConfigAudioMinDuration, so it
-    ///     follows the user's config.
+    ///     MinDurationSeconds is 0: the caller checks the duration upstream, from the user's config.
     /// </summary>
     public static VadValidationCriteria FromSensitivity(VadSensitivity sensitivity)
     {

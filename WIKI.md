@@ -159,12 +159,6 @@ All settings can be modified via the BepInEx configuration file.
 | Voice Max Delay | 15s | Maximum delay between voice playback |
 | Voice Filter Enabled | false | Enables audio filters on voices |
 
-### Experimental
-
-| Parameter | Default | Description |
-|---------|---------|-------------|
-| Sampling Rate | 48000 Hz | Audio sampling rate (change if microphone issues occur) |
-
 ### Audio Quality
 
 | Parameter | Default | Description |

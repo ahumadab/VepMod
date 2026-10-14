@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
@@ -22,7 +23,6 @@ public static class ConfigRanges
 {
     public static readonly RangeValue<float> Volume = RangeValue.Percentage();
     public static readonly RangeValue<int> SamplesPerPlayer = RangeValue.Int(5, 20, 20);
-    public static readonly RangeValue<int> SamplingRate = RangeValue.Int(16000, 48000, 48000);
 
     // Linked min/max pairs: corrected automatically when min > max
     public static readonly MinMaxRange<float> ShareDelay = MinMaxRange.Float(
@@ -42,7 +42,6 @@ public static class ConfigRanges
 public class VepMod : BaseUnityPlugin
 {
     public static ConfigEntry<float> ConfigVoiceVolume;
-    public static ConfigEntry<int> ConfigSamplingRate;
 
     // Voice Sample sharing between clients
     public static BoundMinMaxRange<float> ShareDelay;
@@ -67,6 +66,15 @@ public class VepMod : BaseUnityPlugin
 
     public static VoiceBanks VoiceBanks { get; private set; }
 
+    public static VoiceRecorder VoiceRecorder { get; private set; }
+
+    /// <summary>Null when the VAD is disabled or failed to load.</summary>
+    public static SpeechCheck? SpeechCheck { get; private set; }
+
+#if !VEPMOD_NO_VAD
+    private static VadAudioValidator? _vad;
+#endif
+
     private void Awake()
     {
         PreventDelete();
@@ -76,6 +84,10 @@ public class VepMod : BaseUnityPlugin
         VoiceBanks = new VoiceBanks(Path.Combine(Application.dataPath, "AudioFiles"),
             () => ConfigSamplesPerPlayer.Value);
         LOG.Debug($"Voice Bank store created at {VoiceBanks.RootFolder}.");
+        VoiceRecorder = new VoiceRecorder(VepLogger.Create<VoiceRecorder>(true).Debug);
+#if !VEPMOD_NO_VAD
+        SpeechCheck = CreateSpeechCheck();
+#endif
 
         new Harmony("VepMod.Plugin").PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
@@ -101,6 +113,39 @@ public class VepMod : BaseUnityPlugin
         }));
     }
 
+    private void OnDestroy()
+    {
+#if !VEPMOD_NO_VAD
+        _vad?.Dispose();
+#endif
+    }
+
+#if !VEPMOD_NO_VAD
+    private static SpeechCheck? CreateSpeechCheck()
+    {
+        if (!ConfigVadEnabled.Value) return null;
+
+        try
+        {
+            var criteria = VadValidationCriteria.FromSensitivity(ConfigVadSensitivity.Value);
+            var vad = new VadAudioValidator(criteria);
+            _vad = vad;
+            LOG.Info($"VAD handle created (sensitivity={ConfigVadSensitivity.Value}, " +
+                     $"speechRatio>={criteria.MinSpeechRatio:F2}).");
+            return (speech, sampleRate) =>
+            {
+                var result = vad.Validate(speech, sampleRate);
+                return (result.IsValid, result.ToString());
+            };
+        }
+        catch (Exception ex)
+        {
+            LOG.Warning($"VAD initialization failed, Captures will not be checked for speech: {ex.Message}");
+            return null;
+        }
+    }
+#endif
+
     private void InitConfig()
     {
         Logger.LogInfo("Initializing config for VepMod...");
@@ -124,10 +169,6 @@ public class VepMod : BaseUnityPlugin
         ConfigVoiceFilterEnabled = Config.Bind("Voice Playback", "Voice Filter Enabled?", false,
             new ConfigDescription(
                 "Turning this will enable modifiable filters for which enemies can play back voices during the Whispral debuff."));
-
-        // Experimental settings
-        ConfigSamplingRate = Config.BindRange("Experimental", "Sampling Rate", ConfigRanges.SamplingRate,
-            "Only change this value if the console gives you a warning about your microphone frequency not being supported.");
 
 #if DEBUG
         // Developer tools (dev build only, off by default)

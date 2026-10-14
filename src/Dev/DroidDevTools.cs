@@ -8,10 +8,10 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.Enemies.Whispral;
+using VepMod.Patchs;
 using VepMod.VepFramework;
 #if !VEPMOD_NO_VAD
 using VepMod.VepFramework.Audio;
-using VepMod.Patchs;
 #endif
 
 namespace VepMod.Dev;
@@ -23,9 +23,7 @@ namespace VepMod.Dev;
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
-#if !VEPMOD_NO_VAD
-    private const KeyCode VadReplayKey = KeyCode.F6;
-#endif
+    private const KeyCode CaptureKey = KeyCode.F6;
     private const KeyCode SpawnKey = KeyCode.F7;
     private const KeyCode TeleportKey = KeyCode.F8;
     private const KeyCode DropKey = KeyCode.F9;
@@ -54,9 +52,13 @@ public sealed class DroidDevTools : MonoBehaviour
 
     private void Update()
     {
+        if (Input.GetKeyDown(CaptureKey))
+        {
+            if (ShiftHeld()) RequestCapture();
 #if !VEPMOD_NO_VAD
-        if (Input.GetKeyDown(VadReplayKey)) ReplayWavFolderThroughVad();
+            else ReplayWavFolderThroughVad();
 #endif
+        }
         if (Input.GetKeyDown(SpawnKey)) SpawnAtAim();
         if (Input.GetKeyDown(TeleportKey)) TeleportNearestToAim();
         if (Input.GetKeyDown(DropKey))
@@ -89,6 +91,12 @@ public sealed class DroidDevTools : MonoBehaviour
             _nearestRefreshTimer = NearestRefreshInterval;
             RefreshNearest();
         }
+    }
+
+    private static void RequestCapture()
+    {
+        LOG.Info("DevTools: Capture requested, it starts when you talk.");
+        VepMod.VoiceRecorder.RequestCapture();
     }
 
     private void SpawnAtAim()
@@ -377,7 +385,8 @@ public sealed class DroidDevTools : MonoBehaviour
                  $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
-                 "F12 hurt yourself | Shift+F12 heal yourself\n";
+                 "F12 hurt yourself | Shift+F12 heal yourself\n" +
+                 "Shift+F6 capture your voice now\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
@@ -397,20 +406,8 @@ public sealed class DroidDevTools : MonoBehaviour
             sb += "\nNo droid in scene.";
         }
 
-#if !VEPMOD_NO_VAD
         var mimics = VepFinder.LocalMimics;
-        var sensitivity = VepMod.ConfigVadSensitivity.Value;
-        if (mimics != null && mimics.LastVadResult.HasValue)
-        {
-            var r = mimics.LastVadResult.Value;
-            var verdict = r.IsValid ? "ACCEPT" : $"REJECT ({r.RejectionReason})";
-            sb += $"\n\nVAD [{sensitivity}]: {verdict}\n  {r.Analysis}";
-        }
-        else
-        {
-            sb += $"\n\nVAD [{sensitivity}]: (no clip recorded yet)";
-        }
-#endif
+        sb += $"\n\nLast Capture: {(mimics ? mimics.LastCaptureVerdict : null) ?? "none yet"}";
 
         var style = new GUIStyle(GUI.skin.box)
         {
