@@ -107,6 +107,10 @@ sequenceDiagram
     end
 ```
 
+Les morceaux passent par l'avatar du joueur (`VoiceSampleSharing`) et ne portent ni nom, ni Steam ID, ni fréquence :
+le récepteur reconnaît l'expéditeur au propriétaire de l'avatar, et la fréquence est dans l'en-tête WAV. Un premier
+morceau recommence le transfert ; un joueur qui part emporte son avatar, et le transfert en cours avec lui.
+
 Une Voice Bank est rangée sous le Steam ID du joueur, le pseudo en repli sans Steam (ADR-0006), et plafonnée : le plus
 ancien Voice Sample part en premier.
 

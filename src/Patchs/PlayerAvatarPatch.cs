@@ -29,6 +29,8 @@ internal class PlayerAvatarPatch
             LOG.Warning($"PlayerAvatar: {__instance.name} already has a WhispralMimics component.");
         }
 
+        __instance.gameObject.AddComponent<VoiceSampleSharing>();
+
         var photonView = __instance.GetComponent<PhotonView>();
         if (!photonView || !photonView.IsMine)
         {

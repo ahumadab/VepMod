@@ -1,14 +1,9 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Photon.Pun;
-using Unity.VisualScripting;
 using UnityEngine;
 using VepMod.VepFramework;
-using VepMod.VepFramework.Extensions;
 using Random = UnityEngine.Random;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
@@ -16,9 +11,7 @@ using Random = UnityEngine.Random;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Saves, shares and plays Voice Samples for Mimics, in two loops:
-///     - every client shares its player's Voice Samples with all the others;
-///     - the Master tells a Victim's client which Hallucination performs a Mimic.
+///     Carries the Master's Mimic command to a Victim's client and plays the Mimic on the Hallucination.
 /// </summary>
 public sealed class WhispralMimics : MonoBehaviour
 {
@@ -31,29 +24,12 @@ public sealed class WhispralMimics : MonoBehaviour
     private void Awake()
     {
         PhotonView = GetComponent<PhotonView>();
-        if (!PhotonView)
-        {
-            LOG.Error("PhotonView not found.");
-            return;
-        }
-
         _playerAvatar = GetComponent<PlayerAvatar>();
-        if (!_playerAvatar)
-        {
-            LOG.Error("PlayerAvatar not found.");
-            return;
-        }
-
-        StartCoroutine(WaitForVoiceChat());
     }
 
     #endregion
 
     #region Constants
-
-    // Network
-    private const int ChunkSizeBytes = 8192;
-    private const int ChunkDelayMs = 125;
 
     // Playback, from the game's Voice prefab
     private const float SpatialBlend = 1f;
@@ -69,243 +45,6 @@ public sealed class WhispralMimics : MonoBehaviour
     #region Private Fields
 
     private PlayerAvatar _playerAvatar;
-#if DEBUG
-    /// <summary>Shown on the DroidDevTools HUD.</summary>
-    public string? LastCaptureVerdict { get; private set; }
-#endif
-    private string _localPlayerNickName;
-
-    // Shared Voice Samples being received, per player
-    private readonly Dictionary<string, List<byte[]?>> _receivedChunksByPlayer = new();
-    private readonly Dictionary<string, int> _expectedChunkCountByPlayer = new();
-
-    #endregion
-
-    #region Initialization
-
-    private IEnumerator WaitForVoiceChat()
-    {
-        while (!_playerAvatar.voiceChat)
-        {
-            yield return null;
-        }
-
-        LOG.Info("PlayerVoiceChat initialized.");
-
-        // Every player's instance receives the sharing RPCs; only the local player's instance shares.
-        if (SemiFunc.RunIsLevel())
-        {
-            _localPlayerNickName = PhotonNetwork.LocalPlayer.NickName ?? "unknown";
-
-            if (PhotonView.IsMine)
-            {
-                LOG.Info($"WhispralMimics initialized for local player: {_localPlayerNickName}");
-
-                StartCoroutine(ShareAudioLoop());
-                StartCoroutine(SaveCaptures());
-            }
-            else
-            {
-                LOG.Info("WhispralMimics initialized for remote player (RPC reception only).");
-            }
-        }
-    }
-
-    #endregion
-
-    #region Capture validation
-
-    // The VAD and the disk write would stall the main thread, so they run in a background task.
-    private IEnumerator SaveCaptures()
-    {
-        // A request or a Capture left from the previous level, or the lobby, is not this level's to share.
-        VepMod.VoiceRecorder.Clear();
-        var player = _playerAvatar.VoiceBankKey();
-        while (true)
-        {
-            if (!VepMod.VoiceRecorder.TryTakeCapture(out var capture))
-            {
-                yield return null;
-                continue;
-            }
-
-            var minDuration = VepMod.ConfigAudioMinDuration.Value;
-            var saving = Task.Run(() => ValidateAndSave(capture, player, minDuration));
-            while (!saving.IsCompleted)
-            {
-                yield return null;
-            }
-
-            var (verdict, wav) = saving.Result;
-#if DEBUG
-            LastCaptureVerdict = verdict;
-#endif
-            if (wav != null)
-            {
-                yield return ShareAudioWithOthersAsync(wav, capture.Sample.SampleRate).AsCoroutine();
-            }
-        }
-        // ReSharper disable once IteratorNeverReturns
-    }
-
-    /// <summary>Runs in a background task.</summary>
-    /// <returns>The verdict for the HUD, and the WAV to share, null when the Capture is not a Voice Sample.</returns>
-    private static (string verdict, byte[]? wav) ValidateAndSave(Capture capture, PlayerKey player, float minDuration)
-    {
-        var verdict = "not validated";
-        try
-        {
-            var (accepted, detail) = CaptureValidation.Validate(capture, minDuration, VepMod.SpeechCheck);
-            verdict = $"{(accepted ? "accepted" : "rejected")} " +
-                      $"({capture.DurationSeconds:F2} s at {capture.Sample.SampleRate} Hz): {detail}";
-            if (!accepted)
-            {
-                LOG.Debug($"Capture {verdict}");
-                return (verdict, null);
-            }
-
-            VepMod.VoiceBanks.Save(player, capture.Sample);
-            var wav = WavCodec.Encode(capture.Sample);
-            LOG.Debug($"Capture {verdict}. Voice Sample saved in the Voice Bank of {player}.");
-            return (verdict, wav);
-        }
-        catch (Exception ex)
-        {
-            LOG.Error($"Error validating or saving a Capture of {player}: {ex.Message}");
-            return (verdict, null);
-        }
-    }
-
-    #endregion
-
-    #region Voice Sample sharing
-
-    private IEnumerator ShareAudioLoop()
-    {
-        LOG.Info("ShareAudioLoop started.");
-
-        while (true)
-        {
-            var delay = Random.Range(VepMod.ShareDelay.Min, VepMod.ShareDelay.Max);
-            yield return new WaitForSeconds(delay);
-
-            VepMod.VoiceRecorder.RequestCapture();
-        }
-        // ReSharper disable once IteratorNeverReturns
-    }
-
-    private async Task ShareAudioWithOthersAsync(byte[] audioData, int sampleRate)
-    {
-        if (!PhotonNetwork.IsConnectedAndReady)
-        {
-            LOG.Warning("Photon not connected, skipping share.");
-            return;
-        }
-
-        var chunks = ChunkAudioData(audioData);
-        LOG.Debug($"Voice Sample handed to sharing: {audioData.Length} bytes in {chunks.Count} chunks");
-
-        for (var i = 0; i < chunks.Count; i++)
-        {
-            if (!PhotonNetwork.IsConnectedAndReady)
-            {
-                LOG.Warning("Photon disconnected, aborting share.");
-                return;
-            }
-
-            PhotonView.RPC(nameof(ReceiveSharedAudioChunk), RpcTarget.Others,
-                chunks[i], i, chunks.Count, _localPlayerNickName, sampleRate);
-
-            await Task.Delay(ChunkDelayMs);
-        }
-
-        LOG.Debug($"Audio shared successfully: {chunks.Count} chunks sent.");
-    }
-
-    private static List<byte[]> ChunkAudioData(byte[] audioData)
-    {
-        var chunks = new List<byte[]>();
-        for (var offset = 0; offset < audioData.Length; offset += ChunkSizeBytes)
-        {
-            var length = Mathf.Min(ChunkSizeBytes, audioData.Length - offset);
-            var chunk = new byte[length];
-            Array.Copy(audioData, offset, chunk, 0, length);
-            chunks.Add(chunk);
-        }
-
-        return chunks;
-    }
-
-    [PunRPC]
-    public void ReceiveSharedAudioChunk(byte[] chunk, int chunkIndex, int totalChunks, string sourcePlayerNickName,
-        int srcSampleRate)
-    {
-        // Sent to RpcTarget.Others, so this is only a safety net.
-        if (sourcePlayerNickName == _localPlayerNickName) return;
-
-        if (chunkIndex == 0)
-        {
-            _receivedChunksByPlayer[sourcePlayerNickName] = new List<byte[]?>();
-            _expectedChunkCountByPlayer[sourcePlayerNickName] = totalChunks;
-            LOG.Debug(
-                $"Receiving shared audio from {sourcePlayerNickName}: {totalChunks} chunks at {srcSampleRate} Hz");
-        }
-
-        if (!_receivedChunksByPlayer.TryGetValue(sourcePlayerNickName, out var chunks))
-        {
-            LOG.Warning($"Received chunk for unknown player: {sourcePlayerNickName}");
-            return;
-        }
-
-        while (chunks.Count <= chunkIndex)
-        {
-            chunks.Add(null);
-        }
-
-        chunks[chunkIndex] = chunk;
-
-        var expectedCount = _expectedChunkCountByPlayer.GetValueOrDefault(sourcePlayerNickName, 0);
-        if (chunks.Count >= expectedCount && chunks.All(c => c != null))
-        {
-            LOG.Debug($"All chunks received from {sourcePlayerNickName}, saving audio.");
-
-            var combinedData = CombineChunks(chunks!);
-            SaveReceivedAudioAsync(combinedData);
-
-            _receivedChunksByPlayer.Remove(sourcePlayerNickName);
-            _expectedChunkCountByPlayer.Remove(sourcePlayerNickName);
-        }
-    }
-
-    private static byte[] CombineChunks(List<byte[]> chunks)
-    {
-        var totalLength = chunks.Sum(c => c.Length);
-        var result = new byte[totalLength];
-        var offset = 0;
-
-        foreach (var chunk in chunks)
-        {
-            Array.Copy(chunk, 0, result, offset, chunk.Length);
-            offset += chunk.Length;
-        }
-
-        return result;
-    }
-
-    // The sender of a Voice Sample is the owner of the avatar whose PhotonView it arrives on (ADR-0006).
-    private async void SaveReceivedAudioAsync(byte[] wav)
-    {
-        var player = _playerAvatar.VoiceBankKey();
-        try
-        {
-            await Task.Run(() => VepMod.VoiceBanks.Save(player, WavCodec.Decode(wav)));
-            LOG.Debug($"Voice Sample received from {player} saved in their Voice Bank.");
-        }
-        catch (Exception ex)
-        {
-            LOG.Error($"Error saving the Voice Sample received from {player}: {ex.Message}");
-        }
-    }
 
     #endregion
 

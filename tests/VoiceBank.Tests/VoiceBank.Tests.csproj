@@ -13,11 +13,12 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 
-  <!-- The Voice Bank store, the WAV codec and the recorder are plain C#: compiled from source, without referencing the plugin or Unity. -->
+  <!-- The Voice Bank store, the WAV codec, the recorder and the chunking are plain C#: compiled from source, without referencing the plugin or Unity. -->
   <ItemGroup>
     <Compile Include="..\..\src\Enemies\Whispral\VoiceBanks.cs" Link="VoiceBanks.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\WavCodec.cs" Link="WavCodec.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\VoiceRecorder.cs" Link="VoiceRecorder.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\VoiceSampleChunks.cs" Link="VoiceSampleChunks.cs" />
     <Compile Include="..\..\src\VepFramework\Extensions\FileSystemSanitizer.cs" Link="FileSystemSanitizer.cs" />
   </ItemGroup>
 

@@ -8,7 +8,6 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.Enemies.Whispral;
-using VepMod.Patchs;
 using VepMod.VepFramework;
 #if !VEPMOD_NO_VAD
 using VepMod.VepFramework.Audio;
@@ -412,8 +411,7 @@ public sealed class DroidDevTools : MonoBehaviour
             sb += "\nNo droid in scene.";
         }
 
-        var mimics = VepFinder.LocalMimics;
-        sb += $"\n\nLast Capture: {(mimics ? mimics.LastCaptureVerdict : null) ?? "none yet"}";
+        sb += $"\n\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
 
         var style = new GUIStyle(GUI.skin.box)
         {
