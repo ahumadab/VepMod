@@ -45,12 +45,7 @@ public sealed class VoiceBanks(string rootFolder, Func<int> samplesPerPlayer)
         {
             var folder = BankFolder(player);
             Directory.CreateDirectory(folder);
-
-            // The file name orders a Voice Bank by age. Mono's DateTime.Now ticks in steps of several milliseconds.
-            var ticks = DateTime.Now.Ticks;
-            while (File.Exists(SamplePath(folder, ticks))) ticks++;
-            File.WriteAllBytes(SamplePath(folder, ticks), wav);
-
+            File.WriteAllBytes(FreeSamplePath(folder, DateTime.UtcNow), wav);
             Cap(folder);
         }
     }
@@ -84,10 +79,10 @@ public sealed class VoiceBanks(string rootFolder, Func<int> samplesPerPlayer)
 
             var folder = BankFolder(player);
             Directory.CreateDirectory(folder);
+            // Older versions named their files after DateTime.Now, which does not sort across a DST change.
             foreach (var file in SampleFiles(legacyFolder))
             {
-                var destination = Path.Combine(folder, Path.GetFileName(file));
-                if (!File.Exists(destination)) File.Move(file, destination);
+                File.Move(file, FreeSamplePath(folder, File.GetLastWriteTimeUtc(file)));
             }
 
             Directory.Delete(legacyFolder, true);
@@ -114,9 +109,15 @@ public sealed class VoiceBanks(string rootFolder, Func<int> samplesPerPlayer)
         return Path.Combine(RootFolder, NicknamePrefix + FileSystemSanitizer.Sanitize(player.Nickname));
     }
 
-    private static string SamplePath(string folder, long ticks)
+    // The file name orders a Voice Bank by age. Mono's clock ticks in steps of several milliseconds, so two Voice
+    // Samples can share a time.
+    private static string FreeSamplePath(string folder, DateTime savedAtUtc)
     {
-        return Path.Combine(folder, $"sample_{ticks:D18}.wav");
+        for (var ticks = savedAtUtc.Ticks; ; ticks++)
+        {
+            var path = Path.Combine(folder, $"sample_{ticks:D18}.wav");
+            if (!File.Exists(path)) return path;
+        }
     }
 
     /// <returns>Oldest first.</returns>

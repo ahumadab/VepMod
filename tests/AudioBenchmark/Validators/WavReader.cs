@@ -27,7 +27,7 @@ public static class WavReader
     }
 
     /// <summary>
-    ///     Recurses into the player_* subfolders.
+    ///     Recurses into the Voice Bank subfolders.
     /// </summary>
     public static List<WavFile> LoadDataset(string basePath)
     {

@@ -16,15 +16,13 @@ internal class VoiceBankMigrationPatch
 
     private static void Postfix(PlayerAvatar __instance)
     {
-        var player = WhispralMimics.VoiceBankKey(__instance);
+        var player = __instance.VoiceBankKey();
         try
         {
             var count = VepMod.VoiceBanks.MigrateLegacyBank(player);
-            if (count != null)
-            {
-                LOG.Debug(
-                    $"Legacy Voice Bank of nickname {player.Nickname} migrated to Steam ID {player.SteamId}: {count} Voice Samples after merge.");
-            }
+            LOG.Debug(count == null
+                ? $"No legacy Voice Bank to migrate for {player}."
+                : $"Legacy Voice Bank of nickname {player.Nickname} migrated to Steam ID {player.SteamId}: {count} Voice Samples after merge.");
         }
         catch (Exception ex)
         {

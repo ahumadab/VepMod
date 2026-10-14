@@ -95,8 +95,8 @@ public sealed class VoiceBanksTests : IDisposable
     [Fact]
     public void TheFirstPlayerSeenWithALegacyNicknameTakesTheWholeBank()
     {
-        WriteLegacySample("Bob", 1, 0.125f);
-        WriteLegacySample("Bob", 2, 0.25f);
+        WriteLegacySample("Bob", 2, 0.125f);
+        WriteLegacySample("Bob", 1, 0.25f);
 
         Assert.Equal(2, _banks.MigrateLegacyBank(Bob));
         Assert.Null(_banks.MigrateLegacyBank(OtherBob));
@@ -106,12 +106,21 @@ public sealed class VoiceBanksTests : IDisposable
     }
 
     [Fact]
+    public void LegacyVoiceSamplesSavedAtTheSameTimeAreAllMigrated()
+    {
+        WriteLegacySample("Bob", 1, 0.125f);
+        WriteLegacySample("Bob", 1, 0.25f);
+
+        Assert.Equal(2, _banks.MigrateLegacyBank(Bob));
+    }
+
+    [Fact]
     public void ALegacyBankIsMergedIntoTheSteamIdBankThenCapped()
     {
         _banks.Save(Bob, Sample(0.5f));
         _banks.Save(Bob, Sample(0.75f));
-        WriteLegacySample("Bob", 1, 0.125f);
-        WriteLegacySample("Bob", 2, 0.25f);
+        WriteLegacySample("Bob", 2, 0.125f);
+        WriteLegacySample("Bob", 1, 0.25f);
 
         Assert.Equal(3, _banks.MigrateLegacyBank(Bob));
 
@@ -134,11 +143,14 @@ public sealed class VoiceBanksTests : IDisposable
     }
 
     // Older versions wrote AudioFiles/player_{nickname}/sample_{DateTime.Now.Ticks}.wav.
-    private void WriteLegacySample(string nickname, long ticks, float value)
+    private void WriteLegacySample(string nickname, int daysAgo, float value)
     {
         var folder = Path.Combine(_root, $"player_{nickname}");
         Directory.CreateDirectory(folder);
-        File.WriteAllBytes(Path.Combine(folder, $"sample_{ticks:D18}.wav"), WavCodec.Encode(Sample(value)));
+        var savedAt = DateTime.Now.AddDays(-daysAgo);
+        var path = Path.Combine(folder, $"sample_{savedAt.Ticks}{value}.wav");
+        File.WriteAllBytes(path, WavCodec.Encode(Sample(value)));
+        File.SetLastWriteTimeUtc(path, savedAt.ToUniversalTime());
     }
 
     private SortedSet<float> PickedValues(PlayerKey player)

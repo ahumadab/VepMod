@@ -139,9 +139,6 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     #region Audio
 
-    /// <summary>
-    ///     Uses the local player's WhispralMimics, which plays the Mimic.
-    /// </summary>
     public void PlayVoice(bool applyFilter = false)
     {
         if (SourcePlayer == null || ControllerTransform == null) return;

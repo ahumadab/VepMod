@@ -238,14 +238,13 @@ public sealed class DroidDevTools : MonoBehaviour
                 continue;
             }
 
-            var sr = sample.SampleRate;
-            var result = validator.Validate(sample.Samples, sr);
+            var result = validator.Validate(sample.Samples, sample.SampleRate);
             total++;
             var ratio = result.Analysis?.SpeechRatio ?? 0f;
             ratioSum += ratio;
             if (result.IsValid) accepted++;
 
-            LOG.Info($"  {(result.IsValid ? "ACCEPT" : "REJECT")} ratio={ratio:P0} [{sr}Hz] {Path.GetFileName(file)}");
+            LOG.Info($"  {(result.IsValid ? "ACCEPT" : "REJECT")} ratio={ratio:P0} [{sample.SampleRate}Hz] {Path.GetFileName(file)}");
         }
 
         var meanRatio = total > 0 ? ratioSum / total : 0f;

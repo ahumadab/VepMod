@@ -404,7 +404,7 @@ public sealed class WhispralMimics : MonoBehaviour
         try
         {
             var sample = new VoiceSample(audioData, _sampleRate);
-            var player = VoiceBankKey(_playerAvatar);
+            var player = _playerAvatar.VoiceBankKey();
             await Task.Run(() => VepMod.VoiceBanks.Save(player, sample));
 
             _lastSavedAudioBytes = WavCodec.Encode(sample);
@@ -550,7 +550,7 @@ public sealed class WhispralMimics : MonoBehaviour
     // The sender of a Voice Sample is the owner of the avatar whose PhotonView it arrives on (ADR-0006).
     private async void SaveReceivedAudioAsync(byte[] wav)
     {
-        var player = VoiceBankKey(_playerAvatar);
+        var player = _playerAvatar.VoiceBankKey();
         try
         {
             await Task.Run(() => VepMod.VoiceBanks.Save(player, WavCodec.Decode(wav)));
@@ -560,11 +560,6 @@ public sealed class WhispralMimics : MonoBehaviour
         {
             LOG.Error($"Error saving the Voice Sample received from {player}: {ex.Message}");
         }
-    }
-
-    internal static PlayerKey VoiceBankKey(PlayerAvatar player)
-    {
-        return new PlayerKey(player.steamID, player.playerName);
     }
 
     #endregion
@@ -639,13 +634,13 @@ public sealed class WhispralMimics : MonoBehaviour
             return;
         }
 
-        var player = VoiceBankKey(imitatedPlayer);
+        var player = imitatedPlayer.VoiceBankKey();
         VoiceSample? sample;
         try
         {
             sample = VepMod.VoiceBanks.PickRandom(player);
         }
-        catch (InvalidDataException ex)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             LOG.Warning($"Unreadable Voice Sample in the Voice Bank of {player}: {ex.Message}");
             return;
