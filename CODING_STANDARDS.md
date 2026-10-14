@@ -44,6 +44,8 @@ belongs to the tooling, not here.
 
 - Code reached from the Photon voice thread calls no Unity API and hands data to the main thread through a synchronised
   hand-off.
+- A Harmony patch on a voice-thread method only forwards to plain C# that a net8 test project compiles, so the compiler
+  keeps Unity out of it (`LocalVoiceFramedPatch` → `VoiceRecorder`).
 
 ## Decisions
 
