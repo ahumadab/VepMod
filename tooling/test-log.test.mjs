@@ -1,0 +1,29 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { summarizeLog } from "./test-log.mjs";
+
+const log = [
+    "[Warning:Repo Steam Networking] RepoSteamNetworkManager already initialized!",
+    "[Info   :VepMod.PlayerAvatarPatch] 23:01:02.788 Local player VieuxPoulpe, Master: True",
+    "[Debug  :VepMod.HallucinationBodyPose] 23:01:54.147 Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
+    "[Warning:VepMod.HallucinationMovement] 23:09:55.776 Controller off NavMesh at (-10.08, 6.90, 7.54)",
+    "[Warning:VepMod.HallucinationMovement] 23:09:55.793 Controller off NavMesh at (-10.08, 6.90, 7.54)",
+    "[Warning:VepMod.HallucinationMovement] 23:09:55.810 Controller off NavMesh at (-10.08, 6.90, 7.54)",
+    "[Info   :VepMod.HallucinationDevTools] 23:12:23.730 DevTools: 50 renderers of Hallucination_VieuxPoulpe",
+].join("\r\n");
+
+test("keeps VepMod's lines, heads each level, folds repeats", () => {
+    assert.deepEqual(summarizeLog(log), [
+        "--- 23:01:02.788 level start, local player VieuxPoulpe, Master: True",
+        "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
+        "23:09:55.776 Warning HallucinationMovement: Controller off NavMesh at (-10.08, 6.90, 7.54) ×3",
+        "23:12:23.730 HallucinationDevTools: DevTools: 50 renderers of Hallucination_VieuxPoulpe",
+    ]);
+});
+
+test("filters by the regex but keeps the level headers", () => {
+    assert.deepEqual(summarizeLog(log, /Body pose/), [
+        "--- 23:01:02.788 level start, local player VieuxPoulpe, Master: True",
+        "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
+    ]);
+});
