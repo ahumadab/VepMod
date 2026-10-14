@@ -55,7 +55,7 @@ internal static class DroidVisualsClone
             if (child != null && child.name == "Cube") return child;
         }
 
-        LOG.Warning("FindCube: Cube transform not found under droid root");
+        LOG.Warning("FindCube: Cube transform not found under the Hallucination root");
         return null;
     }
 
