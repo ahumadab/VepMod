@@ -1,5 +1,4 @@
 using UnityEngine;
-using VepMod.VepFramework;
 
 #pragma warning disable CS8618
 
@@ -11,8 +10,6 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class DroidAvatarAnimationController : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<DroidAvatarAnimationController>();
-
     private static readonly int MovingKey = Animator.StringToHash("Moving");
     private static readonly int SprintingKey = Animator.StringToHash("Sprinting");
     private static readonly int TurningKey = Animator.StringToHash("Turning");

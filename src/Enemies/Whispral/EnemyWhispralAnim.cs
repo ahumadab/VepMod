@@ -17,6 +17,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>();
 
+    // The Whispral prefab in the asset bundle serializes these by name: a renamed field loses its value.
+#pragma warning disable IDE1006
     [Space][SerializeField] private Enemy enemy;
     [SerializeField] private EnemyWhispral enemyWhispral;
 
@@ -30,13 +32,14 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     [Space][SerializeField] private GameObject visuals;
     [SerializeField] private GameObject rigidBody;
+#pragma warning restore IDE1006
     protected override State DefaultState => State.NoBreathing;
 
     protected override void Awake()
     {
         base.Awake();
 
-        Fsm.AddState(State.NoBreathing, new NoBreathing(this));
+        Fsm.AddState(State.NoBreathing, new NoBreathing());
         Fsm.AddState(State.BreatheIn,
             new BreathingState(this, soundBreatheIn, breathingDurationInRange, State.BreatheOut));
         Fsm.AddState(State.BreatheOut,
@@ -105,7 +108,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     #region States
 
-    private sealed class NoBreathing(EnemyWhispralAnim owner) : StateMachineBase<StateMachine, State>.StateBase { }
+    private sealed class NoBreathing : StateMachineBase<StateMachine, State>.StateBase { }
 
     private sealed class BreathingState(EnemyWhispralAnim owner, Sound sound, Vector2 durationRange, State nextState)
         : StateMachineBase<StateMachine, State>.StateBaseTransition(durationRange.x, nextState)
@@ -145,7 +148,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         public override void OnStateExit(State next)
         {
             base.OnStateExit(next);
-            if (_audioSource) _audioSource.Stop();
+            if (_audioSource != null) _audioSource.Stop();
             if (next != _nextState) // Breathing was interrupted before its planned next state.
             {
                 owner.Show(true);

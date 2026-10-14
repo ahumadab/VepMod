@@ -9,7 +9,7 @@ public partial class StateMachineBase<TMachine, TStateId>
     /// </summary>
     public class StateBase
     {
-        public TMachine Machine { get; set; }
+        public TMachine Machine { get; set; } = null!;
         public virtual void OnStateEnter(TStateId previous) { }
         public virtual void OnStateExit(TStateId next) { }
         public virtual void OnStateUpdate() { }

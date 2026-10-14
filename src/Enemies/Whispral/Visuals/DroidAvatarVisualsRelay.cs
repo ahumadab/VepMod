@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using VepMod.VepFramework;
 
 #pragma warning disable CS8618
 
@@ -13,8 +12,6 @@ namespace VepMod.Enemies.Whispral.Visuals;
 /// </summary>
 public sealed class DroidAvatarVisualsRelay : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<DroidAvatarVisualsRelay>();
-
     private CosmeticCustomSpring[] _customSprings = System.Array.Empty<CosmeticCustomSpring>();
     private DroidController _droid;
     private CosmeticSprings[] _springs = System.Array.Empty<CosmeticSprings>();

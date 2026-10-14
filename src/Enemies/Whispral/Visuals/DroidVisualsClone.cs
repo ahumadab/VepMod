@@ -39,14 +39,15 @@ internal static class DroidVisualsClone
     };
 
     // Held from TryCloneRig to AttachRelay, in the same frame.
-    private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? SpringTypeCache;
+    private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? _springTypeCache;
 
     /// <summary>
     ///     MyDroid/Enable/Cube, which holds the Animator and the [RIG].
     /// </summary>
     public static Transform? FindCube(Transform droidRoot)
     {
-        var cube = droidRoot.Find("Enable/Cube") ?? droidRoot.Find("Cube");
+        var cube = droidRoot.Find("Enable/Cube");
+        if (cube == null) cube = droidRoot.Find("Cube");
         if (cube != null) return cube;
 
         foreach (var child in droidRoot.GetComponentsInChildren<Transform>(true))
@@ -120,7 +121,7 @@ internal static class DroidVisualsClone
 
         // Before Sanitize destroys the Cosmetic MonoBehaviours that know each spring's type.
         var springTypes = CaptureSpringTypes(clone);
-        SpringTypeCache = springTypes;
+        _springTypeCache = springTypes;
 
         Sanitize(clone);
         ApplyColors(clone, sourcePlayer);
@@ -149,8 +150,8 @@ internal static class DroidVisualsClone
     {
         if (sourcePlayer == null || cloneRig == null) return false;
 
-        var sourceController = sourcePlayer.flashlightController
-                               ?? sourcePlayer.GetComponentInChildren<FlashlightController>(true);
+        var sourceController = sourcePlayer.flashlightController;
+        if (sourceController == null) sourceController = sourcePlayer.GetComponentInChildren<FlashlightController>(true);
         if (sourceController == null)
         {
             LOG.Warning($"TryCloneFlashlight: no FlashlightController on {sourcePlayer.playerName}");
@@ -320,8 +321,8 @@ internal static class DroidVisualsClone
     {
         if (animator == null) return;
         var relay = animator.gameObject.AddComponent<DroidAvatarVisualsRelay>();
-        relay.Initialize(droid, cloneRig, SpringTypeCache ?? new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>());
-        SpringTypeCache = null;
+        relay.Initialize(droid, cloneRig, _springTypeCache ?? new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>());
+        _springTypeCache = null;
     }
 
     private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType> CaptureSpringTypes(GameObject clone)

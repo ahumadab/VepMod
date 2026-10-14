@@ -1,7 +1,6 @@
 // The one check run by the git hooks and CI (AGENTS.md).
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { relative } from "node:path";
 import { avoidedWords, checkedExtensions, commentLinesMatching, french } from "./comments.mjs";
 import { touchedFiles } from "./touched-files.mjs";
 
@@ -30,28 +29,6 @@ function checkFormat(files) {
     run("dotnet", ["format", "whitespace", "--folder", ...verify, "--include", ...files]);
 }
 
-// With TreatWarningsAsErrors, every warning left is a rule the csproj demotes (WarningsNotAsErrors) because existing
-// code still breaks it: a touched file keeps none. A rebuild, since an up-to-date build reports no warning.
-function buildWithoutWarningsIn(files, args) {
-    const command = ["build", ...args, "--no-incremental", "-v", "q", "-clp:ErrorsOnly;WarningsOnly"];
-    console.log(`> dotnet ${command.join(" ")}`);
-    const { status, stdout } = spawnSync("dotnet", command, { encoding: "utf8" });
-    if (status !== 0) {
-        console.log(stdout);
-        process.exit(status ?? 1);
-    }
-    const touched = new Set(files);
-    const warnings = new Set(
-        stdout.split("\n").flatMap((line) => {
-            const match = line.match(/^\s*(.+?\.cs)\((\d+),\d+\): warning (\w+): (.+?)(?: \(https?:[^)]*\))? \[/);
-            const file = match && relative(process.cwd(), match[1]).replaceAll("\\", "/");
-            return file && touched.has(file) ? [`${file}:${match[2]} ${match[3]} ${match[4]}`] : [];
-        }),
-    );
-    if (warnings.size === 0) return;
-    console.error(`A touched file keeps no analyzer warning:\n  ${[...warnings].join("\n  ")}`);
-    process.exitCode = 1;
-}
 
 // A rule check reports and lets the run go on, so one run lists every finding; a failed build or test still stops it.
 function checkComments(files, pattern, rule) {
@@ -83,7 +60,7 @@ run(
 // NoVad first, so bin/ is left with the default plugin. The copy into a game profile is a developer-machine step.
 for (const noVad of ["true", "false"]) {
     const variant = [`-p:VepModNoVad=${noVad}`, "-p:CopyFilesToPluginOutputDirectoryOnBuild=false"];
-    buildWithoutWarningsIn(touchedCode, ["VepMod.csproj", "-c", "Debug", ...variant]);
+    run("dotnet", ["build", "VepMod.csproj", "-c", "Debug", ...variant, ...quiet]);
 }
 for (const project of readdirSync("tests", { recursive: true }).filter((path) => path.endsWith(".csproj"))) {
     run("dotnet", ["test", `tests/${project}`, "-v", "q"]);

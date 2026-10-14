@@ -14,25 +14,25 @@ public sealed class DilatedPupils : MonoBehaviour
     private const float RefreshInterval = 0.1f;
     private static readonly VepLogger LOG = VepLogger.Create<DilatedPupils>();
 
-    private PlayerAvatar? playerAvatar;
-    private float refreshTimer;
+    private PlayerAvatar? _playerAvatar;
+    private float _refreshTimer;
 
     public bool IsActive { get; private set; }
 
     private void Awake()
     {
-        playerAvatar = GetComponent<PlayerAvatar>();
+        _playerAvatar = GetComponent<PlayerAvatar>();
     }
 
     private void Update()
     {
-        if (!IsActive || playerAvatar == null) return;
+        if (!IsActive || _playerAvatar == null) return;
 
-        refreshTimer -= Time.deltaTime;
-        if (refreshTimer <= 0f)
+        _refreshTimer -= Time.deltaTime;
+        if (_refreshTimer <= 0f)
         {
             ApplyPupilEffect();
-            refreshTimer = RefreshInterval;
+            _refreshTimer = RefreshInterval;
         }
     }
 
@@ -43,16 +43,16 @@ public sealed class DilatedPupils : MonoBehaviour
 
         if (dilated)
         {
-            refreshTimer = 0f;
+            _refreshTimer = 0f;
             ApplyPupilEffect();
         }
     }
 
     private void ApplyPupilEffect()
     {
-        if (playerAvatar == null) return;
+        if (_playerAvatar == null) return;
 
-        playerAvatar.OverridePupilSize(
+        _playerAvatar.OverridePupilSize(
             PupilSizeMultiplier,
             Priority,
             SpringSpeedIn,

@@ -1,5 +1,4 @@
 using UnityEngine;
-using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
@@ -13,8 +12,6 @@ public sealed class DroidNameplate : MonoBehaviour
 
     // Hallucination names have always peaked here, dimmer than a real teammate's nameplate (0.5).
     private const float PeakAlpha = 0.2f;
-
-    private static readonly VepLogger LOG = VepLogger.Create<DroidNameplate>();
 
     private Transform _controllerTransform = null!;
     private WorldSpaceUIPlayerName? _nameplate;
