@@ -1,4 +1,5 @@
 using UnityEngine;
+using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
@@ -13,14 +14,19 @@ public sealed class HallucinationNameplate : MonoBehaviour
     // Hallucination names have always peaked here, dimmer than a real teammate's nameplate (0.5).
     private const float PeakAlpha = 0.2f;
 
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationNameplate>();
+
     private Transform _controllerTransform = null!;
+    private HallucinationGaze _gaze = null!;
     private WorldSpaceUIPlayerName? _nameplate;
     private PlayerAvatar _imitatedPlayer = null!;
+    private bool _wasVisible;
 
-    public void Initialize(Transform controllerTransform, PlayerAvatar imitatedPlayer)
+    internal void Initialize(Transform controllerTransform, PlayerAvatar imitatedPlayer, HallucinationGaze gaze)
     {
         _controllerTransform = controllerTransform;
         _imitatedPlayer = imitatedPlayer;
+        _gaze = gaze;
 
         CreateNameplate();
     }
@@ -36,9 +42,14 @@ public sealed class HallucinationNameplate : MonoBehaviour
         var cameraPos = Camera.main.transform.position;
         var distance = Vector3.Distance(worldPos, cameraPos);
 
-        var direction = worldPos - cameraPos;
-        var isVisible = !Physics.Raycast(cameraPos, direction.normalized, distance,
-            LayerMask.GetMask("Default"), QueryTriggerInteraction.Ignore);
+        var visiblePart = _gaze.FindVisiblePart(cameraPos);
+        var isVisible = visiblePart != null;
+        if (isVisible != _wasVisible)
+        {
+            LOG.Debug($"Nameplate of the Hallucination of {_imitatedPlayer.playerName} " +
+                      $"{(isVisible ? $"shown, {visiblePart} visible" : "hidden")}");
+            _wasVisible = isVisible;
+        }
 
         var distanceAlpha = Mathf.Clamp01(1f - distance / MaxVisibleDistance);
         var targetAlpha = isVisible ? distanceAlpha * PeakAlpha : 0f;
