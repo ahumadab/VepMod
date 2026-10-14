@@ -254,7 +254,12 @@ internal static class HallucinationVisualsClone
         var sourceMapToolTransform = imitatedPlayer.transform.root.Find("Map Tool");
         if (sourceMapToolTransform == null)
         {
-            LOG.Warning($"TryCloneMapTool: 'Map Tool' not found under root of {imitatedPlayer.playerName}");
+            // MapToolController.Start moves the local player's map tool under the first-person camera. Only the dev
+            // tools make a Hallucination of the local player: on the Victim's client, the Victim is never imitated.
+            LOG.Warning(imitatedPlayer.isLocal
+                ? $"TryCloneMapTool: {imitatedPlayer.playerName} is the local player, whose map tool sits under the " +
+                  "first-person camera: this Hallucination has none"
+                : $"TryCloneMapTool: 'Map Tool' not found under root of {imitatedPlayer.playerName}");
             return false;
         }
 
