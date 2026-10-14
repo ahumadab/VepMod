@@ -7,7 +7,7 @@ namespace VepMod.Enemies.Whispral;
 /// <summary>
 ///     A Hallucination's face: angry eyelids, talking animation, and the Victim's Gaze.
 /// </summary>
-public sealed class DroidFaceAnimationController : MonoBehaviour
+public sealed class HallucinationFace : MonoBehaviour
 {
     // Detection settings
     private const float LookAtAngle = 50f;
@@ -17,12 +17,12 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
     // Talking animation
     private const float TalkRotationMaxAngle = 25f;
     private const int SampleDataLength = 256;
-    private const float StalkStareBeforeFlee = DroidController.StalkStareBeforeFlee / 0.66f;
+    private const float StalkStareBeforeFlee = Hallucination.StalkStareBeforeFlee / 0.66f;
 
     // Angry eyes state
     private float _angryTimer;
     private Transform _controllerTransform;
-    private DroidController _droidController;
+    private Hallucination _hallucination;
     private GameObject? _eyelidsLeft;
     private GameObject? _eyelidsRight;
 
@@ -41,10 +41,10 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
 
     public bool IsPlayerLookingAtMe { get; private set; }
 
-    public void Initialize(DroidController droidController, Transform controllerTransform)
+    public void Initialize(Hallucination hallucination, Transform controllerTransform)
     {
-        _droidController = droidController;
-        _controllerTransform = droidController.ControllerTransform;
+        _hallucination = hallucination;
+        _controllerTransform = hallucination.ControllerTransform;
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
 
         if (IsPlayerLookingAtMe && !_wasPlayerLooking)
         {
-            _angryTimer = _droidController.IsStalking ? StalkStareBeforeFlee : AngryEyesCooldown;
+            _angryTimer = _hallucination.IsStalking ? StalkStareBeforeFlee : AngryEyesCooldown;
         }
 
         _wasPlayerLooking = IsPlayerLookingAtMe;
@@ -185,18 +185,18 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
             return;
         }
 
-        var droidPosition = _controllerTransform.position + Vector3.up;
+        var hallucinationPosition = _controllerTransform.position + Vector3.up;
         var cameraPosition = camera.transform.position;
 
-        var distance = Vector3.Distance(cameraPosition, droidPosition);
+        var distance = Vector3.Distance(cameraPosition, hallucinationPosition);
         if (distance > LookAtMaxDistance)
         {
             IsPlayerLookingAtMe = false;
             return;
         }
 
-        var directionToDroid = (droidPosition - cameraPosition).normalized;
-        var dot = Vector3.Dot(camera.transform.forward, directionToDroid);
+        var directionToHallucination = (hallucinationPosition - cameraPosition).normalized;
+        var dot = Vector3.Dot(camera.transform.forward, directionToHallucination);
         var threshold = Mathf.Cos(LookAtAngle * Mathf.Deg2Rad);
 
         IsPlayerLookingAtMe = dot >= threshold;
@@ -209,7 +209,7 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
         if (_talkingAudioSource == null && _controllerTransform != null)
         {
             // Follows one Mimic at a time: the first emitter still under the Hallucination.
-            var emitter = _controllerTransform.Find(DroidController.MimicEmitterName);
+            var emitter = _controllerTransform.Find(Hallucination.MimicEmitterName);
             if (emitter != null) _talkingAudioSource = emitter.GetComponent<AudioSource>();
         }
 

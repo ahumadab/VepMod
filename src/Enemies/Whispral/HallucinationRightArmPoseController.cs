@@ -7,12 +7,12 @@ namespace VepMod.Enemies.Whispral;
 /// <summary>
 ///     The arm pose logic of PlayerAvatarRightArm, rebuilt for a Hallucination without PlayerAvatar or
 ///     MapToolController: code_arm_r goes from basePose to mapPose along an AnimationCurve while
-///     DroidController.WantsGrabbing is set.
+///     Hallucination.WantsGrabbing is set.
 /// </summary>
-public sealed class DroidRightArmPoseController : MonoBehaviour
+public sealed class HallucinationRightArmPoseController : MonoBehaviour
 {
     private Vector3 _basePose;
-    private DroidController _droid;
+    private Hallucination _hallucination;
     private Vector3 _mapPose;
     private Vector3 _poseCurrent;
     private AnimationCurve _poseCurve;
@@ -25,9 +25,9 @@ public sealed class DroidRightArmPoseController : MonoBehaviour
 
     private void Update()
     {
-        if (_droid == null || _rightArmTransform == null) return;
+        if (_hallucination == null || _rightArmTransform == null) return;
 
-        var target = _droid.WantsGrabbing ? _mapPose : _basePose;
+        var target = _hallucination.WantsGrabbing ? _mapPose : _basePose;
 
         if (target != _poseNew)
         {
@@ -50,10 +50,10 @@ public sealed class DroidRightArmPoseController : MonoBehaviour
         _rightArmTransform.localEulerAngles = _poseCurrent;
     }
 
-    public void Initialize(DroidController droid, Transform rightArmTransform,
+    public void Initialize(Hallucination hallucination, Transform rightArmTransform,
         Vector3 basePose, Vector3 mapPose, AnimationCurve poseCurve, float poseSpeed)
     {
-        _droid = droid;
+        _hallucination = hallucination;
         _rightArmTransform = rightArmTransform;
         _basePose = basePose;
         _mapPose = mapPose;

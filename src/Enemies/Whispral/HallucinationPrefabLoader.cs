@@ -7,18 +7,18 @@ using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
-public static class DroidPrefabLoader
+public static class HallucinationPrefabLoader
 {
     private const string BundleFileName = "vepmod_prefabs";
-    private const string DroidPrefabName = "MyDroid";
+    private const string PrefabName = "MyDroid";
     private const string EmbeddedBundleResourceName = "VepMod.Resources.vepmod_prefabs";
-    private static readonly VepLogger LOG = VepLogger.Create(nameof(DroidPrefabLoader));
+    private static readonly VepLogger LOG = VepLogger.Create(nameof(HallucinationPrefabLoader));
 
     private static AssetBundle? _bundle;
 
-    public static GameObject? DroidPrefab { get; private set; }
+    public static GameObject? Prefab { get; private set; }
 
-    public static bool IsAvailable => DroidPrefab != null;
+    public static bool IsAvailable => Prefab != null;
 
     public static bool IsLoading { get; private set; }
 
@@ -39,7 +39,7 @@ public static class DroidPrefabLoader
         LOG.Info("Starting async preload of Hallucination prefab...");
 
         var embeddedLoaded = false;
-        using (var stream = typeof(DroidPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
+        using (var stream = typeof(HallucinationPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
         {
             if (stream != null)
             {
@@ -96,12 +96,12 @@ public static class DroidPrefabLoader
         }
 
         // Both branches above set _bundle or yield break: the compiler loses that across the yields.
-        var assetRequest = _bundle!.LoadAssetAsync<GameObject>(DroidPrefabName);
+        var assetRequest = _bundle!.LoadAssetAsync<GameObject>(PrefabName);
         yield return assetRequest;
 
         if (assetRequest.asset != null)
         {
-            DroidPrefab = assetRequest.asset as GameObject;
+            Prefab = assetRequest.asset as GameObject;
             LOG.Info("Hallucination prefab loaded directly from bundle");
             FinishLoading(true, onComplete);
             yield break;
@@ -112,14 +112,14 @@ public static class DroidPrefabLoader
 
         foreach (var assetName in allAssetNames)
         {
-            if (assetName.ToLower().Contains(DroidPrefabName.ToLower()) && assetName.EndsWith(".prefab"))
+            if (assetName.ToLower().Contains(PrefabName.ToLower()) && assetName.EndsWith(".prefab"))
             {
                 var prefabRequest = _bundle.LoadAssetAsync<GameObject>(assetName);
                 yield return prefabRequest;
 
                 if (prefabRequest.asset != null)
                 {
-                    DroidPrefab = prefabRequest.asset as GameObject;
+                    Prefab = prefabRequest.asset as GameObject;
                     LOG.Info($"Hallucination prefab loaded from: {assetName}");
                     FinishLoading(true, onComplete);
                     yield break;

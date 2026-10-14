@@ -5,18 +5,18 @@ using UnityEngine;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     PlayerEyes.EyeLookAt rebuilt for a Hallucination: while DroidController.WantsGrabbing is set, code_eye_left
+///     PlayerEyes.EyeLookAt rebuilt for a Hallucination: while Hallucination.WantsGrabbing is set, code_eye_left
 ///     and code_eye_right turn towards the Player Look Target of the cloned map tool. Same LookRotation and Y clamp
 ///     as the game, but the rotation is applied directly instead of through a spring, and eases back to rest.
 /// </summary>
-public sealed class DroidEyeLookAtController : MonoBehaviour
+public sealed class HallucinationEyeLookAtController : MonoBehaviour
 {
     // From PlayerEyes.LateUpdate in the game.
     private const float ClampX = 50f;
     private const float ClampY = 30f;
     private const float ReturnSpeed = 8f;
 
-    private DroidController _droid;
+    private Hallucination _hallucination;
     private Transform _eyeLeft;
 
     private Quaternion _eyeLeftRest;
@@ -26,9 +26,9 @@ public sealed class DroidEyeLookAtController : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (_droid == null) return;
+        if (_hallucination == null) return;
 
-        if (_droid.WantsGrabbing && _lookTarget != null)
+        if (_hallucination.WantsGrabbing && _lookTarget != null)
         {
             ApplyLookAt(_eyeLeft);
             ApplyLookAt(_eyeRight);
@@ -49,9 +49,9 @@ public sealed class DroidEyeLookAtController : MonoBehaviour
         }
     }
 
-    public void Initialize(DroidController droid, Transform eyeLeft, Transform eyeRight, Transform lookTarget)
+    public void Initialize(Hallucination hallucination, Transform eyeLeft, Transform eyeRight, Transform lookTarget)
     {
-        _droid = droid;
+        _hallucination = hallucination;
         _eyeLeft = eyeLeft;
         _eyeRight = eyeRight;
         _lookTarget = lookTarget;

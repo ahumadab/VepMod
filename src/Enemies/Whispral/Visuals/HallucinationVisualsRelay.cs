@@ -10,10 +10,10 @@ namespace VepMod.Enemies.Whispral.Visuals;
 ///     the animations call, without playerAvatar or playerCosmetics, which are destroyed on the clone.
 ///     Must sit on the Animator's GameObject.
 /// </summary>
-public sealed class DroidAvatarVisualsRelay : MonoBehaviour
+public sealed class HallucinationVisualsRelay : MonoBehaviour
 {
     private CosmeticCustomSpring[] _customSprings = System.Array.Empty<CosmeticCustomSpring>();
-    private DroidController _droid;
+    private Hallucination _hallucination;
     private CosmeticSprings[] _springs = System.Array.Empty<CosmeticSprings>();
 
     // The Cosmetic MonoBehaviours are destroyed on the clone (their null playerCosmetics and cosmeticAsset throw
@@ -22,11 +22,11 @@ public sealed class DroidAvatarVisualsRelay : MonoBehaviour
     private Dictionary<CosmeticSprings, SemiFunc.CosmeticType> _springTypes = new();
 
     public void Initialize(
-        DroidController droid,
+        Hallucination hallucination,
         GameObject cloneRoot,
         Dictionary<CosmeticSprings, SemiFunc.CosmeticType> springTypes)
     {
-        _droid = droid;
+        _hallucination = hallucination;
         _springTypes = springTypes ?? new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>();
         if (cloneRoot != null)
         {
@@ -67,7 +67,7 @@ public sealed class DroidAvatarVisualsRelay : MonoBehaviour
 
     private void PlayFootstep()
     {
-        if (_droid != null) _droid.PlayMediumFootstep();
+        if (_hallucination != null) _hallucination.PlayMediumFootstep();
     }
 
     private void ImpulseRight(float springForce, float customForce)

@@ -12,7 +12,7 @@ namespace VepMod.Enemies.Whispral;
 ///     rig's baked pose, usually the lowered basePose.
 ///     headRotation (the camera pitch offset) is ignored, as for the right arm.
 /// </summary>
-public sealed class DroidLeftArmPoseController : MonoBehaviour
+public sealed class HallucinationLeftArmPoseController : MonoBehaviour
 {
     private Transform _leftArmTransform;
     private Vector3 _flashlightPose;

@@ -8,7 +8,7 @@ namespace VepMod.Enemies.Whispral;
 ///     Drives, every frame, the Animator parameters of the PlayerAvatar clone mounted on the Hallucination, the way
 ///     PlayerAvatarVisuals.AnimationLogic() does for a player.
 /// </summary>
-public sealed class DroidAvatarAnimationController : MonoBehaviour
+public sealed class HallucinationAvatarAnimationController : MonoBehaviour
 {
     private static readonly int MovingKey = Animator.StringToHash("Moving");
     private static readonly int SprintingKey = Animator.StringToHash("Sprinting");
@@ -24,33 +24,33 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
     private static readonly int StunKey = Animator.StringToHash("stun");
     private static readonly int SprintingImpulseKey = Animator.StringToHash("SprintingImpulse");
 
-    private DroidController _droid;
+    private Hallucination _hallucination;
     private Animator _animator;
     private bool _wasSprinting;
 
     public float AnimationSpeedMultiplier { get; set; } = 1f;
 
-    public void Initialize(DroidController droid, Animator animator)
+    public void Initialize(Hallucination hallucination, Animator animator)
     {
-        _droid = droid;
+        _hallucination = hallucination;
         _animator = animator;
     }
 
     private void Update()
     {
-        if (_animator == null || _droid == null) return;
+        if (_animator == null || _hallucination == null) return;
 
-        var isMovementState = _droid.IsInMovementState;
+        var isMovementState = _hallucination.IsInMovementState;
 
         var turning = false;
-        if (isMovementState && _droid.ControllerTransform != null && _droid.Movement != null)
+        if (isMovementState && _hallucination.ControllerTransform != null)
         {
-            var angle = Quaternion.Angle(_droid.ControllerTransform.rotation, _droid.Movement.TargetRotation);
+            var angle = Quaternion.Angle(_hallucination.ControllerTransform.rotation, _hallucination.Movement.TargetRotation);
             turning = angle > 7f;
         }
 
-        var sprinting = _droid.IsSprinting;
-        var moving = _droid.IsWalking || sprinting;
+        var sprinting = _hallucination.IsSprinting;
+        var moving = _hallucination.IsWalking || sprinting;
 
         _animator.SetBool(MovingKey, moving);
         _animator.SetBool(SprintingKey, sprinting);
@@ -58,14 +58,14 @@ public sealed class DroidAvatarAnimationController : MonoBehaviour
 
         // 'Grabbing' raises the hand during CheckMap (animator transition to grabberPose). Every other player bool the
         // Hallucination never uses stays false, or the animator transitions would not fall back to locomotion.
-        _animator.SetBool(GrabbingKey, _droid.WantsGrabbing);
+        _animator.SetBool(GrabbingKey, _hallucination.WantsGrabbing);
         _animator.SetBool(CrouchingKey, false);
         _animator.SetBool(CrawlingKey, false);
         _animator.SetBool(TumblingKey, false);
         _animator.SetBool(TumblingMoveKey, false);
         _animator.SetBool(SlidingKey, false);
         _animator.SetBool(JumpingKey, false);
-        _animator.SetBool(FallingKey, _droid.IsFalling);
+        _animator.SetBool(FallingKey, _hallucination.Movement.IsFalling);
         _animator.SetBool(StunKey, false);
 
         // Fired on the rising edge, like PlayerAvatarVisuals.cs:767, for the sprint snap.

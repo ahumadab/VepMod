@@ -23,7 +23,7 @@ namespace VepMod.Enemies.Whispral;
 ///     The prefab visuals (Cube) are removed and replaced by a clone of the Imitated Player's
 ///     PlayerAvatarVisuals (cosmetics and colors included).
 /// </summary>
-public sealed partial class DroidController : StateMachineComponent<DroidController, DroidController.StateId>
+public sealed partial class Hallucination : StateMachineComponent<Hallucination, Hallucination.StateId>
 {
     public enum StateId
     {
@@ -53,52 +53,47 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     internal const float StalkFleeDistance = 20f;
     internal const float StalkStareBeforeFlee = 2f;
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidController>();
+    private static readonly VepLogger LOG = VepLogger.Create<Hallucination>();
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
-    private DroidFaceAnimationController _animController;
-    private DroidRightArmPoseController? _armPoseController;
-    private DroidLeftArmPoseController? _leftArmPoseController;
-    private DroidAvatarAnimationController _avatarAnimController;
+    private HallucinationFace _face;
+    private HallucinationRightArmPoseController? _armPoseController;
+    private HallucinationLeftArmPoseController? _leftArmPoseController;
+    private HallucinationAvatarAnimationController _avatarAnimController;
     private CharacterController _charController;
-    private DroidEyeLookAtController? _eyeLookController;
+    private HallucinationEyeLookAtController? _eyeLookController;
     private GameObject? _mapToolClone;
-    private DroidNameplate _nameplateController;
+    private HallucinationNameplate _nameplateController;
     private NavMeshAgent _navAgent;
-    private Transform _rigidbodyTransform;
+    private Transform? _rigidbodyTransform;
+    private Animator? _animator;
 
     // NavMesh settings (saved for initialization)
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
-
-    // Components (animator is internal for FSM states)
-    internal Animator Animator;
 
     public bool IsWalking { get; set; }
     public bool IsSprinting { get; set; }
     public bool HasChangedMovementState { get; set; }
 
     /// <summary>
-    ///     Read by DroidAvatarAnimationController to drive the animator's 'Grabbing' bool (the raised-hand pose).
+    ///     Read by HallucinationAvatarAnimationController to drive the animator's 'Grabbing' bool (the raised-hand pose).
     ///     Set during CheckMap.
     /// </summary>
     public bool WantsGrabbing { get; set; }
 
     public PlayerAvatar ImitatedPlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
-    public DroidMovementController Movement { get; private set; }
+    internal HallucinationMovement Movement { get; private set; }
 
-    public bool IsPlayerLookingAtMe => _animController.IsPlayerLookingAtMe;
+    public bool IsPlayerLookingAtMe => _face.IsPlayerLookingAtMe;
 
     public bool IsStalking =>
         Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
 
-    public bool IsInMovementState => DroidHelpers.IsMovementState(Fsm.CurrentStateStateId);
-
-    /// <summary>
-    ///     Relayed to the animator's 'Falling' bool.
-    /// </summary>
-    public bool IsFalling => Movement != null && Movement.IsFalling;
+    public bool IsInMovementState =>
+        Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint or StateId.StalkApproach or StateId.StalkStare
+            or StateId.StalkFlee;
 
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
@@ -114,16 +109,13 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         if (Movement == null || _navAgent == null || !_navAgent.isOnNavMesh) return;
         if (ControllerTransform == null) return;
 
-        // Update FSM
         Fsm.Update();
 
-        // Update movement
-        var currentState = Fsm.CurrentStateStateId;
-        var isMovementState = DroidHelpers.IsMovementState(currentState);
+        var isMovementState = IsInMovementState;
 
         Movement.UpdateMovement(isMovementState);
         Movement.UpdateRotation();
-        Movement.SyncVisualsToController(Animator != null ? Animator.transform : null);
+        Movement.SyncVisualsToController(_animator != null ? _animator.transform : null);
         Movement.SyncNavAgentPosition(isMovementState);
     }
 
@@ -150,83 +142,17 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         if (_charController != null) _charController.enabled = true;
     }
 
-    #region Movement (delegates to DroidMovementController)
-
-    public bool TrySetRandomDestination()
-    {
-        return Movement != null && Movement.TrySetRandomDestination();
-    }
-
-    public bool TryExtendCurrentPath()
-    {
-        return Movement != null && Movement.TryExtendCurrentPath();
-    }
-
-    public void StartPrecomputeForwardDestination()
-    {
-        if (Movement != null) Movement.StartPrecomputeForwardDestination();
-    }
-
-    public void ClearPrecomputedForwardDestination()
-    {
-        if (Movement != null) Movement.ClearPrecomputedForwardDestination();
-    }
-
-    public void StartPrecomputeDestination()
-    {
-        Movement.StartPrecomputeDestination();
-    }
-
-    public bool HasPrecomputedDestination => Movement.HasPrecomputedDestination;
-
-    public void ResetPath()
-    {
-        Movement.ResetPath();
-    }
-
-    public bool HasReachedDestination()
-    {
-        return Movement.HasReachedDestination();
-    }
-
-    public float GetDistanceToPlayer()
-    {
-        return Movement.GetDistanceToPlayer();
-    }
-
-    public bool TrySetDestinationToPlayer()
-    {
-        return Movement != null && Movement.TrySetDestinationToPlayer();
-    }
-
-    public bool TrySetFleeDestination()
-    {
-        return Movement != null && Movement.TrySetFleeDestination(StalkFleeDistance);
-    }
-
-    public void LookAtPlayer()
-    {
-        Movement.LookAtPlayer();
-    }
-
-    public void SetSpeed(float speed)
-    {
-        Movement.SetSpeed(speed);
-    }
-
-    #endregion
-
     #region Factory & Initialization
 
-    public static DroidController? Create(PlayerAvatar imitatedPlayer, Vector3 spawnPosition)
+    public static Hallucination? Create(PlayerAvatar imitatedPlayer, Vector3 spawnPosition)
     {
-        if (!DroidPrefabLoader.IsAvailable)
+        if (!HallucinationPrefabLoader.IsAvailable)
         {
             LOG.Warning("Hallucination prefab not available");
             return null;
         }
 
-        var instance = Instantiate(DroidPrefabLoader.DroidPrefab, spawnPosition, Quaternion.identity);
+        var instance = Instantiate(HallucinationPrefabLoader.Prefab, spawnPosition, Quaternion.identity);
         if (instance == null)
         {
             LOG.Error("Failed to instantiate Hallucination prefab");
@@ -235,7 +161,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
         instance.name = $"Hallucination_{imitatedPlayer.playerName}";
 
-        var hallucination = instance.AddComponent<DroidController>();
+        var hallucination = instance.AddComponent<Hallucination>();
         hallucination.Initialize(imitatedPlayer);
 
         return hallucination;
@@ -262,7 +188,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     {
         if (ControllerTransform == null) return;
 
-        Movement = gameObject.AddComponent<DroidMovementController>();
+        Movement = gameObject.AddComponent<HallucinationMovement>();
         Movement.Initialize(ControllerTransform, _rigidbodyTransform, _navAgent, _charController, _savedAreaMask);
         Movement.OnNavMeshError += HandleNavMeshError;
     }
@@ -274,22 +200,22 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     private void SetupAnimationController()
     {
-        _animController = gameObject.AddComponent<DroidFaceAnimationController>();
-        _animController.Initialize(this, ControllerTransform);
+        _face = gameObject.AddComponent<HallucinationFace>();
+        _face.Initialize(this, ControllerTransform);
 
-        if (Animator != null)
+        if (_animator != null)
         {
-            _avatarAnimController = gameObject.AddComponent<DroidAvatarAnimationController>();
-            _avatarAnimController.Initialize(this, Animator);
+            _avatarAnimController = gameObject.AddComponent<HallucinationAvatarAnimationController>();
+            _avatarAnimController.Initialize(this, _animator);
         }
 
-        var visualsRoot = Animator != null ? Animator.transform : transform;
+        var visualsRoot = _animator != null ? _animator.transform : transform;
 
         // Setup head transform for talking animation (present in cloned player visuals)
-        var headTopTransform = DroidHelpers.FindChildByName(visualsRoot, "code_head_top");
+        var headTopTransform = HallucinationVisualsClone.FindChildByName(visualsRoot, "code_head_top");
         if (headTopTransform != null)
         {
-            _animController.SetupTalking(headTopTransform);
+            _face.SetupTalking(headTopTransform);
         }
 
         SetupEyelidsFromClone(visualsRoot);
@@ -299,8 +225,8 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     {
         try
         {
-            var eyelidsLeft = DroidHelpers.FindChildByName(visualsRoot, "EYELIDS LEFT");
-            var eyelidsRight = DroidHelpers.FindChildByName(visualsRoot, "EYELIDS RIGHT");
+            var eyelidsLeft = HallucinationVisualsClone.FindChildByName(visualsRoot, "EYELIDS LEFT");
+            var eyelidsRight = HallucinationVisualsClone.FindChildByName(visualsRoot, "EYELIDS RIGHT");
 
             if (eyelidsLeft == null || eyelidsRight == null)
             {
@@ -314,7 +240,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             eyelidsLeft.gameObject.SetActive(false);
             eyelidsRight.gameObject.SetActive(false);
 
-            _animController.SetupEyelids(
+            _face.SetupEyelids(
                 eyelidsLeft.gameObject, eyelidsRight.gameObject,
                 leftUpperX, leftUpperZ, leftLowerX,
                 rightUpperX, rightUpperZ, rightLowerX);
@@ -355,7 +281,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
     private void LateUpdate()
     {
         _nameplateController.UpdateNameplate();
-        _animController.UpdateAnimations();
+        _face.UpdateAnimations();
     }
 
     private void OnDestroy()
@@ -393,7 +319,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     private void SetupNameplate()
     {
-        _nameplateController = gameObject.AddComponent<DroidNameplate>();
+        _nameplateController = gameObject.AddComponent<HallucinationNameplate>();
         _nameplateController.Initialize(ControllerTransform, ImitatedPlayer);
     }
 
@@ -411,41 +337,19 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
     private void FindCriticalTransforms()
     {
-        ControllerTransform = transform.Find("Controller");
-        if (ControllerTransform == null)
-        {
-            foreach (var child in GetComponentsInChildren<Transform>())
-            {
-                if (child.name == "Controller")
-                {
-                    ControllerTransform = child;
-                    break;
-                }
-            }
-        }
-
-        if (ControllerTransform == null)
+        var controllerTransform = HallucinationVisualsClone.FindChildByName(transform, "Controller");
+        if (controllerTransform == null)
         {
             LOG.Warning("Controller transform not found, creating one");
             var controllerGo = new GameObject("Controller");
             controllerGo.transform.SetParent(transform);
             controllerGo.transform.localPosition = Vector3.zero;
-            ControllerTransform = controllerGo.transform;
+            controllerTransform = controllerGo.transform;
         }
 
-        _rigidbodyTransform = transform.Find("Rigidbody");
-        if (_rigidbodyTransform == null)
-        {
-            foreach (var child in GetComponentsInChildren<Transform>())
-            {
-                if (child.name == "Rigidbody")
-                {
-                    _rigidbodyTransform = child;
-                    break;
-                }
-            }
-        }
+        ControllerTransform = controllerTransform;
 
+        _rigidbodyTransform = HallucinationVisualsClone.FindChildByName(transform, "Rigidbody");
         if (_rigidbodyTransform == null)
         {
             LOG.Warning("Rigidbody transform not found");
@@ -562,7 +466,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             return;
         }
 
-        var cube = DroidVisualsClone.FindCube(transform);
+        var cube = HallucinationVisualsClone.FindCube(transform);
         if (cube == null)
         {
             LOG.Error("Cannot clone visuals: MyDroid/Enable/Cube not found");
@@ -571,34 +475,34 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
 
         // Cube keeps its Animator, BloodDust and Hurt Collider; only the player components that throw NREs
         // (PlayerAvatarVisuals and its siblings) go.
-        DroidVisualsClone.SanitizeCube(cube);
+        HallucinationVisualsClone.SanitizeCube(cube);
 
-        Animator = cube.GetComponent<Animator>();
+        _animator = cube.GetComponent<Animator>();
 
-        DroidVisualsClone.StripExistingRig(cube);
+        HallucinationVisualsClone.StripExistingRig(cube);
 
-        if (!DroidVisualsClone.TryCloneRig(ImitatedPlayer, cube, out var cloneRig))
+        if (!HallucinationVisualsClone.TryCloneRig(ImitatedPlayer, cube, out var cloneRig))
         {
             LOG.Warning("Failed to clone Imitated Player [RIG]");
             return;
         }
 
-        if (Animator != null && cloneRig != null)
+        if (_animator != null && cloneRig != null)
         {
-            Animator.enabled = true;
-            Animator.applyRootMotion = false;
+            _animator.enabled = true;
+            _animator.applyRootMotion = false;
 
             // The Animator ran its Awake on the prefab's old [RIG] and caches bone bindings by path. Swapping [RIG]
             // breaks them; Rebind makes Unity resolve the bone paths against the new hierarchy.
-            Animator.Rebind();
-            Animator.Update(0f);
+            _animator.Rebind();
+            _animator.Update(0f);
 
-            DroidVisualsClone.AttachRelay(Animator, this, cloneRig);
-            DroidVisualsClone.TryCloneFlashlight(ImitatedPlayer, cloneRig);
-            DroidVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out _mapToolClone);
+            HallucinationVisualsClone.AttachRelay(_animator, this, cloneRig);
+            HallucinationVisualsClone.TryCloneFlashlight(ImitatedPlayer, cloneRig);
+            HallucinationVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out _mapToolClone);
             SetupArmAndEyePoses(cloneRig);
         }
-        else if (Animator == null)
+        else if (_animator == null)
         {
             LOG.Warning("Cube has no Animator after SanitizeCube");
         }
@@ -621,13 +525,13 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         var sourceArm = visuals.GetComponent<PlayerAvatarRightArm>();
         if (sourceArm != null && sourceArm.rightArmTransform != null)
         {
-            var clonedArm = DroidHelpers.FindChildByName(cloneRig.transform, sourceArm.rightArmTransform.name);
+            var clonedArm = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceArm.rightArmTransform.name);
             if (clonedArm != null)
             {
-                _armPoseController = gameObject.AddComponent<DroidRightArmPoseController>();
+                _armPoseController = gameObject.AddComponent<HallucinationRightArmPoseController>();
                 _armPoseController.Initialize(this, clonedArm, sourceArm.basePose, sourceArm.mapPose,
                     sourceArm.poseCurve, sourceArm.poseSpeed);
-                LOG.Debug($"DroidRightArmPoseController initialized on bone '{sourceArm.rightArmTransform.name}'");
+                LOG.Debug($"HallucinationRightArmPoseController initialized on bone '{sourceArm.rightArmTransform.name}'");
             }
             else
             {
@@ -643,13 +547,13 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         var sourceLeftArm = visuals.GetComponent<PlayerAvatarLeftArm>();
         if (sourceLeftArm != null && sourceLeftArm.leftArmTransform != null)
         {
-            var clonedLeftArm = DroidHelpers.FindChildByName(cloneRig.transform, sourceLeftArm.leftArmTransform.name);
+            var clonedLeftArm = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceLeftArm.leftArmTransform.name);
             if (clonedLeftArm != null)
             {
-                _leftArmPoseController = gameObject.AddComponent<DroidLeftArmPoseController>();
+                _leftArmPoseController = gameObject.AddComponent<HallucinationLeftArmPoseController>();
                 _leftArmPoseController.Initialize(clonedLeftArm, sourceLeftArm.basePose, sourceLeftArm.flashlightPose,
                     sourceLeftArm.poseCurve, sourceLeftArm.poseSpeed);
-                LOG.Debug($"DroidLeftArmPoseController initialized on bone '{sourceLeftArm.leftArmTransform.name}'");
+                LOG.Debug($"HallucinationLeftArmPoseController initialized on bone '{sourceLeftArm.leftArmTransform.name}'");
             }
             else
             {
@@ -664,17 +568,17 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         var sourceEyes = visuals.GetComponent<PlayerEyes>();
         if (sourceEyes != null && sourceEyes.eyeLeft != null && sourceEyes.eyeRight != null)
         {
-            var clonedEyeLeft = DroidHelpers.FindChildByName(cloneRig.transform, sourceEyes.eyeLeft.name);
-            var clonedEyeRight = DroidHelpers.FindChildByName(cloneRig.transform, sourceEyes.eyeRight.name);
+            var clonedEyeLeft = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceEyes.eyeLeft.name);
+            var clonedEyeRight = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceEyes.eyeRight.name);
             var lookTarget = _mapToolClone != null
-                ? DroidHelpers.FindChildByName(_mapToolClone.transform, "Player Look Target")
+                ? HallucinationVisualsClone.FindChildByName(_mapToolClone.transform, "Player Look Target")
                 : null;
 
             if (clonedEyeLeft != null && clonedEyeRight != null && lookTarget != null)
             {
-                _eyeLookController = gameObject.AddComponent<DroidEyeLookAtController>();
+                _eyeLookController = gameObject.AddComponent<HallucinationEyeLookAtController>();
                 _eyeLookController.Initialize(this, clonedEyeLeft, clonedEyeRight, lookTarget);
-                LOG.Debug("DroidEyeLookAtController initialized");
+                LOG.Debug("HallucinationEyeLookAtController initialized");
             }
             else
             {

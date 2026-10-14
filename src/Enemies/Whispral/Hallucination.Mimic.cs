@@ -6,9 +6,9 @@ using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
 
-public sealed partial class DroidController
+public sealed partial class Hallucination
 {
-    // Found by DroidFaceAnimationController, which moves the head while a Mimic plays.
+    // Found by HallucinationFace, which moves the head while a Mimic plays.
     public const string MimicEmitterName = "Mimic";
 
     // Playback, from the game's Voice prefab

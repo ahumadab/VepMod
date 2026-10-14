@@ -6,89 +6,45 @@ using Random = UnityEngine.Random;
 
 namespace VepMod.Enemies.Whispral;
 
-public sealed partial class DroidController
+public sealed partial class Hallucination
 {
     private sealed class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
-        private const string ClipName = "LostDroidStand";
-        private const float IdleLoopStart = 0f;
-        private const float IdleLoopEnd = 4.5f;
-        private const float BlendDelay = 0.3f;
-
         private const float MinIdleTime = 2f;
         private const float MaxIdleTime = 4f;
         private const float PrecomputeRetryInterval = 1f;
         private const float CheckMapChance = 0.25f;
 
-        private Animator _animator;
-        private bool _animatorTakenOver;
-        private AnimationClip? _clip;
-        private float _currentTime;
-
         private float _duration;
         private float _precomputeTimer;
-        private GameObject? _targetObject;
 
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
             _precomputeTimer = 0f;
-            _animatorTakenOver = false;
-            Machine.Owner.ResetPath();
+            Machine.Owner.Movement.ResetPath();
             Machine.Owner.HasChangedMovementState = false;
-
-            _animator = Machine.Owner.Animator;
-            if (_animator != null)
-            {
-                _clip = DroidHelpers.GetAnimationClip(_animator, ClipName);
-                if (_clip != null)
-                {
-                    _targetObject = _animator.gameObject;
-                }
-            }
-
-            Machine.Owner.StartPrecomputeDestination();
+            Machine.Owner.Movement.StartPrecomputeDestination();
         }
 
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
 
-            if (!_animatorTakenOver && _clip != null && _targetObject != null)
-            {
-                if (TimeElapsed >= BlendDelay)
-                {
-                    _animator.enabled = false;
-                    _currentTime = IdleLoopStart;
-                    _animatorTakenOver = true;
-                }
-            }
-
-            if (_animatorTakenOver && _clip != null && _targetObject != null)
-            {
-                _currentTime += Time.deltaTime;
-                if (_currentTime >= IdleLoopEnd)
-                {
-                    _currentTime = IdleLoopStart;
-                }
-
-                _clip.SampleAnimation(_targetObject, _currentTime);
-            }
-
-            if (!Machine.Owner.HasPrecomputedDestination)
+            if (!Machine.Owner.Movement.HasPrecomputedDestination)
             {
                 _precomputeTimer -= Time.deltaTime;
                 if (_precomputeTimer <= 0f)
                 {
-                    Machine.Owner.StartPrecomputeDestination();
+                    Machine.Owner.Movement.StartPrecomputeDestination();
                     _precomputeTimer = PrecomputeRetryInterval;
                 }
             }
 
             if (TimeElapsed >= _duration)
             {
-                var distanceToPlayer = Machine.Owner.GetDistanceToPlayer();
+                var distanceToPlayer = Machine.Owner.Movement.GetDistanceToPlayer();
                 if (distanceToPlayer > StalkMinDistance && Random.value < StalkChance)
                 {
                     Machine.NextStateStateId = StateId.StalkApproach;
@@ -107,16 +63,6 @@ public sealed partial class DroidController
                     Machine.NextStateStateId = Random.value < SprintChance ? StateId.Sprint : StateId.Wander;
                     LOG.Debug($"IdleState: -> {Machine.NextStateStateId}");
                 }
-            }
-        }
-
-        public override void OnStateExit(StateId next)
-        {
-            base.OnStateExit(next);
-
-            if (_animator != null)
-            {
-                _animator.enabled = true;
             }
         }
     }
@@ -148,21 +94,21 @@ public sealed partial class DroidController
             if (isMovementSwitch)
             {
                 // A failed extension keeps the current destination.
-                Machine.Owner.TryExtendCurrentPath();
+                Machine.Owner.Movement.TryExtendCurrentPath();
             }
             else
             {
-                if (!Machine.Owner.TrySetRandomDestination())
+                if (!Machine.Owner.Movement.TrySetRandomDestination())
                 {
                     Machine.NextStateStateId = StateId.Idle;
                     return;
                 }
             }
 
-            Machine.Owner.SetSpeed(Speed);
+            Machine.Owner.Movement.SetSpeed(Speed);
             SetMovementFlag(true);
 
-            Machine.Owner.StartPrecomputeForwardDestination();
+            Machine.Owner.Movement.StartPrecomputeForwardDestination();
         }
 
         public override void OnStateExit(StateId next)
@@ -172,7 +118,7 @@ public sealed partial class DroidController
 
             if (next is not (StateId.Wander or StateId.Sprint))
             {
-                Machine.Owner.ClearPrecomputedForwardDestination();
+                Machine.Owner.Movement.ClearPrecomputedForwardDestination();
             }
         }
 
@@ -180,7 +126,7 @@ public sealed partial class DroidController
         {
             base.OnStateUpdate();
 
-            if (Machine.Owner.HasReachedDestination() || TimeElapsed >= _duration)
+            if (Machine.Owner.Movement.HasReachedDestination() || TimeElapsed >= _duration)
             {
                 Machine.NextStateStateId = StateId.Idle;
                 return;
@@ -190,7 +136,7 @@ public sealed partial class DroidController
             if (_nextPrecomputeForward <= 0f)
             {
                 _nextPrecomputeForward = PrecomputeForwardInterval;
-                Machine.Owner.StartPrecomputeForwardDestination();
+                Machine.Owner.Movement.StartPrecomputeForwardDestination();
             }
 
             if (!Machine.Owner.HasChangedMovementState && TimeElapsed >= _nextSwitchCheck)
@@ -233,7 +179,7 @@ public sealed partial class DroidController
 
     private sealed class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
-        // From the former LostDroidStand animation timings (4.65→5.5 raise, 5.5→6.93 look loop, 6.93→7.15 lower).
+        // Phase lengths only: the animator plays the raise and the lower through its Grabbing transitions.
         private const float RaiseDuration = 0.85f;
         private const float LowerDuration = 0.22f;
         private const float MinLookDuration = 0.5f;
@@ -249,10 +195,10 @@ public sealed partial class DroidController
 
             Machine.Owner.IsWalking = false;
             Machine.Owner.IsSprinting = false;
-            Machine.Owner.ResetPath();
+            Machine.Owner.Movement.ResetPath();
 
             // The animator, left enabled, moves to the grabber pose through its Grabbing bool, which
-            // DroidAvatarAnimationController drives from WantsGrabbing.
+            // HallucinationAvatarAnimationController drives from WantsGrabbing.
             Machine.Owner.ShowMapTool(true);
 
             _lookDuration = Random.Range(MinLookDuration, MaxLookDuration);
@@ -333,10 +279,10 @@ public sealed partial class DroidController
             LOG.Debug("=== STALK: Approach started - running towards player ===");
 
             Machine.Owner.IsSprinting = true;
-            Machine.Owner.SetSpeed(SprintSpeed);
+            Machine.Owner.Movement.SetSpeed(SprintSpeed);
             _nextDestinationUpdate = 0f;
 
-            if (!Machine.Owner.TrySetDestinationToPlayer())
+            if (!Machine.Owner.Movement.TrySetDestinationToPlayer())
             {
                 LOG.Debug("STALK: Failed to set destination to player, aborting");
                 Machine.NextStateStateId = StateId.Idle;
@@ -347,8 +293,8 @@ public sealed partial class DroidController
         {
             base.OnStateUpdate();
 
-            var distance = Machine.Owner.GetDistanceToPlayer();
-            var reachedNavDest = Machine.Owner.HasReachedDestination();
+            var distance = Machine.Owner.Movement.GetDistanceToPlayer();
+            var reachedNavDest = Machine.Owner.Movement.HasReachedDestination();
 
             if (TimeElapsed >= MaxApproachTime)
             {
@@ -374,7 +320,7 @@ public sealed partial class DroidController
             _nextDestinationUpdate -= Time.deltaTime;
             if (_nextDestinationUpdate <= 0f)
             {
-                Machine.Owner.TrySetDestinationToPlayer();
+                Machine.Owner.Movement.TrySetDestinationToPlayer();
                 _nextDestinationUpdate = DestinationUpdateInterval;
             }
         }
@@ -383,7 +329,7 @@ public sealed partial class DroidController
         {
             base.OnStateExit(next);
             Machine.Owner.IsSprinting = false;
-            Machine.Owner.ResetPath();
+            Machine.Owner.Movement.ResetPath();
         }
     }
 
@@ -411,16 +357,16 @@ public sealed partial class DroidController
 
             Machine.Owner.IsWalking = true;
             Machine.Owner.IsSprinting = false;
-            Machine.Owner.SetSpeed(WalkSpeed);
+            Machine.Owner.Movement.SetSpeed(WalkSpeed);
         }
 
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
 
-            Machine.Owner.LookAtPlayer();
+            Machine.Owner.Movement.LookAtPlayer();
 
-            var distance = Machine.Owner.GetDistanceToPlayer();
+            var distance = Machine.Owner.Movement.GetDistanceToPlayer();
             var isPlayerLooking = Machine.Owner.IsPlayerLookingAtMe;
 
             if (isPlayerLooking && !_hasBeenSeen)
@@ -429,7 +375,7 @@ public sealed partial class DroidController
                 LOG.Debug("=== STALK: Player sees me! Maintaining eye contact... ===");
 
                 Machine.Owner.IsWalking = false;
-                Machine.Owner.ResetPath();
+                Machine.Owner.Movement.ResetPath();
             }
 
             if (_hasBeenSeen)
@@ -449,13 +395,13 @@ public sealed partial class DroidController
                     _nextDestinationUpdate -= Time.deltaTime;
                     if (_nextDestinationUpdate <= 0f)
                     {
-                        Machine.Owner.TrySetDestinationToPlayer();
+                        Machine.Owner.Movement.TrySetDestinationToPlayer();
                         _nextDestinationUpdate = DestinationUpdateInterval;
                     }
                 }
                 else
                 {
-                    Machine.Owner.ResetPath();
+                    Machine.Owner.Movement.ResetPath();
                 }
             }
 
@@ -483,9 +429,9 @@ public sealed partial class DroidController
             LOG.Debug("=== STALK: Fleeing from player! ===");
 
             Machine.Owner.IsSprinting = true;
-            Machine.Owner.SetSpeed(SprintSpeed);
+            Machine.Owner.Movement.SetSpeed(SprintSpeed);
 
-            if (!Machine.Owner.TrySetFleeDestination())
+            if (!Machine.Owner.Movement.TrySetFleeDestination(StalkFleeDistance))
             {
                 LOG.Debug("STALK: Failed to set flee destination, going to idle");
                 Machine.NextStateStateId = StateId.Idle;
@@ -496,7 +442,7 @@ public sealed partial class DroidController
         {
             base.OnStateUpdate();
 
-            if (Machine.Owner.HasReachedDestination() || TimeElapsed >= MaxFleeTime)
+            if (Machine.Owner.Movement.HasReachedDestination() || TimeElapsed >= MaxFleeTime)
             {
                 LOG.Debug("=== STALK: Flee complete, returning to idle ===");
                 Machine.NextStateStateId = StateId.Idle;

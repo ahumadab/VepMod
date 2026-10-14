@@ -12,7 +12,7 @@ The tester confirms what the game shows; only the BepInEx logs show the state be
 but off the NavMesh), and you read them after the test to confirm each acceptance criterion. So before asking for an
 in-game test, map every acceptance criterion to the action that triggers it and the `Debug` line that proves it, with
 the data behind it. An action the tester cannot trigger at will (a command the Master sends, a state reached only by
-chance) gets a key in `src/Dev/DroidDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
+chance) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
 (`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about.
 
 ## Coding standards
