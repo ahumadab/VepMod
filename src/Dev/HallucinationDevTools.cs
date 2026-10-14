@@ -70,7 +70,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
             else DropNearest();
         }
 
-        if (Input.GetKeyDown(HudKey)) _hudVisible = !_hudVisible;
+        if (Input.GetKeyDown(HudKey))
+        {
+            if (ShiftHeld()) LogNearestRenderers();
+            else _hudVisible = !_hudVisible;
+        }
         if (Input.GetKeyDown(DespawnKey)) DespawnAll();
         if (Input.GetKeyDown(SpawnWhispralKey)) SpawnWhispralAtAim();
         if (Input.GetKeyDown(StunPreparingWhispralsKey)) StunWhisprals(true);
@@ -209,6 +213,40 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
 
         _nearest.PlayMimic(false);
+    }
+
+    // What Unity draws, where the Debug lines only say what the code asked for: pressed twice, the two dumps diff.
+    private void LogNearestRenderers()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to inspect.");
+            return;
+        }
+
+        var root = _nearest.transform;
+        var renderers = root.GetComponentsInChildren<Renderer>(true);
+        LOG.Info($"DevTools: {renderers.Length} renderers of {_nearest.name} " +
+                 $"in {_nearest.DebugStateName}:");
+        foreach (var renderer in renderers)
+        {
+            var material = renderer.sharedMaterial != null ? renderer.sharedMaterial.name : "none";
+            LOG.Info($"  {PathUnder(root, renderer.transform)}: active={renderer.gameObject.activeInHierarchy}, " +
+                     $"enabled={renderer.enabled}, visible={renderer.isVisible}, scale={renderer.transform.lossyScale}, " +
+                     $"layer={LayerMask.LayerToName(renderer.gameObject.layer)}, material={material}");
+        }
+    }
+
+    private static string PathUnder(Transform root, Transform transform)
+    {
+        var path = transform.name;
+        for (var parent = transform.parent; parent != null && parent != root; parent = parent.parent)
+        {
+            path = $"{parent.name}/{path}";
+        }
+
+        return path;
     }
 
     private void DespawnAll()
@@ -429,7 +467,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Shift+F4 Mimic command without a Hallucination (Master)\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n" +
-                 "Shift+F6 capture your voice now\n";
+                 "Shift+F6 capture your voice now\n" +
+                 "Shift+F10 log what the nearest Hallucination renders\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
