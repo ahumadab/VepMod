@@ -12,9 +12,6 @@ internal static class ImitationsPatch
     // Held above zero, the death head's cooldown never runs out, so the head seen reaction cannot fire.
     private const float SeenCooldownHold = 1f; // s
 
-    private static Imitations? LocalImitations =>
-        PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Imitations>() : null;
-
     [HarmonyPrefix]
     [HarmonyPatch(typeof(Materials), nameof(Materials.Impulse))]
     private static bool Impulse_Prefix(Materials.MaterialTrigger materialTrigger)
@@ -66,7 +63,7 @@ internal static class ImitationsPatch
     {
         if (___seenCooldownTimer >= SeenCooldownHold || !__instance.playerAvatar) return;
 
-        var imitations = LocalImitations;
+        var imitations = Imitations.Local;
         if (imitations && imitations!.IsImitatedPlayer(__instance.playerAvatar))
         {
             ___seenCooldownTimer = SeenCooldownHold;
@@ -85,7 +82,7 @@ internal static class ImitationsPatch
 
     private static bool IsImitatedPlayerSound(object emitter)
     {
-        var imitations = LocalImitations;
+        var imitations = Imitations.Local;
         return imitations && imitations!.IsImitatedPlayerSound(emitter);
     }
 }

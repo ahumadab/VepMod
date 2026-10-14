@@ -233,7 +233,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             return null;
         }
 
-        instance.name = $"HallucinationDroid_{imitatedPlayer.playerName}";
+        instance.name = $"Hallucination_{imitatedPlayer.playerName}";
 
         var hallucination = instance.AddComponent<DroidController>();
         hallucination.Initialize(imitatedPlayer);
@@ -255,7 +255,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         SetupNameplate();
         InitializeFsm();
 
-        LOG.Info($"HallucinationDroid created for {imitatedPlayer.playerName} at {ControllerTransform.position}");
+        LOG.Info($"Hallucination created for {imitatedPlayer.playerName} at {ControllerTransform.position}");
     }
 
     private void SetupMovementController()
@@ -596,7 +596,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             DroidVisualsClone.AttachRelay(Animator, this, cloneRig);
             DroidVisualsClone.TryCloneFlashlight(ImitatedPlayer, cloneRig);
             DroidVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out _mapToolClone);
-            SetupArmAndEyeMimics(cloneRig);
+            SetupArmAndEyePoses(cloneRig);
         }
         else if (Animator == null)
         {
@@ -604,7 +604,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         }
     }
 
-    private void SetupArmAndEyeMimics(GameObject cloneRig)
+    private void SetupArmAndEyePoses(GameObject cloneRig)
     {
         if (ImitatedPlayer == null || cloneRig == null) return;
 
@@ -614,7 +614,7 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
         var visuals = ImitatedPlayer.playerAvatarVisuals;
         if (visuals == null)
         {
-            LOG.Warning("SetupArmAndEyeMimics: ImitatedPlayer.playerAvatarVisuals is null");
+            LOG.Warning("SetupArmAndEyePoses: ImitatedPlayer.playerAvatarVisuals is null");
             return;
         }
 
@@ -631,12 +631,12 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             }
             else
             {
-                LOG.Warning($"SetupArmAndEyeMimics: bone '{sourceArm.rightArmTransform.name}' not found in clone rig");
+                LOG.Warning($"SetupArmAndEyePoses: bone '{sourceArm.rightArmTransform.name}' not found in clone rig");
             }
         }
         else
         {
-            LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarRightArm on Imitated Player");
+            LOG.Warning("SetupArmAndEyePoses: no PlayerAvatarRightArm on Imitated Player");
         }
 
         // The Hallucination's flashlight is always on, so the left arm always aims for flashlightPose.
@@ -653,12 +653,12 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             }
             else
             {
-                LOG.Warning($"SetupArmAndEyeMimics: left arm bone '{sourceLeftArm.leftArmTransform.name}' not found in clone rig");
+                LOG.Warning($"SetupArmAndEyePoses: left arm bone '{sourceLeftArm.leftArmTransform.name}' not found in clone rig");
             }
         }
         else
         {
-            LOG.Warning("SetupArmAndEyeMimics: no PlayerAvatarLeftArm on Imitated Player");
+            LOG.Warning("SetupArmAndEyePoses: no PlayerAvatarLeftArm on Imitated Player");
         }
 
         var sourceEyes = visuals.GetComponent<PlayerEyes>();
@@ -678,13 +678,13 @@ public sealed partial class DroidController : StateMachineComponent<DroidControl
             }
             else
             {
-                LOG.Warning($"SetupArmAndEyeMimics: eye bones or lookTarget missing " +
+                LOG.Warning($"SetupArmAndEyePoses: eye bones or lookTarget missing " +
                             $"(eyeL={clonedEyeLeft != null}, eyeR={clonedEyeRight != null}, lookTarget={lookTarget != null})");
             }
         }
         else
         {
-            LOG.Warning("SetupArmAndEyeMimics: no PlayerEyes on Imitated Player or eyeLeft/Right null");
+            LOG.Warning("SetupArmAndEyePoses: no PlayerEyes on Imitated Player or eyeLeft/Right null");
         }
     }
 

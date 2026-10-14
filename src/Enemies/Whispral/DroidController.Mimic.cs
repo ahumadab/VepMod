@@ -8,7 +8,7 @@ namespace VepMod.Enemies.Whispral;
 
 public sealed partial class DroidController
 {
-    /// <summary>Name of the child GameObject that carries one Mimic's AudioSource under the Hallucination's controller.</summary>
+    // Found by DroidFaceAnimationController, which moves the head while a Mimic plays.
     public const string MimicEmitterName = "Mimic";
 
     // Playback, from the game's Voice prefab
@@ -71,8 +71,7 @@ public sealed partial class DroidController
         }
     }
 
-    // Each Mimic gets its own emitter, so Mimics overlapping on one Hallucination never share an AudioSource. Parented
-    // to the controller, the emitter follows the Hallucination and goes with it.
+    // Each Mimic gets its own emitter, so Mimics overlapping on one Hallucination never share an AudioSource.
     private void PlayOnNewEmitter(AudioClip clip)
     {
         var emitter = new GameObject(MimicEmitterName);
@@ -138,7 +137,9 @@ public sealed partial class DroidController
 
         foreach (Transform child in ControllerTransform)
         {
-            if (child.name != MimicEmitterName) continue;
+            // An emitter outlives its clip by a moment: only a playing one is cut.
+            var source = child.GetComponent<AudioSource>();
+            if (child.name != MimicEmitterName || source == null || !source.isPlaying) continue;
 
             var imitatedPlayer = ImitatedPlayer != null ? ImitatedPlayer.playerName : "?";
             LOG.Debug($"Mimic of {imitatedPlayer} on Hallucination {GetInstanceID()} cut short: the Hallucination " +

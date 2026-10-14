@@ -277,7 +277,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
 
         var imitatedPlayer = SemiFunc.PlayerAvatarGetFromPhotonID(imitatedPlayerViewID);
-        var imitations = PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Imitations>() : null;
+        var imitations = Imitations.Local;
         var hallucination = imitatedPlayer && imitations ? imitations!.FindHallucination(imitatedPlayer) : null;
         if (!hallucination)
         {

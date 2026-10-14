@@ -28,6 +28,9 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     private Coroutine? _spawning;
     private PlayerAvatar _victim = null!;
 
+    /// <summary>The local player's: null while they are not a Victim.</summary>
+    public static Imitations? Local => PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Imitations>() : null;
+
     private void Awake()
     {
         _victim = GetComponent<PlayerAvatar>();
