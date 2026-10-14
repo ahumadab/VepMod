@@ -123,7 +123,11 @@ public class VepMod : BaseUnityPlugin
 #if !VEPMOD_NO_VAD
     private static SpeechCheck? CreateSpeechCheck()
     {
-        if (!ConfigVadEnabled.Value) return null;
+        if (!ConfigVadEnabled.Value)
+        {
+            LOG.Info("VAD disabled in the config: Captures will not be checked for speech.");
+            return null;
+        }
 
         try
         {

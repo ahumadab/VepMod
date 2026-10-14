@@ -22,7 +22,6 @@ public sealed class VoiceRecorder(Action<string> logDebug)
 {
     private const float SilenceTimeoutSeconds = 0.5f;
     private const int MaxDurationSeconds = 6;
-    private const float FullScale = 32768f;
 
     private readonly ConcurrentQueue<Capture> _captures = new();
     private int _requested;
@@ -58,10 +57,16 @@ public sealed class VoiceRecorder(Action<string> logDebug)
         if (_silenceLength >= _silenceLimit || _length == _buffer.Length) End();
     }
 
-    /// <summary>Main thread.</summary>
     public bool TryTakeCapture(out Capture capture)
     {
         return _captures.TryDequeue(out capture!);
+    }
+
+    /// <summary>Drops the pending request and the queued Captures; a Capture under way still ends in the queue.</summary>
+    public void Clear()
+    {
+        Interlocked.Exchange(ref _requested, 0);
+        _captures.Clear();
     }
 
     private void Start(int sampleRate, int channels)
@@ -84,7 +89,7 @@ public sealed class VoiceRecorder(Action<string> logDebug)
         {
             var sum = 0f;
             for (var c = 0; c < _channels; c++) sum += pcm[i * _channels + c];
-            _buffer[_length + i] = sum / (_channels * FullScale);
+            _buffer[_length + i] = sum / (_channels * WavCodec.FullScale);
         }
 
         _length += frames;
@@ -103,7 +108,7 @@ public sealed class VoiceRecorder(Action<string> logDebug)
     }
 }
 
-/// <returns>Whether the speech has enough of it, and the analysis for the log.</returns>
+/// <returns>Whether <paramref name="speech" /> holds enough speech, and the analysis for the log.</returns>
 public delegate (bool hasSpeech, string analysis) SpeechCheck(float[] speech, int sampleRate);
 
 public static class CaptureValidation
@@ -112,8 +117,8 @@ public static class CaptureValidation
     private const float MinSpeechSeconds = 0.1f;
 
     /// <param name="speechCheck">Null without a VAD.</param>
-    /// <returns>Whether the Capture becomes a Voice Sample, and why for the log.</returns>
-    public static (bool accepted, string reason) Validate(Capture capture, float minDurationSeconds,
+    /// <returns>Whether the Capture becomes a Voice Sample, and the details for the log.</returns>
+    public static (bool accepted, string detail) Validate(Capture capture, float minDurationSeconds,
         SpeechCheck? speechCheck)
     {
         if (capture.DurationSeconds < minDurationSeconds)

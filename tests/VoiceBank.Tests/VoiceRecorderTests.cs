@@ -74,6 +74,20 @@ public sealed class VoiceRecorderTests
     }
 
     [Fact]
+    public void ClearDropsThePendingRequestAndTheQueuedCaptures()
+    {
+        _recorder.RequestCapture();
+        PushFrames(true, 1);
+        PushFrames(false, 5);
+        _recorder.RequestCapture();
+        _recorder.Clear();
+        PushFrames(true, 1);
+        PushFrames(false, 5);
+
+        Assert.False(_recorder.TryTakeCapture(out _));
+    }
+
+    [Fact]
     public void StereoIsAveragedToMono()
     {
         _recorder.RequestCapture();

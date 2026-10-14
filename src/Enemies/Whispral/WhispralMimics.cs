@@ -115,9 +115,11 @@ public sealed class WhispralMimics : MonoBehaviour
 
     #region Capture validation
 
-    // Photon's voice thread only fills the recorder; the Captures are validated and saved off the main thread.
+    // The VAD and the disk write would stall the main thread, so they run in a background task.
     private IEnumerator SaveCaptures()
     {
+        // A request or a Capture left from the previous level, or the lobby, is not this level's to share.
+        VepMod.VoiceRecorder.Clear();
         var player = _playerAvatar.VoiceBankKey();
         while (true)
         {
@@ -150,17 +152,18 @@ public sealed class WhispralMimics : MonoBehaviour
     /// <returns>The verdict for the HUD, and the WAV to share, null when the Capture is not a Voice Sample.</returns>
     private static (string verdict, byte[]? wav) ValidateAndSave(Capture capture, PlayerKey player, float minDuration)
     {
-        var (accepted, reason) = CaptureValidation.Validate(capture, minDuration, VepMod.SpeechCheck);
-        var verdict = $"{(accepted ? "accepted" : "rejected")} " +
-                      $"({capture.DurationSeconds:F2} s at {capture.Sample.SampleRate} Hz): {reason}";
-        if (!accepted)
-        {
-            LOG.Debug($"Capture {verdict}");
-            return (verdict, null);
-        }
-
+        var verdict = "not validated";
         try
         {
+            var (accepted, detail) = CaptureValidation.Validate(capture, minDuration, VepMod.SpeechCheck);
+            verdict = $"{(accepted ? "accepted" : "rejected")} " +
+                      $"({capture.DurationSeconds:F2} s at {capture.Sample.SampleRate} Hz): {detail}";
+            if (!accepted)
+            {
+                LOG.Debug($"Capture {verdict}");
+                return (verdict, null);
+            }
+
             VepMod.VoiceBanks.Save(player, capture.Sample);
             var wav = WavCodec.Encode(capture.Sample);
             LOG.Debug($"Capture {verdict}. Voice Sample saved in the Voice Bank of {player}.");
@@ -168,7 +171,7 @@ public sealed class WhispralMimics : MonoBehaviour
         }
         catch (Exception ex)
         {
-            LOG.Error($"Error saving the Voice Sample of {player}: {ex.Message}");
+            LOG.Error($"Error validating or saving a Capture of {player}: {ex.Message}");
             return (verdict, null);
         }
     }

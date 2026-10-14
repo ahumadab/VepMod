@@ -95,6 +95,12 @@ public sealed class DroidDevTools : MonoBehaviour
 
     private static void RequestCapture()
     {
+        if (!SemiFunc.RunIsLevel())
+        {
+            LOG.Warning("DevTools: Captures are saved in a level only.");
+            return;
+        }
+
         LOG.Info("DevTools: Capture requested, it starts when you talk.");
         VepMod.VoiceRecorder.RequestCapture();
     }
