@@ -78,7 +78,7 @@ public sealed partial class Hallucination
         private float _nextSwitchCheck;
 
         // Walking and sprinting switch to each other at most once between two Idles.
-        private bool _isMovementSwitch;
+        private bool _enteredFromSwitch;
 
         protected abstract float MinDuration { get; }
         protected abstract float MaxDuration { get; }
@@ -93,8 +93,8 @@ public sealed partial class Hallucination
             _nextSwitchCheck = SwitchCheckInterval;
             _nextPrecomputeForward = PrecomputeForwardInterval;
 
-            _isMovementSwitch = previous is StateId.Wander or StateId.Sprint;
-            if (_isMovementSwitch)
+            _enteredFromSwitch = previous is StateId.Wander or StateId.Sprint;
+            if (_enteredFromSwitch)
             {
                 // A failed extension keeps the current destination.
                 Machine.Owner.Movement.TryExtendCurrentPath();
@@ -141,7 +141,7 @@ public sealed partial class Hallucination
                 Machine.Owner.Movement.StartPrecomputeForwardDestination();
             }
 
-            if (!_isMovementSwitch && TimeElapsed >= _nextSwitchCheck)
+            if (!_enteredFromSwitch && TimeElapsed >= _nextSwitchCheck)
             {
                 _nextSwitchCheck += SwitchCheckInterval;
                 if (Random.value < SwitchChance)

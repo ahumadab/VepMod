@@ -497,8 +497,8 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
             HallucinationVisualsClone.TryCloneFlashlight(ImitatedPlayer, cloneRig);
             HallucinationVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out var mapTool);
 
-            // PlayerAvatarRightArm and PlayerEyes live on the 'Player Visuals' GameObject, a sibling of the 'Player
-            // Avatar Controller' that holds PlayerAvatar.cs: GetComponentInChildren on the Imitated Player misses them.
+            // The arm and eye scripts live on the 'Player Visuals' GameObject, a sibling of the 'Player Avatar
+            // Controller' that holds PlayerAvatar.cs: GetComponentInChildren on the Imitated Player misses them.
             BodyPose.Initialize(_animator, Movement, ControllerTransform, ImitatedPlayer.playerAvatarVisuals,
                 cloneRig.transform, mapTool);
         }

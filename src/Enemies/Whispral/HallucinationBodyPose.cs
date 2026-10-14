@@ -23,8 +23,8 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     private const float TurningAngle = 7f; // °
 
     // From PlayerEyes.Update in the game.
-    private const float EyeClampX = 50f; // °
-    private const float EyeClampY = 30f; // °
+    private const float EyeClampCone = 50f; // °
+    private const float EyeClampYaw = 30f; // °
     private const float EyeReturnSpeed = 8f;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationBodyPose>();
@@ -55,10 +55,8 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     private ArmPose? _leftArm;
     private Vector3 _flashlightPose;
 
-    private Transform? _eyeLeft;
-    private Quaternion _eyeLeftRest;
-    private Transform? _eyeRight;
-    private Quaternion _eyeRightRest;
+    private Eye? _eyeLeft;
+    private Eye? _eyeRight;
 
     private Situation _situation = Situation.Moving;
     private Gait _gait = Gait.Still;
@@ -66,8 +64,7 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     public string DebugEyes => _eyeLeft == null || _eyeRight == null
         ? "no eyes"
-        : $"{_situation}: left {Angles(_eyeLeft)} {Quaternion.Angle(_eyeLeft.localRotation, _eyeLeftRest):F0}° from rest, " +
-          $"right {Angles(_eyeRight)} {Quaternion.Angle(_eyeRight.localRotation, _eyeRightRest):F0}° from rest";
+        : $"{_situation}: left {_eyeLeft}, right {_eyeRight}";
 
     private void Update()
     {
@@ -84,13 +81,13 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
         if (LookTarget() is { } target)
         {
-            LookAt(_eyeLeft, target);
-            LookAt(_eyeRight, target);
+            _eyeLeft.LookAt(target);
+            _eyeRight.LookAt(target);
         }
         else
         {
-            _eyeLeft.localRotation = Quaternion.Slerp(_eyeLeft.localRotation, _eyeLeftRest, EyeReturnSpeed * Time.deltaTime);
-            _eyeRight.localRotation = Quaternion.Slerp(_eyeRight.localRotation, _eyeRightRest, EyeReturnSpeed * Time.deltaTime);
+            _eyeLeft.EaseToRest();
+            _eyeRight.EaseToRest();
         }
     }
 
@@ -138,12 +135,11 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
         var eyes = source.GetComponent<PlayerEyes>();
         var eyeLeft = FindClonedBone(cloneRig, eyes != null ? eyes.eyeLeft : null, "left eye");
         var eyeRight = FindClonedBone(cloneRig, eyes != null ? eyes.eyeRight : null, "right eye");
-        if (eyeLeft != null && eyeRight != null)
+        var idleTarget = FindClonedBone(cloneRig, eyes != null ? eyes.targetIdle : null, "eye idle target");
+        if (eyeLeft != null && eyeRight != null && idleTarget != null)
         {
-            _eyeLeft = eyeLeft;
-            _eyeLeftRest = eyeLeft.localRotation;
-            _eyeRight = eyeRight;
-            _eyeRightRest = eyeRight.localRotation;
+            _eyeLeft = new Eye(eyeLeft, idleTarget);
+            _eyeRight = new Eye(eyeRight, idleTarget);
         }
     }
 
@@ -219,34 +215,6 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
         }
     }
 
-    // PlayerEyes.EyeLookAt with the same clamps, applied directly instead of through a spring.
-    private static void LookAt(Transform eye, Vector3 target)
-    {
-        var direction = target - eye.position;
-        if (direction.sqrMagnitude < 0.0001f) return;
-
-        eye.rotation = Quaternion.LookRotation(direction);
-
-        var euler = eye.localEulerAngles;
-        euler.y = ClampAngle(euler.y, EyeClampY);
-        euler.x = ClampAngle(euler.x, EyeClampX);
-        eye.localEulerAngles = euler;
-    }
-
-    private static float ClampAngle(float angle, float limit)
-    {
-        // Unity reports euler angles in [0, 360]; the clamp is symmetric around 0.
-        if (angle > limit && angle < 180f) return limit;
-        if (angle < 360f - limit && angle > 180f) return 360f - limit;
-        return angle;
-    }
-
-    private static string Angles(Transform eye)
-    {
-        var euler = eye.localEulerAngles;
-        return $"(x {Mathf.DeltaAngle(0f, euler.x):F0}°, y {Mathf.DeltaAngle(0f, euler.y):F0}°)";
-    }
-
     private Transform? FindClonedBone(Transform cloneRig, Transform? sourceBone, string part)
     {
         var bone = sourceBone != null ? HallucinationVisualsClone.FindChildByName(cloneRig, sourceBone.name) : null;
@@ -305,6 +273,49 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
             }
 
             _bone.localEulerAngles = _current;
+        }
+    }
+
+    private sealed class Eye
+    {
+        private readonly Transform _bone;
+        private readonly Transform _idleTarget;
+        private readonly Quaternion _rest;
+
+        /// <param name="idleTarget">The clone of PlayerEyes.targetIdle, whose forward the look-at cone is centred on.</param>
+        public Eye(Transform bone, Transform idleTarget)
+        {
+            _bone = bone;
+            _idleTarget = idleTarget;
+            _rest = bone.localRotation;
+        }
+
+        // PlayerEyes.EyeLookAt applied directly instead of through a spring.
+        public void LookAt(Vector3 target)
+        {
+            var direction = target - _bone.position;
+            if (direction.sqrMagnitude < 0.0001f) return;
+
+            _bone.rotation =
+                Quaternion.LookRotation(SemiFunc.ClampDirection(direction, _idleTarget.forward, EyeClampCone));
+
+            // Unity reports euler angles in [0, 360]; the clamp is symmetric around 0.
+            var euler = _bone.localEulerAngles;
+            if (euler.y > EyeClampYaw && euler.y < 180f) euler.y = EyeClampYaw;
+            else if (euler.y < 360f - EyeClampYaw && euler.y > 180f) euler.y = 360f - EyeClampYaw;
+            _bone.localEulerAngles = euler;
+        }
+
+        public void EaseToRest()
+        {
+            _bone.localRotation = Quaternion.Slerp(_bone.localRotation, _rest, EyeReturnSpeed * Time.deltaTime);
+        }
+
+        public override string ToString()
+        {
+            var euler = _bone.localEulerAngles;
+            return $"(x {Mathf.DeltaAngle(0f, euler.x):F0}°, y {Mathf.DeltaAngle(0f, euler.y):F0}°) " +
+                   $"{Quaternion.Angle(_bone.localRotation, _rest):F0}° from rest";
         }
     }
 }
