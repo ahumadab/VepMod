@@ -1,5 +1,4 @@
 using HarmonyLib;
-using UnityEngine;
 using VepMod.Enemies.Whispral;
 
 namespace VepMod.Patchs;
@@ -10,16 +9,11 @@ internal static class MaterialsImpulsePatch
 {
     [HarmonyPrefix]
     [HarmonyPatch(nameof(Materials.Impulse))]
-    private static bool Impulse_Prefix(
-        Vector3 origin,
-        bool footstep,
-        Materials.HostType hostType)
+    private static bool Impulse_Prefix(bool footstep, Materials.MaterialTrigger materialTrigger)
     {
         if (!footstep) return true;
 
-        if (hostType != Materials.HostType.LocalPlayer && hostType != Materials.HostType.OtherPlayer) return true;
-
         var imitations = PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Imitations>() : null;
-        return !imitations || !imitations!.IsNearImitatedPlayer(origin);
+        return !imitations || !imitations!.IsImitatedPlayerFootstep(materialTrigger);
     }
 }
