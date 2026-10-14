@@ -4,6 +4,8 @@ REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/A
 
 Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04/Assets/VepMod/`. Read them before deciding whether a bundle references a class, field or clip; the built bundles in `Ressources/` are compressed. A script or clip GUID resolves through the `.meta` files under `../Repo_04/Assets/`.
 
+Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components.
+
 ## In-game tests
 
 The tester confirms what the game shows; only the BepInEx logs show the state behind it (a Hallucination on the floor
