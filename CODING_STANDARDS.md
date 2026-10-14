@@ -34,8 +34,9 @@ belongs to the tooling, not here.
 
 ## Network contract
 
-- RPC method names and parameters are a wire contract: changing them breaks players on another mod version, and the PR
-  says so.
+- RPC method names and parameters are a wire contract: changing them breaks players on another mod version. The PR says
+  so, and the commit carries a `BREAKING CHANGE:` footer, the one thing that puts the break in the CHANGELOG (and
+  bumps the major version); the commit-msg hook asks for it.
 - Classes and serialized fields referenced by an asset bundle keep their names (`EnemyWhispral`, `EnemyWhispralAnim`).
 - The Master decides, every client applies, and handlers that run on every client are idempotent.
 - Hallucinations never go on the network (ADR-0002).
