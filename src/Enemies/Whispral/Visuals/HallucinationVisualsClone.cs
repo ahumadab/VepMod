@@ -297,7 +297,7 @@ internal static class HallucinationVisualsClone
         }
 
         // MapToolController.Start deactivates VisualTransform on the player, and the clone inherits it. Active, it
-        // follows the root that ShowMapTool toggles.
+        // follows the root that the body pose toggles.
         var visuals = FindChildByName(clone.transform, "Visuals");
         if (visuals != null) visuals.gameObject.SetActive(true);
 

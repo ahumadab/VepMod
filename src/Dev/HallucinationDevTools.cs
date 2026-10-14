@@ -58,7 +58,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
             else ReplayWavFolderThroughVad();
 #endif
         }
-        if (Input.GetKeyDown(SpawnKey)) SpawnAtAim();
+        if (Input.GetKeyDown(SpawnKey))
+        {
+            if (ShiftHeld()) CheckMapWithNearest();
+            else SpawnAtAim();
+        }
         if (Input.GetKeyDown(TeleportKey))
         {
             if (ShiftHeld()) StalkWithNearest();
@@ -184,6 +188,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
         LOG.Info("DevTools: the nearest Hallucination starts Stalking.");
     }
 
+    private void CheckMapWithNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to check its map.");
+            return;
+        }
+
+        _nearest.DebugCheckMap();
+        LOG.Info("DevTools: the nearest Hallucination checks its map.");
+    }
+
     private void DropNearest()
     {
         RefreshNearest();
@@ -236,6 +253,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
                      $"enabled={renderer.enabled}, visible={renderer.isVisible}, scale={renderer.transform.lossyScale}, " +
                      $"layer={LayerMask.LayerToName(renderer.gameObject.layer)}, material={material}");
         }
+
+        LOG.Info($"  Eyes: {_nearest.BodyPose.DebugEyes}");
     }
 
     private static string PathUnder(Transform root, Transform transform)
@@ -463,12 +482,13 @@ public sealed class HallucinationDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
+                 "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command without a Hallucination (Master)\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n" +
                  "Shift+F6 capture your voice now\n" +
-                 "Shift+F10 log what the nearest Hallucination renders\n";
+                 "Shift+F10 log what the nearest Hallucination renders, eyes included\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
@@ -497,7 +517,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 340), sb, style);
+        GUI.Box(new Rect(10, 10, 440, 360), sb, style);
     }
 }
 #endif
