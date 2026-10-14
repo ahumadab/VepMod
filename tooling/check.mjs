@@ -1,7 +1,8 @@
 // The one check run by the git hooks and CI (AGENTS.md).
 import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { checkedExtensions, frenchCommentLines } from "./english-comments.mjs";
+import { relative } from "node:path";
+import { avoidedWords, checkedExtensions, commentLinesMatching, french } from "./comments.mjs";
 import { touchedFiles } from "./touched-files.mjs";
 
 const [mode, scope] = process.argv.slice(2);
@@ -29,19 +30,49 @@ function checkFormat(files) {
     run("dotnet", ["format", "whitespace", "--folder", ...verify, "--include", ...files]);
 }
 
-function checkEnglishComments(files) {
-    const offenders = files.flatMap((file) =>
-        frenchCommentLines(file, readFileSync(file, "utf8")).map((line) => `${file}:${line}`),
+// With TreatWarningsAsErrors, every warning left is a rule the csproj demotes (WarningsNotAsErrors) because existing
+// code still breaks it: a touched file keeps none. A rebuild, since an up-to-date build reports no warning.
+function buildWithoutWarningsIn(files, args) {
+    const command = ["build", ...args, "--no-incremental", "-v", "q", "-clp:ErrorsOnly;WarningsOnly"];
+    console.log(`> dotnet ${command.join(" ")}`);
+    const { status, stdout } = spawnSync("dotnet", command, { encoding: "utf8" });
+    if (status !== 0) {
+        console.log(stdout);
+        process.exit(status ?? 1);
+    }
+    const touched = new Set(files);
+    const warnings = new Set(
+        stdout.split("\n").flatMap((line) => {
+            const match = line.match(/^\s*(.+?\.cs)\((\d+),\d+\): warning (\w+): (.+?)(?: \(https?:[^)]*\))? \[/);
+            const file = match && relative(process.cwd(), match[1]).replaceAll("\\", "/");
+            return file && touched.has(file) ? [`${file}:${match[2]} ${match[3]} ${match[4]}`] : [];
+        }),
     );
-    if (offenders.length === 0) return;
-    console.error(`Comments are written in English (CODING_STANDARDS.md):\n  ${offenders.join("\n  ")}`);
+    if (warnings.size === 0) return;
+    console.error(`A touched file keeps no analyzer warning:\n  ${[...warnings].join("\n  ")}`);
     process.exit(1);
 }
 
-checkFormat(touchedFiles(["*.cs"], { staged, base }));
+function checkComments(files, pattern, rule) {
+    const offenders = files.flatMap((file) =>
+        commentLinesMatching(pattern, file, readFileSync(file, "utf8")).map((line) => `${file}:${line}`),
+    );
+    if (offenders.length === 0) return;
+    console.error(`${rule}:\n  ${offenders.join("\n  ")}`);
+    process.exit(1);
+}
+
+const touchedCode = touchedFiles(["*.cs"], { staged, base });
+checkFormat(touchedCode);
 if (mode === "format" || mode === "fix") process.exit(0);
 
-checkEnglishComments(touchedFiles(checkedExtensions.map((extension) => `*${extension}`), { staged, base }));
+const commentedFiles = touchedFiles(checkedExtensions.map((extension) => `*${extension}`), { staged, base });
+checkComments(commentedFiles, french, "Comments are written in English (CODING_STANDARDS.md)");
+checkComments(
+    commentedFiles,
+    avoidedWords(readFileSync("GLOSSARY.md", "utf8")),
+    "Comments use the GLOSSARY.md terms, not the words it lists under Avoid",
+);
 run("node", ["--test", "tooling/**/*.test.mjs"]);
 run(
     "dotnet",
@@ -51,7 +82,7 @@ run(
 // NoVad first, so bin/ is left with the default plugin. The copy into a game profile is a developer-machine step.
 for (const noVad of ["true", "false"]) {
     const variant = [`-p:VepModNoVad=${noVad}`, "-p:CopyFilesToPluginOutputDirectoryOnBuild=false"];
-    run("dotnet", ["build", "VepMod.csproj", "-c", "Debug", ...variant, ...quiet]);
+    buildWithoutWarningsIn(touchedCode, ["VepMod.csproj", "-c", "Debug", ...variant]);
 }
 for (const project of readdirSync("tests", { recursive: true }).filter((path) => path.endsWith(".csproj"))) {
     run("dotnet", ["test", `tests/${project}`, "-v", "q"]);
