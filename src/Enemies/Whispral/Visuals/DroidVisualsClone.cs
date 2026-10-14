@@ -86,29 +86,29 @@ internal static class DroidVisualsClone
     }
 
     public static bool TryCloneRig(
-        PlayerAvatar sourcePlayer,
+        PlayerAvatar imitatedPlayer,
         Transform cube,
         out GameObject? cloneRig)
     {
         cloneRig = null;
 
-        if (sourcePlayer == null || cube == null)
+        if (imitatedPlayer == null || cube == null)
         {
-            LOG.Warning("TryCloneRig: sourcePlayer or cube is null");
+            LOG.Warning("TryCloneRig: imitatedPlayer or cube is null");
             return false;
         }
 
-        var visuals = sourcePlayer.playerAvatarVisuals;
+        var visuals = imitatedPlayer.playerAvatarVisuals;
         if (visuals == null)
         {
-            LOG.Warning($"TryCloneRig: sourcePlayer {sourcePlayer.playerName} has no playerAvatarVisuals");
+            LOG.Warning($"TryCloneRig: imitatedPlayer {imitatedPlayer.playerName} has no playerAvatarVisuals");
             return false;
         }
 
         var sourceRig = visuals.transform.Find(RigName);
         if (sourceRig == null)
         {
-            LOG.Warning($"TryCloneRig: source [RIG] not found under {sourcePlayer.playerName}.playerAvatarVisuals");
+            LOG.Warning($"TryCloneRig: source [RIG] not found under {imitatedPlayer.playerName}.playerAvatarVisuals");
             return false;
         }
 
@@ -124,18 +124,18 @@ internal static class DroidVisualsClone
         _springTypeCache = springTypes;
 
         Sanitize(clone);
-        ApplyColors(clone, sourcePlayer);
+        ApplyColors(clone, imitatedPlayer);
         NormalizeRendering(clone);
         ForceStandingPose(clone);
 
         cloneRig = clone;
 
         var rendererCount = clone.GetComponentsInChildren<Renderer>(true).Length;
-        LOG.Debug($"Cloned [RIG] from {sourcePlayer.playerName}: cubePos={cube.position}, " +
+        LOG.Debug($"Cloned [RIG] from {imitatedPlayer.playerName}: cubePos={cube.position}, " +
                   $"rigLocalPos={clone.transform.localPosition}, " +
                   $"cubeLossy={cube.lossyScale}, " +
                   $"rigLossy={clone.transform.lossyScale}, " +
-                  $"renderers={rendererCount}, isLocal={sourcePlayer.isLocal}");
+                  $"renderers={rendererCount}, isLocal={imitatedPlayer.isLocal}");
 
         return true;
     }
@@ -146,15 +146,15 @@ internal static class DroidVisualsClone
     ///     player's first-person target, outside the Hallucination. Mesh, spotlight and halo are forced on, and the
     ///     layer becomes "PlayerVisuals": on "Triggers" the game keeps a non-local flashlight invisible.
     /// </summary>
-    public static bool TryCloneFlashlight(PlayerAvatar sourcePlayer, GameObject cloneRig)
+    public static bool TryCloneFlashlight(PlayerAvatar imitatedPlayer, GameObject cloneRig)
     {
-        if (sourcePlayer == null || cloneRig == null) return false;
+        if (imitatedPlayer == null || cloneRig == null) return false;
 
-        var sourceController = sourcePlayer.flashlightController;
-        if (sourceController == null) sourceController = sourcePlayer.GetComponentInChildren<FlashlightController>(true);
+        var sourceController = imitatedPlayer.flashlightController;
+        if (sourceController == null) sourceController = imitatedPlayer.GetComponentInChildren<FlashlightController>(true);
         if (sourceController == null)
         {
-            LOG.Warning($"TryCloneFlashlight: no FlashlightController on {sourcePlayer.playerName}");
+            LOG.Warning($"TryCloneFlashlight: no FlashlightController on {imitatedPlayer.playerName}");
             return false;
         }
 
@@ -240,17 +240,17 @@ internal static class DroidVisualsClone
     ///     (under Player Spring Impulse - Arm Right) of the cloned rig. Returned inactive: the caller activates it
     ///     when the Hallucination enters CheckMap.
     /// </summary>
-    public static bool TryCloneMapTool(PlayerAvatar sourcePlayer, GameObject cloneRig, out GameObject? clonedMapTool)
+    public static bool TryCloneMapTool(PlayerAvatar imitatedPlayer, GameObject cloneRig, out GameObject? clonedMapTool)
     {
         clonedMapTool = null;
-        if (sourcePlayer == null || cloneRig == null) return false;
+        if (imitatedPlayer == null || cloneRig == null) return false;
 
         // PlayerAvatar sits on 'Player Avatar Controller', a child of the prefab root, and 'Map Tool' is its sibling:
         // GetComponentInChildren cannot reach it, the search starts from transform.root.
-        var sourceMapToolTransform = sourcePlayer.transform.root.Find("Map Tool");
+        var sourceMapToolTransform = imitatedPlayer.transform.root.Find("Map Tool");
         if (sourceMapToolTransform == null)
         {
-            LOG.Warning($"TryCloneMapTool: 'Map Tool' not found under root of {sourcePlayer.playerName}");
+            LOG.Warning($"TryCloneMapTool: 'Map Tool' not found under root of {imitatedPlayer.playerName}");
             return false;
         }
 
@@ -379,9 +379,9 @@ internal static class DroidVisualsClone
         return false;
     }
 
-    private static void ApplyColors(GameObject clone, PlayerAvatar sourcePlayer)
+    private static void ApplyColors(GameObject clone, PlayerAvatar imitatedPlayer)
     {
-        var cosmetics = sourcePlayer.playerCosmetics;
+        var cosmetics = imitatedPlayer.playerCosmetics;
         if (cosmetics == null || cosmetics.colorsEquipped == null) return;
         if (MetaManager.instance == null || MetaManager.instance.colors == null) return;
 

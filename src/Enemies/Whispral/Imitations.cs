@@ -28,6 +28,9 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     private Coroutine? _spawning;
     private PlayerAvatar _victim = null!;
 
+    /// <summary>The local player's: null while they are not a Victim.</summary>
+    public static Imitations? Local => PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Imitations>() : null;
+
     private void Awake()
     {
         _victim = GetComponent<PlayerAvatar>();
@@ -116,17 +119,12 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         _imitations.Remove(leavingPlayer);
     }
 
-    public DroidController? FindHallucination(string imitatedPlayerName)
+    /// <returns>Null before the Hallucination has spawned, or for a player who is not imitated.</returns>
+    public DroidController? FindHallucination(PlayerAvatar imitatedPlayer)
     {
-        foreach (var (imitatedPlayer, imitation) in _imitations)
-        {
-            if (imitatedPlayer && imitation.Hallucination && imitatedPlayer.playerName == imitatedPlayerName)
-            {
-                return imitation.Hallucination;
-            }
-        }
-
-        return null;
+        return _imitations.TryGetValue(imitatedPlayer, out var imitation) && imitation.Hallucination
+            ? imitation.Hallucination
+            : null;
     }
 
     public bool IsImitatedPlayer(PlayerAvatar player)

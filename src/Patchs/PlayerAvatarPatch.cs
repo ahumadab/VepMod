@@ -18,19 +18,7 @@ internal class PlayerAvatarPatch
             return;
         }
 
-        var mimics = __instance.gameObject.AddComponent<WhispralMimics>();
         __instance.gameObject.AddComponent<VoiceSampleSharing>();
-        LOG.Debug($"Mimics and Voice Sample sharing added to PlayerAvatar: {__instance.name}");
-
-        var photonView = __instance.GetComponent<PhotonView>();
-        if (!photonView || !photonView.IsMine)
-        {
-            LOG.Warning("PhotonView is null or not owned by local player.");
-            return;
-        }
-
-        VepFinder.EnsureInitialized();
-        VepFinder.LocalMimics = mimics;
-        LOG.Info($"Set LocalMimics for local PlayerAvatar: {__instance.name}");
+        LOG.Debug($"Voice Sample sharing added to PlayerAvatar: {__instance.name}");
     }
 }

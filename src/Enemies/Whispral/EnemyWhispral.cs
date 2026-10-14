@@ -3,7 +3,6 @@ using Photon.Pun;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
-using VepMod.Patchs;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
 using Random = UnityEngine.Random;
@@ -266,6 +265,38 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             haunting.Detach(whispralViewID);
         }
+    }
+
+    /// <summary>Master only.</summary>
+    internal void SendMimicCommand(PlayerAvatar victim, PlayerAvatar imitatedPlayer, bool voiceFilter)
+    {
+        LOG.Debug($"Mimic command: Victim={victim.playerName}, Imitated Player={imitatedPlayer.playerName}, " +
+                  $"voice filter={voiceFilter}");
+        _photonView.RPC(nameof(MimicRPC), victim.photonView.Owner, imitatedPlayer.photonView.ViewID, voiceFilter);
+    }
+
+    // Sent to the Victim's client only.
+    [PunRPC]
+    private void MimicRPC(int imitatedPlayerViewID, bool voiceFilter, PhotonMessageInfo _info = default)
+    {
+        if (!SemiFunc.MasterOnlyRPC(_info))
+        {
+            return;
+        }
+
+        var imitatedPlayer = SemiFunc.PlayerAvatarGetFromPhotonID(imitatedPlayerViewID);
+        var imitations = Imitations.Local;
+        var hallucination = imitatedPlayer && imitations ? imitations!.FindHallucination(imitatedPlayer) : null;
+        if (!hallucination)
+        {
+            var name = imitatedPlayer ? imitatedPlayer.playerName : $"ViewID {imitatedPlayerViewID}";
+            LOG.Debug($"Mimic command for {name}: no Hallucination, nothing plays.");
+            return;
+        }
+
+        LOG.Debug($"Mimic command for {imitatedPlayer.playerName}: Hallucination {hallucination!.GetInstanceID()}, " +
+                  $"voice filter={voiceFilter}.");
+        hallucination.PlayMimic(voiceFilter);
     }
 
     private void ReportAttachment(int victimViewID, bool attached)
@@ -723,37 +754,21 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var victim = Whispral.playerTarget;
             if (victim == null) return;
 
-            var localMimics = VepFinder.LocalMimics;
-            if (!localMimics)
+            var imitatedPlayer = ChooseRandomImitatedPlayer(victim);
+            if (imitatedPlayer == null)
             {
-                LOG.Warning("LocalMimics not found, cannot send voice command.");
+                LOG.Debug($"No Imitated Player for a Mimic command to {victim.playerName}.");
                 return;
             }
 
-            var imitatedPlayerNickName = ChooseRandomImitatedPlayer(victim);
-            if (imitatedPlayerNickName == null)
-            {
-                LOG.Warning("No Imitated Player available for voice command.");
-                return;
-            }
-
-            var applyFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
-
-            LOG.Debug(
-                $"Sending voice command: Victim={victim.photonView.Owner.NickName}, Imitated Player={imitatedPlayerNickName}, filter={applyFilter}");
-            localMimics.SendPlayVoiceCommand(victim.photonView.ViewID, imitatedPlayerNickName, applyFilter);
+            var voiceFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
+            Whispral.SendMimicCommand(victim, imitatedPlayer, voiceFilter);
         }
 
-        private static string? ChooseRandomImitatedPlayer(PlayerAvatar victim)
+        private static PlayerAvatar? ChooseRandomImitatedPlayer(PlayerAvatar victim)
         {
-            var victimNickName = victim.photonView.Owner?.NickName;
-
-            var players = PhotonNetwork.PlayerList
-                .Where(p => !string.IsNullOrEmpty(p.NickName) && p.NickName != victimNickName)
-                .ToList();
-
-            if (players.Count == 0) return null;
-            return players[Random.Range(0, players.Count)].NickName;
+            var players = SemiFunc.PlayerGetList().Where(p => p && p != victim).ToList();
+            return players.Count == 0 ? null : players[Random.Range(0, players.Count)];
         }
 
         private void CheckDetachState()

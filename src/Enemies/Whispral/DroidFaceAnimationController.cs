@@ -209,7 +209,7 @@ public sealed class DroidFaceAnimationController : MonoBehaviour
         if (_talkingAudioSource == null && _controllerTransform != null)
         {
             // Follows one Mimic at a time: the first emitter still under the Hallucination.
-            var emitter = _controllerTransform.Find(WhispralMimics.MimicEmitterName);
+            var emitter = _controllerTransform.Find(DroidController.MimicEmitterName);
             if (emitter != null) _talkingAudioSource = emitter.GetComponent<AudioSource>();
         }
 
