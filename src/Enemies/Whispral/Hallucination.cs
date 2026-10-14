@@ -85,14 +85,12 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public PlayerAvatar ImitatedPlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
     internal HallucinationMovement Movement { get; private set; }
+    internal HallucinationGaze Gaze { get; private set; }
 
-    public bool IsPlayerLookingAtMe => _face.IsPlayerLookingAtMe;
+    public bool IsStalkingBeforeFlee => Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare;
 
-    public bool IsStalking =>
-        Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
-
-    public bool IsInMovementState =>
-        Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint || IsStalking;
+    public bool IsInMovementState => IsStalkingBeforeFlee ||
+                                     Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint or StateId.StalkFlee;
 
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
@@ -126,6 +124,14 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         LOG.Debug($"ShowMapTool({visible}) - clone={(_mapToolClone != null ? "ok" : "NULL")}");
         if (_mapToolClone != null) _mapToolClone.SetActive(visible);
         WantsGrabbing = visible;
+    }
+
+    /// <summary>
+    ///     Dev tools only.
+    /// </summary>
+    public void DebugStartStalking()
+    {
+        Fsm.NextStateStateId = StateId.StalkApproach;
     }
 
     /// <summary>
@@ -176,6 +182,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         SetupNavigation();
         SetupMovementController();
         SetupClonedVisuals();
+        SetupGaze();
         SetupAnimationController();
         SetupNameplate();
         InitializeFsm();
@@ -195,6 +202,16 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private void HandleNavMeshError()
     {
         Fsm.NextStateStateId = StateId.Idle;
+    }
+
+    private void SetupGaze()
+    {
+        Gaze = new HallucinationGaze(
+            transform,
+            ControllerTransform,
+            HallucinationVisualsClone.FindChildByName(transform, "code_head_top"),
+            HallucinationVisualsClone.FindChildByName(transform, "code_body_top_up"),
+            ImitatedPlayer.playerName);
     }
 
     private void SetupAnimationController()
@@ -279,6 +296,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private void LateUpdate()
     {
+        Gaze.Update();
         _nameplateController.UpdateNameplate();
         _face.UpdateAnimations();
     }
@@ -319,7 +337,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private void SetupNameplate()
     {
         _nameplateController = gameObject.AddComponent<HallucinationNameplate>();
-        _nameplateController.Initialize(ControllerTransform, ImitatedPlayer);
+        _nameplateController.Initialize(ControllerTransform, ImitatedPlayer, Gaze);
     }
 
     private void InitializeFsm()

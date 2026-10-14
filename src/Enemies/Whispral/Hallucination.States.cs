@@ -342,8 +342,7 @@ public sealed partial class Hallucination
         private const float MaxStareTime = 30f;
         private const float DestinationUpdateInterval = 0.5f;
 
-        private float _fleeCountdown;
-        private bool _hasBeenSeen;
+        private float? _gazeLandedAt;
         private float _nextDestinationUpdate;
 
         public override void OnStateEnter(StateId previous)
@@ -351,8 +350,7 @@ public sealed partial class Hallucination
             base.OnStateEnter(previous);
             LOG.Debug("=== STALK: Staring at player ===");
 
-            _hasBeenSeen = false;
-            _fleeCountdown = StalkStareBeforeFlee;
+            _gazeLandedAt = null;
             _nextDestinationUpdate = 0f;
 
             Machine.Owner.IsWalking = true;
@@ -367,23 +365,23 @@ public sealed partial class Hallucination
             Machine.Owner.Movement.LookAtPlayer();
 
             var distance = Machine.Owner.Movement.GetDistanceToPlayer();
-            var isPlayerLooking = Machine.Owner.IsPlayerLookingAtMe;
 
-            if (isPlayerLooking && !_hasBeenSeen)
+            if (Machine.Owner.Gaze.IsOn && _gazeLandedAt == null)
             {
-                _hasBeenSeen = true;
-                LOG.Debug("=== STALK: Player sees me! Maintaining eye contact... ===");
+                _gazeLandedAt = TimeElapsed;
+                LOG.Debug($"=== STALK: Gaze landed, fleeing in {StalkStareBeforeFlee}s ===");
 
                 Machine.Owner.IsWalking = false;
                 Machine.Owner.Movement.ResetPath();
             }
 
-            if (_hasBeenSeen)
+            if (_gazeLandedAt is { } landedAt)
             {
-                _fleeCountdown -= Time.deltaTime;
-                if (_fleeCountdown <= 0f)
+                var sinceGaze = TimeElapsed - landedAt;
+                if (sinceGaze >= StalkStareBeforeFlee)
                 {
-                    LOG.Debug("=== STALK: Eye contact over, fleeing! ===");
+                    LOG.Debug($"=== STALK: Fleeing {sinceGaze:F2}s after the Gaze landed, Gaze now " +
+                              $"{(Machine.Owner.Gaze.IsOn ? "on" : "off")} ===");
                     Machine.NextStateStateId = StateId.StalkFlee;
                     return;
                 }

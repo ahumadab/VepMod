@@ -1,26 +1,22 @@
 using UnityEngine;
+using VepMod.VepFramework;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     A Hallucination's face: angry eyelids, talking animation, and the Victim's Gaze.
+///     A Hallucination's face: angry eyelids and talking animation.
 /// </summary>
 public sealed class HallucinationFace : MonoBehaviour
 {
-    // Detection settings
-    private const float LookAtAngle = 50f;
-    private const float LookAtMaxDistance = 30f;
-    private const float AngryEyesCooldown = 0.3f;
-
     // Talking animation
     private const float TalkRotationMaxAngle = 25f;
     private const int SampleDataLength = 256;
-    private const float StalkStareBeforeFlee = Hallucination.StalkStareBeforeFlee / 0.66f;
 
-    // Angry eyes state
-    private float _angryTimer;
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationFace>();
+
+    private readonly AngryEyes _angryEyes = new();
     private Transform _controllerTransform;
     private Hallucination _hallucination;
     private GameObject? _eyelidsLeft;
@@ -28,7 +24,7 @@ public sealed class HallucinationFace : MonoBehaviour
 
     // Talking animation
     private Transform? _headTopTransform;
-    private bool _isAngry;
+    private bool _wasAngry;
     private Transform? _leftLowerEyelidRotationX;
     private Transform? _leftUpperEyelidRotationX;
     private Transform? _leftUpperEyelidRotationZ;
@@ -37,9 +33,6 @@ public sealed class HallucinationFace : MonoBehaviour
     private Transform? _rightUpperEyelidRotationZ;
     private float[]? _sampleData;
     private AudioSource? _talkingAudioSource;
-    private bool _wasPlayerLooking;
-
-    public bool IsPlayerLookingAtMe { get; private set; }
 
     public void Initialize(Hallucination hallucination)
     {
@@ -80,7 +73,6 @@ public sealed class HallucinationFace : MonoBehaviour
     /// </summary>
     public void UpdateAnimations()
     {
-        UpdatePlayerLookDetection();
         UpdateAngryEyes();
         UpdateTalkingAnimation();
     }
@@ -90,36 +82,25 @@ public sealed class HallucinationFace : MonoBehaviour
         if (_eyelidsLeft == null || _eyelidsRight == null) return;
         if (_leftUpperEyelidRotationX == null || _rightUpperEyelidRotationX == null) return;
 
-        if (IsPlayerLookingAtMe && !_wasPlayerLooking)
+        _angryEyes.Update(_hallucination.Gaze.IsOn, _hallucination.IsStalkingBeforeFlee, Time.deltaTime);
+        var isAngry = _angryEyes.IsAngry;
+        if (isAngry != _wasAngry)
         {
-            _angryTimer = _hallucination.IsStalking ? StalkStareBeforeFlee : AngryEyesCooldown;
+            LOG.Debug($"Angry eyes {(isAngry ? "on" : "off")}: Hallucination of {_hallucination.ImitatedPlayer.playerName} " +
+                      $"in {_hallucination.DebugStateName}");
+            _wasAngry = isAngry;
         }
 
-        _wasPlayerLooking = IsPlayerLookingAtMe;
-
-        if (IsPlayerLookingAtMe)
-        {
-            _angryTimer -= Time.deltaTime;
-            if (_angryTimer <= 0f)
-            {
-                _isAngry = false;
-            }
-        }
-        else
-        {
-            _isAngry = true;
-        }
-
-        if (_isAngry && !_eyelidsLeft.activeSelf)
+        if (isAngry && !_eyelidsLeft.activeSelf)
         {
             _eyelidsLeft.SetActive(true);
             _eyelidsRight.SetActive(true);
         }
 
-        var targetUpperClosed = _isAngry ? AngryExpression.UpperLidClosed : 0f;
-        var targetLowerClosed = _isAngry ? AngryExpression.LowerLidClosed : 0f;
-        var targetLeftAngle = _isAngry ? AngryExpression.UpperLidAngleLeft : 0f;
-        var targetRightAngle = _isAngry ? AngryExpression.UpperLidAngleRight : 0f;
+        var targetUpperClosed = isAngry ? AngryExpression.UpperLidClosed : 0f;
+        var targetLowerClosed = isAngry ? AngryExpression.LowerLidClosed : 0f;
+        var targetLeftAngle = isAngry ? AngryExpression.UpperLidAngleLeft : 0f;
+        var targetRightAngle = isAngry ? AngryExpression.UpperLidAngleRight : 0f;
 
         var lerpSpeed = Time.deltaTime * 8f;
 
@@ -165,7 +146,7 @@ public sealed class HallucinationFace : MonoBehaviour
                 lerpSpeed);
         }
 
-        if (!_isAngry && _eyelidsLeft.activeSelf)
+        if (!isAngry && _eyelidsLeft.activeSelf)
         {
             var currentAngle = Mathf.Abs(_leftUpperEyelidRotationX.localEulerAngles.x);
             if (currentAngle is < 10f or > 350f)
@@ -174,32 +155,6 @@ public sealed class HallucinationFace : MonoBehaviour
                 _eyelidsRight.SetActive(false);
             }
         }
-    }
-
-    private void UpdatePlayerLookDetection()
-    {
-        var camera = Camera.main;
-        if (camera == null || _controllerTransform == null)
-        {
-            IsPlayerLookingAtMe = false;
-            return;
-        }
-
-        var hallucinationPosition = _controllerTransform.position + Vector3.up;
-        var cameraPosition = camera.transform.position;
-
-        var distance = Vector3.Distance(cameraPosition, hallucinationPosition);
-        if (distance > LookAtMaxDistance)
-        {
-            IsPlayerLookingAtMe = false;
-            return;
-        }
-
-        var directionToHallucination = (hallucinationPosition - cameraPosition).normalized;
-        var dot = Vector3.Dot(camera.transform.forward, directionToHallucination);
-        var threshold = Mathf.Cos(LookAtAngle * Mathf.Deg2Rad);
-
-        IsPlayerLookingAtMe = dot >= threshold;
     }
 
     private void UpdateTalkingAnimation()

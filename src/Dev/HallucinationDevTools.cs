@@ -59,7 +59,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
 #endif
         }
         if (Input.GetKeyDown(SpawnKey)) SpawnAtAim();
-        if (Input.GetKeyDown(TeleportKey)) TeleportNearestToAim();
+        if (Input.GetKeyDown(TeleportKey))
+        {
+            if (ShiftHeld()) StalkWithNearest();
+            else TeleportNearestToAim();
+        }
         if (Input.GetKeyDown(DropKey))
         {
             if (ShiftHeld()) MimicNearest();
@@ -161,6 +165,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         _nearest.DebugTeleport(target);
         LOG.Info($"DevTools: teleported the Hallucination to {target}.");
+    }
+
+    private void StalkWithNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to start Stalking.");
+            return;
+        }
+
+        _nearest.DebugStartStalking();
+        LOG.Info("DevTools: the nearest Hallucination starts Stalking.");
     }
 
     private void DropNearest()
@@ -407,6 +424,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
+                 "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command without a Hallucination (Master)\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
@@ -421,6 +439,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             var m = _nearest.Movement;
             sb += $"\nNearest Hallucination:\n" +
                   $"  State      : {_nearest.DebugStateName}\n" +
+                  $"  Gaze       : {(_nearest.Gaze.IsOn ? "on" : "off")}\n" +
                   $"  Grounded   : {m.DebugIsGrounded}\n" +
                   $"  Falling    : {m.IsFalling}\n" +
                   $"  VertVel    : {m.DebugVerticalVelocity:F2} m/s\n" +
@@ -439,7 +458,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 300), sb, style);
+        GUI.Box(new Rect(10, 10, 440, 340), sb, style);
     }
 }
 #endif
