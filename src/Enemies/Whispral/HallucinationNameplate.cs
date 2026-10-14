@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace VepMod.Enemies.Whispral;
 
-public sealed class DroidNameplate : MonoBehaviour
+public sealed class HallucinationNameplate : MonoBehaviour
 {
     private const float NameplateHeight = 1.9f;
     private const float MaxVisibleDistance = 8f;

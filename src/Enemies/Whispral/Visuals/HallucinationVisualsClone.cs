@@ -12,7 +12,7 @@ namespace VepMod.Enemies.Whispral.Visuals;
 ///     PlayerAvatarRightArm…) are removed, and its [RIG] child is replaced by the cloned player's, which brings
 ///     the bones, cosmetic parents and already instantiated cosmetic items.
 /// </summary>
-internal static class DroidVisualsClone
+internal static class HallucinationVisualsClone
 {
     private const string RigName = "[RIG]";
 
@@ -22,7 +22,7 @@ internal static class DroidVisualsClone
     private const string FlashlightAnchorName = "Flashlight Target Client";
     private const string MapToolAnchorName = "Map Tool Target Client";
 
-    private static readonly VepLogger LOG = VepLogger.Create(nameof(DroidVisualsClone), true);
+    private static readonly VepLogger LOG = VepLogger.Create(nameof(HallucinationVisualsClone), true);
 
     private static readonly HashSet<string> KeepTypeNames = new()
     {
@@ -44,18 +44,22 @@ internal static class DroidVisualsClone
     /// <summary>
     ///     MyDroid/Enable/Cube, which holds the Animator and the [RIG].
     /// </summary>
-    public static Transform? FindCube(Transform droidRoot)
+    public static Transform? FindCube(Transform root)
     {
-        var cube = droidRoot.Find("Enable/Cube");
-        if (cube == null) cube = droidRoot.Find("Cube");
-        if (cube != null) return cube;
+        var cube = FindChildByName(root, "Cube");
+        if (cube == null) LOG.Warning("FindCube: Cube transform not found under the Hallucination root");
+        return cube;
+    }
 
-        foreach (var child in droidRoot.GetComponentsInChildren<Transform>(true))
+    public static Transform? FindChildByName(Transform? root, string name)
+    {
+        if (root == null) return null;
+
+        foreach (var child in root.GetComponentsInChildren<Transform>(true))
         {
-            if (child != null && child.name == "Cube") return child;
+            if (child.name == name) return child;
         }
 
-        LOG.Warning("FindCube: Cube transform not found under the Hallucination root");
         return null;
     }
 
@@ -158,7 +162,7 @@ internal static class DroidVisualsClone
             return false;
         }
 
-        var anchor = DroidHelpers.FindChildByName(cloneRig.transform, FlashlightAnchorName);
+        var anchor = FindChildByName(cloneRig.transform, FlashlightAnchorName);
         if (anchor == null)
         {
             LOG.Warning($"TryCloneFlashlight: anchor '{FlashlightAnchorName}' not found in clone rig " +
@@ -227,7 +231,7 @@ internal static class DroidVisualsClone
     {
         foreach (var (name, pos) in FlashlightNeutralNodes)
         {
-            var node = DroidHelpers.FindChildByName(clone.transform, name);
+            var node = FindChildByName(clone.transform, name);
             if (node == null) continue;
             node.localPosition = pos;
             node.localRotation = Quaternion.identity;
@@ -254,7 +258,7 @@ internal static class DroidVisualsClone
             return false;
         }
 
-        var anchor = DroidHelpers.FindChildByName(cloneRig.transform, MapToolAnchorName);
+        var anchor = FindChildByName(cloneRig.transform, MapToolAnchorName);
         if (anchor == null)
         {
             LOG.Warning($"TryCloneMapTool: anchor '{MapToolAnchorName}' not found in clone rig " +
@@ -289,12 +293,12 @@ internal static class DroidVisualsClone
 
         // MapToolController.Start deactivates VisualTransform on the player, and the clone inherits it. Active, it
         // follows the root that ShowMapTool toggles.
-        var visuals = DroidHelpers.FindChildByName(clone.transform, "Visuals");
+        var visuals = FindChildByName(clone.transform, "Visuals");
         if (visuals != null) visuals.gameObject.SetActive(true);
 
         // The controller turns the 'Hide' pivot 90° on X when hidden (HideLerp = 1). With no controller on the clone,
         // identity is the held-out pose.
-        var hide = DroidHelpers.FindChildByName(clone.transform, "Hide");
+        var hide = FindChildByName(clone.transform, "Hide");
         if (hide != null)
         {
             hide.localRotation = Quaternion.identity;
@@ -317,11 +321,11 @@ internal static class DroidVisualsClone
         return true;
     }
 
-    public static void AttachRelay(Animator animator, DroidController droid, GameObject cloneRig)
+    public static void AttachRelay(Animator animator, Hallucination hallucination, GameObject cloneRig)
     {
         if (animator == null) return;
-        var relay = animator.gameObject.AddComponent<DroidAvatarVisualsRelay>();
-        relay.Initialize(droid, cloneRig, _springTypeCache ?? new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>());
+        var relay = animator.gameObject.AddComponent<HallucinationVisualsRelay>();
+        relay.Initialize(hallucination, cloneRig, _springTypeCache ?? new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>());
         _springTypeCache = null;
     }
 

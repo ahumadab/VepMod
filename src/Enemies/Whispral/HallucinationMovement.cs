@@ -9,7 +9,7 @@ using VepMod.VepFramework;
 
 namespace VepMod.Enemies.Whispral;
 
-public sealed class DroidMovementController : MonoBehaviour
+public sealed class HallucinationMovement : MonoBehaviour
 {
     private const float RotationSpeed = 10f;
     private const float VisualYOffset = 0.25f;
@@ -20,7 +20,7 @@ public sealed class DroidMovementController : MonoBehaviour
     private const float MaxFallSpeed = 55f; // m/s, anti-tunnelling clamp, never reached in a level
     private const float FallAnimDelay = 0.12f; // s airborne before the fall animation starts
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidMovementController>();
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationMovement>();
 
     private CharacterController _charController;
     private Transform _controllerTransform;
@@ -56,13 +56,15 @@ public sealed class DroidMovementController : MonoBehaviour
 
     public bool DebugIsGrounded => _charController != null && _charController.isGrounded;
 
+    internal bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
+
     public event Action? OnNavMeshError;
 
     public float GetDistanceToPlayer()
     {
-        var playerPos = DroidHelpers.GetLocalPlayerPosition();
-        if (!playerPos.HasValue || _controllerTransform == null) return float.MaxValue;
-        return Vector3.Distance(_controllerTransform.position, playerPos.Value);
+        var player = PlayerAvatar.instance;
+        if (player == null || _controllerTransform == null) return float.MaxValue;
+        return Vector3.Distance(_controllerTransform.position, player.transform.position);
     }
 
     public bool HasReachedDestination()
@@ -77,7 +79,7 @@ public sealed class DroidMovementController : MonoBehaviour
 
     public void Initialize(
         Transform controllerTransform,
-        Transform rigidbodyTransform,
+        Transform? rigidbodyTransform,
         NavMeshAgent navAgent,
         CharacterController charController,
         int areaMask)
@@ -104,7 +106,7 @@ public sealed class DroidMovementController : MonoBehaviour
 
     public void ResetPath()
     {
-        if (DroidHelpers.IsNavAgentValid(_navAgent))
+        if (IsOnNavMesh)
         {
             _navAgent.ResetPath();
         }
@@ -179,7 +181,7 @@ public sealed class DroidMovementController : MonoBehaviour
     public bool TrySetDestinationToPlayer()
     {
         var player = PlayerAvatar.instance;
-        if (player == null || !DroidHelpers.IsNavAgentValid(_navAgent)) return false;
+        if (player == null || !IsOnNavMesh) return false;
 
         var playerPos = player.transform.position;
         if (!NavMesh.SamplePosition(playerPos, out var hit, 5f, _savedAreaMask)) return false;
@@ -205,7 +207,7 @@ public sealed class DroidMovementController : MonoBehaviour
 
         if (!NavMesh.SamplePosition(fleeTarget, out var hit, 10f, _savedAreaMask)) return false;
 
-        if (!DroidHelpers.IsNavAgentValid(_navAgent)) return false;
+        if (!IsOnNavMesh) return false;
 
         var path = new NavMeshPath();
         if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
@@ -243,7 +245,7 @@ public sealed class DroidMovementController : MonoBehaviour
 
     private bool TryExtendCurrentPathSync(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
     {
-        if (_controllerTransform == null || !DroidHelpers.IsNavAgentValid(_navAgent))
+        if (_controllerTransform == null || !IsOnNavMesh)
         {
             LOG.Debug("TryExtendCurrentPathSync: Invalid controller or NavAgent");
             return false;
@@ -295,7 +297,7 @@ public sealed class DroidMovementController : MonoBehaviour
     {
         _precomputedForwardDestination = null;
 
-        if (!DroidHelpers.IsNavAgentValid(_navAgent)) return false;
+        if (!IsOnNavMesh) return false;
 
         var path = new NavMeshPath();
         if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
@@ -371,8 +373,8 @@ public sealed class DroidMovementController : MonoBehaviour
         _isPrecomputingDestination = true;
 
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
-        var levelPoint = SemiFunc.LevelPointGet(controllerPos, DroidController.SpawnDistanceMin,
-                             DroidController.SpawnDistanceMax);
+        var levelPoint = SemiFunc.LevelPointGet(controllerPos, Hallucination.SpawnDistanceMin,
+                             Hallucination.SpawnDistanceMax);
         if (levelPoint == null) levelPoint = SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null)
@@ -399,7 +401,7 @@ public sealed class DroidMovementController : MonoBehaviour
         }
 
         var path = new NavMeshPath();
-        if (DroidHelpers.IsNavAgentValid(_navAgent) &&
+        if (IsOnNavMesh &&
             _navAgent.CalculatePath(hit.position, path) &&
             path.status == NavMeshPathStatus.PathComplete)
         {
@@ -413,7 +415,7 @@ public sealed class DroidMovementController : MonoBehaviour
     {
         _precomputedDestination = null;
 
-        if (!DroidHelpers.IsNavAgentValid(_navAgent)) return false;
+        if (!IsOnNavMesh) return false;
 
         var path = new NavMeshPath();
         if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
@@ -430,8 +432,8 @@ public sealed class DroidMovementController : MonoBehaviour
     {
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
 
-        var levelPoint = SemiFunc.LevelPointGet(controllerPos, DroidController.SpawnDistanceMin,
-                             DroidController.SpawnDistanceMax);
+        var levelPoint = SemiFunc.LevelPointGet(controllerPos, Hallucination.SpawnDistanceMin,
+                             Hallucination.SpawnDistanceMax);
         if (levelPoint == null) levelPoint = SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null) return false;
@@ -465,7 +467,7 @@ public sealed class DroidMovementController : MonoBehaviour
         _isPrecomputingForward = true;
         LOG.Debug("PrecomputeForward: Starting coroutine");
 
-        if (_controllerTransform == null || !DroidHelpers.IsNavAgentValid(_navAgent))
+        if (_controllerTransform == null || !IsOnNavMesh)
         {
             LOG.Debug("PrecomputeForward: Invalid controller or NavAgent");
             _isPrecomputingForward = false;

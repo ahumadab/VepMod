@@ -120,7 +120,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     }
 
     /// <returns>Null before the Hallucination has spawned, or for a player who is not imitated.</returns>
-    public DroidController? FindHallucination(PlayerAvatar imitatedPlayer)
+    public Hallucination? FindHallucination(PlayerAvatar imitatedPlayer)
     {
         return _imitations.TryGetValue(imitatedPlayer, out var imitation) && imitation.Hallucination
             ? imitation.Hallucination
@@ -190,7 +190,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
                 if (!_imitations.ContainsKey(imitatedPlayer)) break;
 
                 var hallucination = spawnPosition.HasValue
-                    ? DroidController.Create(imitatedPlayer, spawnPosition.Value)
+                    ? Hallucination.Create(imitatedPlayer, spawnPosition.Value)
                     : null;
                 if (hallucination)
                 {
@@ -212,8 +212,8 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     {
         var victimPosition = _victim.transform.position;
 
-        var levelPoint = SemiFunc.LevelPointGet(victimPosition, DroidController.SpawnDistanceMin,
-            DroidController.SpawnDistanceMax);
+        var levelPoint = SemiFunc.LevelPointGet(victimPosition, Hallucination.SpawnDistanceMin,
+            Hallucination.SpawnDistanceMax);
         if (!levelPoint)
         {
             levelPoint = SemiFunc.LevelPointGet(victimPosition, 0f, 999f);
@@ -412,7 +412,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         private readonly Transform? _rig;
 
         // Null until it has spawned.
-        public DroidController? Hallucination;
+        public Hallucination? Hallucination;
 
         public Imitation(PlayerAvatar player, MapToolController? mapTool)
         {

@@ -20,7 +20,7 @@ namespace VepMod.Dev;
 ///     Enabled by the "Developer / Enable Dev Tools" config flag; sits on the plugin's GameObject.
 ///     The HUD (<see cref="OnGUI" />) is the one list of keys the tester reads in game.
 /// </summary>
-public sealed class DroidDevTools : MonoBehaviour
+public sealed class HallucinationDevTools : MonoBehaviour
 {
     private const KeyCode CaptureKey = KeyCode.F6;
     private const KeyCode SpawnKey = KeyCode.F7;
@@ -42,10 +42,10 @@ public sealed class DroidDevTools : MonoBehaviour
     private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
     private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
 
-    private static readonly VepLogger LOG = VepLogger.Create<DroidDevTools>();
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationDevTools>();
 
-    private readonly List<DroidController> _spawned = new();
-    private DroidController? _nearest;
+    private readonly List<Hallucination> _spawned = new();
+    private Hallucination? _nearest;
     private float _nearestRefreshTimer;
     private bool _hudVisible = true;
 
@@ -128,15 +128,15 @@ public sealed class DroidDevTools : MonoBehaviour
             ? hit.position
             : point;
 
-        var droid = DroidController.Create(source, spawnPos);
-        if (droid != null)
+        var hallucination = Hallucination.Create(source, spawnPos);
+        if (hallucination != null)
         {
-            _spawned.Add(droid);
+            _spawned.Add(hallucination);
             LOG.Info($"DevTools: spawned a Hallucination at {spawnPos} (dev Hallucinations: {_spawned.Count}).");
         }
         else
         {
-            LOG.Warning("DevTools: DroidController.Create failed (prefab not loaded?).");
+            LOG.Warning("DevTools: Hallucination.Create failed (prefab not loaded?).");
         }
     }
 
@@ -197,11 +197,11 @@ public sealed class DroidDevTools : MonoBehaviour
     private void DespawnAll()
     {
         var count = 0;
-        foreach (var droid in _spawned)
+        foreach (var hallucination in _spawned)
         {
-            if (droid != null)
+            if (hallucination != null)
             {
-                Destroy(droid.gameObject);
+                Destroy(hallucination.gameObject);
                 count++;
             }
         }
@@ -277,14 +277,14 @@ public sealed class DroidDevTools : MonoBehaviour
 
         _nearest = null;
         var bestSqr = float.MaxValue;
-        foreach (var droid in FindObjectsOfType<DroidController>())
+        foreach (var hallucination in FindObjectsOfType<Hallucination>())
         {
-            if (droid == null || droid.ControllerTransform == null) continue;
-            var sqr = (droid.ControllerTransform.position - origin).sqrMagnitude;
+            if (hallucination == null || hallucination.ControllerTransform == null) continue;
+            var sqr = (hallucination.ControllerTransform.position - origin).sqrMagnitude;
             if (sqr < bestSqr)
             {
                 bestSqr = sqr;
-                _nearest = droid;
+                _nearest = hallucination;
             }
         }
     }
@@ -422,7 +422,7 @@ public sealed class DroidDevTools : MonoBehaviour
             sb += $"\nNearest Hallucination:\n" +
                   $"  State      : {_nearest.DebugStateName}\n" +
                   $"  Grounded   : {m.DebugIsGrounded}\n" +
-                  $"  Falling    : {_nearest.IsFalling}\n" +
+                  $"  Falling    : {m.IsFalling}\n" +
                   $"  VertVel    : {m.DebugVerticalVelocity:F2} m/s\n" +
                   $"  Gravity    : {Physics.gravity.y:F2} m/s²";
         }

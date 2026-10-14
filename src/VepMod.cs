@@ -95,12 +95,12 @@ public class VepMod : BaseUnityPlugin
 #if DEBUG
         if (ConfigEnableDevTools.Value)
         {
-            gameObject.AddComponent<DroidDevTools>();
+            gameObject.AddComponent<HallucinationDevTools>();
             Logger.LogInfo("VepMod dev tools enabled (F7 spawn / F8 teleport / F9 drop / F10 HUD / F11 despawn).");
         }
 #endif
 
-        StartCoroutine(DroidPrefabLoader.PreloadAsync(success =>
+        StartCoroutine(HallucinationPrefabLoader.PreloadAsync(success =>
         {
             if (success)
             {
