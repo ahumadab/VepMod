@@ -42,10 +42,10 @@ A fake copy of an Imitated Player, seen only by the Victim, with the same look, 
 _Avoid_: Fake player, droid, clone, LostDroid
 
 **Stalking**:
-A Hallucination approaching the Victim, staring at them, then fleeing once the Victim's Gaze lingers on it.
+A Hallucination approaching the Victim, staring at them, then fleeing a moment after the Victim's Gaze lands on it, even if the Victim looks away.
 
 **Gaze**:
-The Victim looking at a Hallucination.
+The Victim looking at a Hallucination they can see; a Hallucination behind a wall is never under the Gaze.
 
 **Dilated Pupils**:
 The only Effect visible to the Victim's teammates rather than to the Victim.
