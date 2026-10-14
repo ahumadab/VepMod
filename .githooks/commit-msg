@@ -1,0 +1,2 @@
+#!/bin/sh
+exec node tooling/commit-msg.mjs "$1"
