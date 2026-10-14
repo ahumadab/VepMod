@@ -257,15 +257,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
         LOG.Info($"  Eyes: {_nearest.BodyPose.DebugEyes}");
     }
 
+    // From the nearest rig bone (code_eye_left/…/eyelid_upper_mesh): the full path through the rig's separator objects
+    // runs to 300 characters a line.
     private static string PathUnder(Transform root, Transform transform)
     {
-        var path = transform.name;
         for (var parent = transform.parent; parent != null && parent != root; parent = parent.parent)
         {
-            path = $"{parent.name}/{path}";
+            if (parent.name.StartsWith("code_"))
+            {
+                return parent == transform.parent ? $"{parent.name}/{transform.name}" : $"{parent.name}/…/{transform.name}";
+            }
         }
 
-        return path;
+        return transform.name;
     }
 
     private void DespawnAll()

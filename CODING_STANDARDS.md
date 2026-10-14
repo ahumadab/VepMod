@@ -23,6 +23,8 @@ belongs to the tooling, not here.
 
 - Every state and every resource has one exit that cleans it up, reached whatever the reason for leaving. Cleanup copied
   into several exit paths is a finding.
+- A value every state sets on entry (the Hallucination's body pose situation) needs no exit cleanup: the next state
+  overwrites it. Then every state sets it, and a state that does not is a finding.
 - A call that deactivates or destroys the object running a state machine (`EnemyParent.Despawn`, `SetActive(false)`,
   `Destroy`) skips its state exits: the state machine leaves its state before that call.
 - A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.

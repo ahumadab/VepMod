@@ -4,7 +4,7 @@ REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/A
 
 Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04/Assets/VepMod/`. Read them before deciding whether a bundle references a class, field or clip; the built bundles in `Ressources/` are compressed. A script or clip GUID resolves through the `.meta` files under `../Repo_04/Assets/`.
 
-Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components.
+Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components; `--refs <Script>` names the object each of that script's fields points to (`PlayerEyes.targetIdle → Eye Target Idle`).
 
 ## In-game tests
 
@@ -12,9 +12,12 @@ The tester confirms what the game shows; only the BepInEx logs show the state be
 but off the NavMesh), and you read them after the test to confirm each acceptance criterion. So before asking for an
 in-game test, map every acceptance criterion to the action that triggers it and the `Debug` line that proves it, with
 the data behind it. A criterion about what the Victim sees is proved by what Unity renders, which the dev tools dump,
-not by the line of the code that asked for it. An action the tester cannot trigger at will (a command the Master sends, a state reached only by
+not by the line of the code that asked for it. A criterion about a bound (an angle limit, a cap, a timeout) needs an
+action that reaches the bound, and the test plan says how to reach it. An action the tester cannot trigger at will (a command the Master sends, a state reached only by
 chance) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
 (`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about.
+After the test, `node tooling/test-log.mjs [--grep <regex>]` prints VepMod's lines from every instance's log of that
+test, one section per level, with its local player and Master.
 
 ## Coding standards
 
