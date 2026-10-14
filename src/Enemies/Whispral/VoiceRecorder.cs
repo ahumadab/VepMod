@@ -140,7 +140,9 @@ public static class CaptureValidation
         }
     }
 
-    // The trailing silence would dilute the speech ratio and penalise short words; the Voice Sample keeps it.
+    // The trailing silence would dilute the speech ratio and penalise short words; the Voice Sample keeps it. The game
+    // keeps isTalking true 0.5 s after the voice goes quiet (PlayerVoiceChat.isTalkingTimer), so that much quiet
+    // stays in the speech part.
     private static float[] SpeechPart(Capture capture)
     {
         var samples = capture.Sample.Samples;
