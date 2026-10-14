@@ -41,18 +41,23 @@ internal sealed class HallucinationGaze
 
     public bool IsOn { get; private set; }
 
+    /// <summary>
+    ///     The first of the head and the chest that nothing hides from the Victim's camera, wherever they look; null
+    ///     when both are hidden.
+    /// </summary>
+    public string? VisiblePart { get; private set; }
+
     private static int ObstructionMask =>
         _obstructionMask ??= SemiFunc.LayerMaskGetVisionObstruct() & ~LayerMask.GetMask("Player");
 
     /// <summary>
-    ///     Called once per frame, before the face and the stare state read <see cref="IsOn" />.
+    ///     Called from LateUpdate, before the face and the nameplate read it; the stare state reads it the next frame.
     /// </summary>
     public void Update()
     {
         var camera = Camera.main;
-        var sight = camera == null || !IsInView(camera.transform)
-            ? OutOfView
-            : FindVisiblePart(camera.transform.position) ?? Hidden;
+        VisiblePart = camera != null ? FindVisiblePart(camera.transform.position) : null;
+        var sight = camera == null || !IsInView(camera.transform) ? OutOfView : VisiblePart ?? Hidden;
 
         if (sight != _sight)
         {
@@ -63,8 +68,7 @@ internal sealed class HallucinationGaze
         IsOn = sight is Head or Chest;
     }
 
-    /// <returns>The first of the head and the chest that nothing hides from <paramref name="eye" />, or null.</returns>
-    public string? FindVisiblePart(Vector3 eye)
+    private string? FindVisiblePart(Vector3 eye)
     {
         if (_head != null && CanSee(eye, _head.position)) return Head;
         if (_chest != null && CanSee(eye, _chest.position)) return Chest;

@@ -42,7 +42,7 @@ public sealed class HallucinationNameplate : MonoBehaviour
         var cameraPos = Camera.main.transform.position;
         var distance = Vector3.Distance(worldPos, cameraPos);
 
-        var visiblePart = _gaze.FindVisiblePart(cameraPos);
+        var visiblePart = _gaze.VisiblePart;
         var isVisible = visiblePart != null;
         if (isVisible != _wasVisible)
         {

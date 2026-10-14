@@ -12,9 +12,9 @@ internal sealed class AngryEyes
 
     public bool IsAngry { get; private set; }
 
-    public void Update(bool isUnderGaze, bool holdsAnger, float deltaTime)
+    public void Update(bool isUnderGaze, bool isStalkingBeforeFlee, float deltaTime)
     {
         _gazeTime = isUnderGaze ? _gazeTime + deltaTime : 0f;
-        IsAngry = !isUnderGaze || holdsAnger || _gazeTime < CalmDelay;
+        IsAngry = !isUnderGaze || isStalkingBeforeFlee || _gazeTime < CalmDelay;
     }
 }
