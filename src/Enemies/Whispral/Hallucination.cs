@@ -57,12 +57,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private HallucinationFace _face;
-    private HallucinationRightArmPoseController? _armPoseController;
-    private HallucinationLeftArmPoseController? _leftArmPoseController;
-    private HallucinationAvatarAnimationController _avatarAnimController;
     private CharacterController _charController;
-    private HallucinationEyeLookAtController? _eyeLookController;
-    private GameObject? _mapToolClone;
     private HallucinationNameplate _nameplateController;
     private NavMeshAgent _navAgent;
     private Transform? _rigidbodyTransform;
@@ -72,24 +67,15 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
 
-    public bool IsWalking { get; set; }
-    public bool IsSprinting { get; set; }
-    public bool HasChangedMovementState { get; set; }
-
-    /// <summary>
-    ///     Read by HallucinationAvatarAnimationController to drive the animator's 'Grabbing' bool (the raised-hand pose).
-    ///     Set during CheckMap.
-    /// </summary>
-    public bool WantsGrabbing { get; set; }
-
     public PlayerAvatar ImitatedPlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
     internal HallucinationMovement Movement { get; private set; }
     internal HallucinationGaze Gaze { get; private set; }
+    internal HallucinationBodyPose BodyPose { get; private set; }
 
     public bool IsStalkingBeforeFlee => Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare;
 
-    public bool IsInMovementState => IsStalkingBeforeFlee ||
+    private bool IsInMovementState => IsStalkingBeforeFlee ||
                                      Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint or StateId.StalkFlee;
 
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
@@ -117,21 +103,19 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     }
 
     /// <summary>
-    ///     Also drives the raised-hand pose.
-    /// </summary>
-    public void ShowMapTool(bool visible)
-    {
-        LOG.Debug($"ShowMapTool({visible}) - clone={(_mapToolClone != null ? "ok" : "NULL")}");
-        if (_mapToolClone != null) _mapToolClone.SetActive(visible);
-        WantsGrabbing = visible;
-    }
-
-    /// <summary>
     ///     Dev tools only.
     /// </summary>
     public void DebugStartStalking()
     {
         Fsm.NextStateStateId = StateId.StalkApproach;
+    }
+
+    /// <summary>
+    ///     Dev tools only.
+    /// </summary>
+    public void DebugCheckMap()
+    {
+        Fsm.NextStateStateId = StateId.CheckMap;
     }
 
     /// <summary>
@@ -181,6 +165,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         DisableEnemyComponents();
         SetupNavigation();
         SetupMovementController();
+        BodyPose = gameObject.AddComponent<HallucinationBodyPose>();
         SetupClonedVisuals();
         SetupGaze();
         SetupAnimationController();
@@ -218,12 +203,6 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     {
         _face = gameObject.AddComponent<HallucinationFace>();
         _face.Initialize(this);
-
-        if (_animator != null)
-        {
-            _avatarAnimController = gameObject.AddComponent<HallucinationAvatarAnimationController>();
-            _avatarAnimController.Initialize(this, _animator);
-        }
 
         var visualsRoot = _animator != null ? _animator.transform : transform;
 
@@ -516,96 +495,16 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
             HallucinationVisualsClone.AttachRelay(_animator, this, cloneRig);
             HallucinationVisualsClone.TryCloneFlashlight(ImitatedPlayer, cloneRig);
-            HallucinationVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out _mapToolClone);
-            SetupArmAndEyePoses(cloneRig);
+            HallucinationVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out var mapTool);
+
+            // The arm and eye scripts live on the 'Player Visuals' GameObject, a sibling of the 'Player Avatar
+            // Controller' that holds PlayerAvatar.cs: GetComponentInChildren on the Imitated Player misses them.
+            BodyPose.Initialize(_animator, Movement, ControllerTransform, ImitatedPlayer.playerAvatarVisuals,
+                cloneRig.transform, mapTool);
         }
         else if (_animator == null)
         {
             LOG.Warning("Cube has no Animator after SanitizeCube");
-        }
-    }
-
-    private void SetupArmAndEyePoses(GameObject cloneRig)
-    {
-        if (ImitatedPlayer == null || cloneRig == null) return;
-
-        // PlayerAvatarRightArm and PlayerEyes live on the 'Player Visuals' GameObject
-        // (playerAvatarVisuals.gameObject), a sibling of the 'Player Avatar Controller' that holds PlayerAvatar.cs, so
-        // GetComponentInChildren on the Imitated Player does not find them.
-        var visuals = ImitatedPlayer.playerAvatarVisuals;
-        if (visuals == null)
-        {
-            LOG.Warning("SetupArmAndEyePoses: ImitatedPlayer.playerAvatarVisuals is null");
-            return;
-        }
-
-        var sourceArm = visuals.GetComponent<PlayerAvatarRightArm>();
-        if (sourceArm != null && sourceArm.rightArmTransform != null)
-        {
-            var clonedArm = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceArm.rightArmTransform.name);
-            if (clonedArm != null)
-            {
-                _armPoseController = gameObject.AddComponent<HallucinationRightArmPoseController>();
-                _armPoseController.Initialize(this, clonedArm, sourceArm.basePose, sourceArm.mapPose,
-                    sourceArm.poseCurve, sourceArm.poseSpeed);
-                LOG.Debug($"HallucinationRightArmPoseController initialized on bone '{sourceArm.rightArmTransform.name}'");
-            }
-            else
-            {
-                LOG.Warning($"SetupArmAndEyePoses: bone '{sourceArm.rightArmTransform.name}' not found in clone rig");
-            }
-        }
-        else
-        {
-            LOG.Warning("SetupArmAndEyePoses: no PlayerAvatarRightArm on Imitated Player");
-        }
-
-        // The Hallucination's flashlight is always on, so the left arm always aims for flashlightPose.
-        var sourceLeftArm = visuals.GetComponent<PlayerAvatarLeftArm>();
-        if (sourceLeftArm != null && sourceLeftArm.leftArmTransform != null)
-        {
-            var clonedLeftArm = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceLeftArm.leftArmTransform.name);
-            if (clonedLeftArm != null)
-            {
-                _leftArmPoseController = gameObject.AddComponent<HallucinationLeftArmPoseController>();
-                _leftArmPoseController.Initialize(clonedLeftArm, sourceLeftArm.basePose, sourceLeftArm.flashlightPose,
-                    sourceLeftArm.poseCurve, sourceLeftArm.poseSpeed);
-                LOG.Debug($"HallucinationLeftArmPoseController initialized on bone '{sourceLeftArm.leftArmTransform.name}'");
-            }
-            else
-            {
-                LOG.Warning($"SetupArmAndEyePoses: left arm bone '{sourceLeftArm.leftArmTransform.name}' not found in clone rig");
-            }
-        }
-        else
-        {
-            LOG.Warning("SetupArmAndEyePoses: no PlayerAvatarLeftArm on Imitated Player");
-        }
-
-        var sourceEyes = visuals.GetComponent<PlayerEyes>();
-        if (sourceEyes != null && sourceEyes.eyeLeft != null && sourceEyes.eyeRight != null)
-        {
-            var clonedEyeLeft = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceEyes.eyeLeft.name);
-            var clonedEyeRight = HallucinationVisualsClone.FindChildByName(cloneRig.transform, sourceEyes.eyeRight.name);
-            var lookTarget = _mapToolClone != null
-                ? HallucinationVisualsClone.FindChildByName(_mapToolClone.transform, "Player Look Target")
-                : null;
-
-            if (clonedEyeLeft != null && clonedEyeRight != null && lookTarget != null)
-            {
-                _eyeLookController = gameObject.AddComponent<HallucinationEyeLookAtController>();
-                _eyeLookController.Initialize(this, clonedEyeLeft, clonedEyeRight, lookTarget);
-                LOG.Debug("HallucinationEyeLookAtController initialized");
-            }
-            else
-            {
-                LOG.Warning($"SetupArmAndEyePoses: eye bones or lookTarget missing " +
-                            $"(eyeL={clonedEyeLeft != null}, eyeR={clonedEyeRight != null}, lookTarget={lookTarget != null})");
-            }
-        }
-        else
-        {
-            LOG.Warning("SetupArmAndEyePoses: no PlayerEyes on Imitated Player or eyeLeft/Right null");
         }
     }
 

@@ -24,7 +24,7 @@ public sealed partial class Hallucination
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
             _precomputeTimer = 0f;
             Machine.Owner.Movement.ResetPath();
-            Machine.Owner.HasChangedMovementState = false;
+            Machine.Owner.BodyPose.Move(Gait.Still);
             Machine.Owner.Movement.StartPrecomputeDestination();
         }
 
@@ -77,11 +77,14 @@ public sealed partial class Hallucination
         private float _nextPrecomputeForward;
         private float _nextSwitchCheck;
 
+        // Walking and sprinting switch to each other at most once between two Idles.
+        private bool _enteredFromSwitch;
+
         protected abstract float MinDuration { get; }
         protected abstract float MaxDuration { get; }
         protected abstract float Speed { get; }
         protected abstract StateId SwitchTargetState { get; }
-        protected abstract void SetMovementFlag(bool value);
+        protected abstract Gait Gait { get; }
 
         public override void OnStateEnter(StateId previous)
         {
@@ -90,8 +93,8 @@ public sealed partial class Hallucination
             _nextSwitchCheck = SwitchCheckInterval;
             _nextPrecomputeForward = PrecomputeForwardInterval;
 
-            var isMovementSwitch = previous is StateId.Wander or StateId.Sprint;
-            if (isMovementSwitch)
+            _enteredFromSwitch = previous is StateId.Wander or StateId.Sprint;
+            if (_enteredFromSwitch)
             {
                 // A failed extension keeps the current destination.
                 Machine.Owner.Movement.TryExtendCurrentPath();
@@ -106,7 +109,7 @@ public sealed partial class Hallucination
             }
 
             Machine.Owner.Movement.SetSpeed(Speed);
-            SetMovementFlag(true);
+            Machine.Owner.BodyPose.Move(Gait);
 
             Machine.Owner.Movement.StartPrecomputeForwardDestination();
         }
@@ -114,7 +117,6 @@ public sealed partial class Hallucination
         public override void OnStateExit(StateId next)
         {
             base.OnStateExit(next);
-            SetMovementFlag(false);
 
             if (next is not (StateId.Wander or StateId.Sprint))
             {
@@ -139,12 +141,11 @@ public sealed partial class Hallucination
                 Machine.Owner.Movement.StartPrecomputeForwardDestination();
             }
 
-            if (!Machine.Owner.HasChangedMovementState && TimeElapsed >= _nextSwitchCheck)
+            if (!_enteredFromSwitch && TimeElapsed >= _nextSwitchCheck)
             {
                 _nextSwitchCheck += SwitchCheckInterval;
                 if (Random.value < SwitchChance)
                 {
-                    Machine.Owner.HasChangedMovementState = true;
                     Machine.NextStateStateId = SwitchTargetState;
                 }
             }
@@ -157,11 +158,7 @@ public sealed partial class Hallucination
         protected override float MaxDuration => 15f;
         protected override float Speed => WalkSpeed;
         protected override StateId SwitchTargetState => StateId.Sprint;
-
-        protected override void SetMovementFlag(bool value)
-        {
-            Machine.Owner.IsWalking = value;
-        }
+        protected override Gait Gait => Gait.Walk;
     }
 
     private sealed class SprintState : MovementState
@@ -170,11 +167,7 @@ public sealed partial class Hallucination
         protected override float MaxDuration => 8f;
         protected override float Speed => SprintSpeed;
         protected override StateId SwitchTargetState => StateId.Wander;
-
-        protected override void SetMovementFlag(bool value)
-        {
-            Machine.Owner.IsSprinting = value;
-        }
+        protected override Gait Gait => Gait.Sprint;
     }
 
     private sealed class CheckMapState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
@@ -193,20 +186,14 @@ public sealed partial class Hallucination
         {
             base.OnStateEnter(previous);
 
-            Machine.Owner.IsWalking = false;
-            Machine.Owner.IsSprinting = false;
             Machine.Owner.Movement.ResetPath();
-
-            // The animator, left enabled, moves to the grabber pose through its Grabbing bool, which
-            // HallucinationAvatarAnimationController drives from WantsGrabbing.
-            Machine.Owner.ShowMapTool(true);
+            Machine.Owner.BodyPose.CheckMap();
 
             _lookDuration = Random.Range(MinLookDuration, MaxLookDuration);
             _currentPhase = Phase.Raise;
             _phaseTimer = 0f;
 
-            LOG.Debug(
-                $"CheckMapState: ENTER - LookDuration={_lookDuration:F1}s, mapToolClone={(Machine.Owner._mapToolClone != null ? "ok" : "NULL")}");
+            LOG.Debug($"CheckMapState: ENTER - LookDuration={_lookDuration:F1}s");
         }
 
         public override void OnStateUpdate()
@@ -230,8 +217,8 @@ public sealed partial class Hallucination
                 case Phase.Look:
                     if (_phaseTimer >= _lookDuration)
                     {
-                        // Clearing Grabbing now lets the animator ease back to the neutral pose during Lower.
-                        Machine.Owner.ShowMapTool(false);
+                        // Lowering now lets the animator ease back to the neutral pose during Lower.
+                        Machine.Owner.BodyPose.Move(Gait.Still);
                         _currentPhase = Phase.Lower;
                         _phaseTimer = 0f;
                         LOG.Debug("CheckMapState: -> Lower");
@@ -254,9 +241,6 @@ public sealed partial class Hallucination
         {
             base.OnStateExit(next);
             LOG.Debug($"CheckMapState: EXIT -> {next}");
-
-            // Another state can interrupt CheckMap before Lower.
-            Machine.Owner.ShowMapTool(false);
         }
 
         private enum Phase
@@ -278,7 +262,7 @@ public sealed partial class Hallucination
             base.OnStateEnter(previous);
             LOG.Debug("=== STALK: Approach started - running towards player ===");
 
-            Machine.Owner.IsSprinting = true;
+            Machine.Owner.BodyPose.Move(Gait.Sprint);
             Machine.Owner.Movement.SetSpeed(SprintSpeed);
             _nextDestinationUpdate = 0f;
 
@@ -328,7 +312,6 @@ public sealed partial class Hallucination
         public override void OnStateExit(StateId next)
         {
             base.OnStateExit(next);
-            Machine.Owner.IsSprinting = false;
             Machine.Owner.Movement.ResetPath();
         }
     }
@@ -353,8 +336,7 @@ public sealed partial class Hallucination
             _gazeLandedAt = null;
             _nextDestinationUpdate = 0f;
 
-            Machine.Owner.IsWalking = true;
-            Machine.Owner.IsSprinting = false;
+            Machine.Owner.BodyPose.Stare(Gait.Walk);
             Machine.Owner.Movement.SetSpeed(WalkSpeed);
         }
 
@@ -371,7 +353,7 @@ public sealed partial class Hallucination
                 _gazeLandedAt = TimeElapsed;
                 LOG.Debug($"=== STALK: Gaze landed, fleeing in {StalkStareBeforeFlee}s ===");
 
-                Machine.Owner.IsWalking = false;
+                Machine.Owner.BodyPose.Stare(Gait.Still);
                 Machine.Owner.Movement.ResetPath();
             }
 
@@ -409,12 +391,6 @@ public sealed partial class Hallucination
                 Machine.NextStateStateId = StateId.StalkFlee;
             }
         }
-
-        public override void OnStateExit(StateId next)
-        {
-            base.OnStateExit(next);
-            Machine.Owner.IsWalking = false;
-        }
     }
 
     private sealed class StalkFleeState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
@@ -426,7 +402,7 @@ public sealed partial class Hallucination
             base.OnStateEnter(previous);
             LOG.Debug("=== STALK: Fleeing from player! ===");
 
-            Machine.Owner.IsSprinting = true;
+            Machine.Owner.BodyPose.Move(Gait.Sprint);
             Machine.Owner.Movement.SetSpeed(SprintSpeed);
 
             if (!Machine.Owner.Movement.TrySetFleeDestination(StalkFleeDistance))
@@ -445,12 +421,6 @@ public sealed partial class Hallucination
                 LOG.Debug("=== STALK: Flee complete, returning to idle ===");
                 Machine.NextStateStateId = StateId.Idle;
             }
-        }
-
-        public override void OnStateExit(StateId next)
-        {
-            base.OnStateExit(next);
-            Machine.Owner.IsSprinting = false;
         }
     }
 }
