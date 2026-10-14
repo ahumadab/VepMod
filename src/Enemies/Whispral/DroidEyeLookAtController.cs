@@ -1,5 +1,4 @@
 using UnityEngine;
-using VepMod.VepFramework;
 
 #pragma warning disable CS8618
 
@@ -16,7 +15,6 @@ public sealed class DroidEyeLookAtController : MonoBehaviour
     private const float ClampX = 50f;
     private const float ClampY = 30f;
     private const float ReturnSpeed = 8f;
-    private static readonly VepLogger LOG = VepLogger.Create<DroidEyeLookAtController>();
 
     private DroidController _droid;
     private Transform _eyeLeft;

@@ -19,24 +19,7 @@ namespace VepMod.Dev;
 /// <summary>
 ///     Dev tools to test a Hallucination's gravity and fall animation without a Whispral or a second player.
 ///     Enabled by the "Developer / Enable Dev Tools" config flag; sits on the plugin's GameObject.
-///
-///     Keys:
-///       F7  — spawn a Hallucination of the local player at the aimed point (works in singleplayer)
-///       F8  — teleport the nearest Hallucination to the aimed point (to put it on a ledge)
-///       F9  — drop test: lift the nearest Hallucination and let it fall in place
-///       Shift+F9 — the nearest Hallucination performs a Mimic (press twice in a row to overlap two)
-///       F10 — toggle the HUD overlay
-///       F11 — despawn the Hallucinations the tool spawned
-///
-///     Haunting keys, to test how an Attachment ends (the Whispral ones act on the Master only):
-///       F1  — spawn a Whispral at the aimed point
-///       F2  — stun the Whisprals preparing to attach
-///       F3  — stun every Whispral
-///       F4  — kill every Whispral
-///       F5  — kill the local player
-///       Shift+F5 — revive every dead player (Master only: the game accepts a revive from the Master alone)
-///       F12 — hurt the local player by 10
-///       Shift+F12 — heal the local player by 10
+///     The HUD (<see cref="OnGUI" />) is the one list of keys the tester reads in game.
 /// </summary>
 public sealed class DroidDevTools : MonoBehaviour
 {
@@ -379,6 +362,7 @@ public sealed class DroidDevTools : MonoBehaviour
 
     private static void ReviveDeadPlayers()
     {
+        // The game accepts a revive from the Master alone.
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
 
         foreach (var player in GameDirector.instance.PlayerList)

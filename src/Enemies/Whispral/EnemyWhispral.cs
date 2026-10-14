@@ -53,10 +53,10 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [HideInInspector] public float attachedTimer;
 
     private State _currentState;
-    private float grabAggroTimer;
+    private float _grabAggroTimer;
 
-    private PhotonView photonView;
-    private Quaternion rotationTarget;
+    private PhotonView _photonView;
+    private Quaternion _rotationTarget;
 
     protected override State DefaultState => State.Spawn;
 
@@ -74,9 +74,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     protected override void Awake()
     {
         base.Awake();
-        photonView = GetComponent<PhotonView>();
+        _photonView = GetComponent<PhotonView>();
 #if DEBUG
-        var visualsCapsule = transform.parent?.Find("Visuals/Capsule");
+        var visualsCapsule = transform.parent != null ? transform.parent.Find("Visuals/Capsule") : null;
         if (visualsCapsule != null)
         {
             visualsCapsule.gameObject.SetActive(true);
@@ -153,10 +153,10 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         // While positive, decrement the grab aggro timer each frame so the enemy won't immediately react after being grabbed.
         // The timer is set in OnGrabbed (e.g. 60f). Checking <0f avoids decrementing when already zero and prevents
         // negative values.
-        if (grabAggroTimer > 0f)
+        if (_grabAggroTimer > 0f)
         {
-            grabAggroTimer -= Time.deltaTime;
-            if (grabAggroTimer < 0f) grabAggroTimer = 0f;
+            _grabAggroTimer -= Time.deltaTime;
+            if (_grabAggroTimer < 0f) _grabAggroTimer = 0f;
         }
     }
 
@@ -171,17 +171,17 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             {
                 var look = Quaternion.LookRotation(playerTarget.transform.position - transform.position);
                 look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
-                rotationTarget = look;
+                _rotationTarget = look;
             }
         }
         else if (enemy.NavMeshAgent.AgentVelocity.normalized.magnitude > 0.1f)
         {
             var look = Quaternion.LookRotation(enemy.NavMeshAgent.AgentVelocity.normalized);
             look.eulerAngles = new Vector3(0f, look.eulerAngles.y, 0f);
-            rotationTarget = look;
+            _rotationTarget = look;
         }
 
-        transform.rotation = SemiFunc.SpringQuaternionGet(rotationSpring, rotationTarget);
+        transform.rotation = SemiFunc.SpringQuaternionGet(rotationSpring, _rotationTarget);
     }
 
     private void AttachFollowLogic()
@@ -272,7 +272,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         if (SemiFunc.IsMultiplayer())
         {
-            photonView.RPC(nameof(AttachmentRPC), RpcTarget.All, victimViewID, photonView.ViewID, attached);
+            _photonView.RPC(nameof(AttachmentRPC), RpcTarget.All, victimViewID, _photonView.ViewID, attached);
         }
         else
         {
@@ -305,7 +305,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             // Despawn deactivates this object at once: the FSM has to leave its state in this call, or a Whispral
             // killed while attached never ends its Attachment.
-            LOG.Debug($"Whispral {photonView.ViewID} killed in state {CurrentState}.");
+            LOG.Debug($"Whispral {_photonView.ViewID} killed in state {CurrentState}.");
             Fsm.NextStateStateId = State.Despawn;
             Fsm.Update();
         }
@@ -335,7 +335,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
             if (SemiFunc.IsMultiplayer())
             {
-                photonView.RPC(nameof(UpdatePlayerTargetRPC), RpcTarget.All, playerTarget.photonView.ViewID);
+                _photonView.RPC(nameof(UpdatePlayerTargetRPC), RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
             Fsm.NextStateStateId = State.NoticePlayer;
@@ -349,14 +349,14 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     public void OnGrabbed()
     {
         // When Enemy is grabbed
-        var canAggroPlayer = !(grabAggroTimer > 0f);
+        var canAggroPlayer = !(_grabAggroTimer > 0f);
         if (SemiFunc.IsMasterClientOrSingleplayer() && canAggroPlayer && CurrentState == State.Leave)
         {
-            grabAggroTimer = 60f;
+            _grabAggroTimer = 60f;
             playerTarget = enemy.Rigidbody.onGrabbedPlayerAvatar;
             if (SemiFunc.IsMultiplayer())
             {
-                photonView.RPC(nameof(UpdatePlayerTargetRPC), RpcTarget.All, playerTarget.photonView.ViewID);
+                _photonView.RPC(nameof(UpdatePlayerTargetRPC), RpcTarget.All, playerTarget.photonView.ViewID);
             }
 
             Fsm.NextStateStateId = State.NoticePlayer;
@@ -380,7 +380,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             Enemy.Rigidbody.StuckReset();
             if (GameManager.Multiplayer())
             {
-                Whispral.photonView.RPC(nameof(UpdateStateRPC), RpcTarget.All, Fsm.NextStateStateId);
+                Whispral._photonView.RPC(nameof(UpdateStateRPC), RpcTarget.All, Fsm.NextStateStateId);
             }
             else
             {
@@ -454,8 +454,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _timer = TimeToRoam;
             _hasDestination = false;
 
-            var levelPoint = SemiFunc.LevelPointGet(Whispral.transform.position, 10f, 25f)
-                             ?? SemiFunc.LevelPointGet(Whispral.transform.position, 0f, 999f);
+            var levelPoint = SemiFunc.LevelPointGet(Whispral.transform.position, 10f, 25f);
+            if (levelPoint == null) levelPoint = SemiFunc.LevelPointGet(Whispral.transform.position, 0f, 999f);
 
             if (levelPoint && SamplePosition(levelPoint, out var hit) && Raycast(hit)) // if valid position found
             {
@@ -666,22 +666,22 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     private sealed class AttachedState : WhispralStateBase
     {
         private const float VoiceFilterProbability = 0.5f;
-        private int? victimViewID;
-        private float voiceTimer;
+        private int? _victimViewID;
+        private float _voiceTimer;
 
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
             Whispral.attachedTimer = Whispral.attachedDuration;
-            voiceTimer = GetRandomVoiceDelay();
+            _voiceTimer = GetRandomVoiceDelay();
             var victim = Whispral.playerTarget;
             if (victim == null) return;
 
             Whispral.attachAnchor = SemiFunc.PlayerGetFaceEyeTransform(victim);
             // Kept as an ID: the Victim's avatar may be gone by the time the Attachment ends.
-            victimViewID = victim.photonView.ViewID;
-            LOG.Debug($"Whispral {Whispral.photonView.ViewID} starts its Attachment to {victim.playerName}.");
-            Whispral.ReportAttachment(victimViewID.Value, true);
+            _victimViewID = victim.photonView.ViewID;
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} starts its Attachment to {victim.playerName}.");
+            Whispral.ReportAttachment(_victimViewID.Value, true);
         }
 
         // The one place an Attachment ends, whatever the next state: no other state reports it.
@@ -689,11 +689,11 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             base.OnStateExit(next);
             Whispral.attachAnchor = null;
-            if (victimViewID == null) return;
+            if (_victimViewID == null) return;
 
-            LOG.Debug($"Whispral {Whispral.photonView.ViewID} ends its Attachment to ViewID {victimViewID} (-> {next}).");
-            Whispral.ReportAttachment(victimViewID.Value, false);
-            victimViewID = null;
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} ends its Attachment to ViewID {_victimViewID} (-> {next}).");
+            Whispral.ReportAttachment(_victimViewID.Value, false);
+            _victimViewID = null;
         }
 
         public override void OnStateUpdate()
@@ -702,10 +702,10 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             CheckDetachState();
 
             if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
-            voiceTimer -= Time.deltaTime;
-            if (!(voiceTimer <= 0f)) return;
+            _voiceTimer -= Time.deltaTime;
+            if (!(_voiceTimer <= 0f)) return;
             SendVoiceCommand();
-            voiceTimer = GetRandomVoiceDelay();
+            _voiceTimer = GetRandomVoiceDelay();
         }
 
         private static float GetRandomVoiceDelay()
@@ -835,8 +835,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _timer = TimeToLeave;
             _hasDestination = false;
 
-            var levelPoint = SemiFunc.LevelPointGetPlayerDistance(Whispral.transform.position, 30f, 50f)
-                             ?? SemiFunc.LevelPointGetFurthestFromPlayer(Whispral.transform.position, 5f);
+            var levelPoint = SemiFunc.LevelPointGetPlayerDistance(Whispral.transform.position, 30f, 50f);
+            if (levelPoint == null) levelPoint = SemiFunc.LevelPointGetFurthestFromPlayer(Whispral.transform.position, 5f);
 
             if (levelPoint &&
                 NavMesh.SamplePosition(levelPoint.transform.position + Random.insideUnitSphere * 3f,
@@ -885,7 +885,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
-            LOG.Debug($"Whispral {Whispral.photonView.ViewID} stunned in state {previous}.");
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} stunned in state {previous}.");
         }
 
         public override void OnStateUpdate()

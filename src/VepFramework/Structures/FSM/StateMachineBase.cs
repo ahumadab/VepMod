@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VepMod.VepFramework.Structures.FSM;
@@ -16,9 +16,9 @@ namespace VepMod.VepFramework.Structures.FSM;
 /// </typeparam>
 public partial class StateMachineBase<TMachine, TStateId> where TMachine : StateMachineBase<TMachine, TStateId>
 {
-    private readonly StateBase Default = new();
-    private readonly Dictionary<TStateId, StateBase> states = new();
-    private StateBase _currentStateBaseRunning;
+    private readonly StateBase _default = new();
+    private readonly Dictionary<TStateId, StateBase> _states = new();
+    private StateBase? _currentStateBaseRunning;
 
     public StateMachineBase(TStateId defaultStateId)
     {
@@ -32,27 +32,27 @@ public partial class StateMachineBase<TMachine, TStateId> where TMachine : State
 
     public void AddState(TStateId stateId, StateBase stateBase)
     {
-        stateBase.Machine = this as TMachine;
-        if (states.ContainsKey(stateId))
+        stateBase.Machine = (TMachine)this;
+        if (_states.ContainsKey(stateId))
         {
             Debug.LogWarning($"[FSM] Fsm already defines a state with key {stateId}, it will be overidden");
         }
 
-        states[stateId] = stateBase;
+        _states[stateId] = stateBase;
     }
 
     public StateBase GetState(TStateId stateId)
     {
-        if (!states.TryGetValue(stateId, out var result))
+        if (!_states.TryGetValue(stateId, out var result))
         {
-            return Default;
+            return _default;
         }
 
         return result;
     }
 
     //* In a perfect world this call should be avoided to preserve encapsulation and type secrecy
-    public T GetStateTyped<T>(TStateId stateId) where T : StateBase
+    public T? GetStateTyped<T>(TStateId stateId) where T : StateBase
     {
         return GetState(stateId) as T;
     }
@@ -64,7 +64,7 @@ public partial class StateMachineBase<TMachine, TStateId> where TMachine : State
         {
             var next = NextStateStateId;
             _currentStateBaseRunning?.OnStateExit(next);
-            if (!states.ContainsKey(next))
+            if (!_states.ContainsKey(next))
             {
                 Debug.LogWarning($"[FSM] Fsm does not define any state with key {next}, it will play default state");
             }

@@ -95,7 +95,8 @@ public static class DroidPrefabLoader
             LOG.Info($"AssetBundle loaded from file: {bundlePath}");
         }
 
-        var assetRequest = _bundle.LoadAssetAsync<GameObject>(DroidPrefabName);
+        // Both branches above set _bundle or yield break: the compiler loses that across the yields.
+        var assetRequest = _bundle!.LoadAssetAsync<GameObject>(DroidPrefabName);
         yield return assetRequest;
 
         if (assetRequest.asset != null)

@@ -1,5 +1,4 @@
 using UnityEngine;
-using VepMod.VepFramework;
 
 #pragma warning disable CS8618
 
@@ -15,8 +14,6 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 public sealed class DroidLeftArmPoseController : MonoBehaviour
 {
-    private static readonly VepLogger LOG = VepLogger.Create<DroidLeftArmPoseController>();
-
     private Transform _leftArmTransform;
     private Vector3 _flashlightPose;
     private AnimationCurve _poseCurve;

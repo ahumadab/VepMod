@@ -10,8 +10,6 @@
         <PlatformTarget>x64</PlatformTarget>
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <!-- Rules the existing code still breaks: tooling/check.mjs fails on them in a touched file. -->
-        <WarningsNotAsErrors>$(WarningsNotAsErrors);CS8600;CS8601;CS8602;CS8603;CS8618;CS8625;CS9113;IDE0011;IDE0051;IDE0052;IDE1006;UNT0007;UNT0008</WarningsNotAsErrors>
     </PropertyGroup>
 
     <!-- Opt-out build variant: `dotnet build -p:VepModNoVad=true` produces a VAD-free plugin with

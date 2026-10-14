@@ -15,20 +15,20 @@ public enum HauntedTransition
 /// </summary>
 public sealed class Attachments
 {
-    private readonly HashSet<int> whispralViewIDs = new();
+    private readonly HashSet<int> _whispralViewIDs = new();
 
-    public bool IsHaunted => whispralViewIDs.Count > 0;
+    public bool IsHaunted => _whispralViewIDs.Count > 0;
 
     public HauntedTransition Attach(int whispralViewID)
     {
-        return whispralViewIDs.Add(whispralViewID) && whispralViewIDs.Count == 1
+        return _whispralViewIDs.Add(whispralViewID) && _whispralViewIDs.Count == 1
             ? HauntedTransition.BecameHaunted
             : HauntedTransition.NoChange;
     }
 
     public HauntedTransition Detach(int whispralViewID)
     {
-        return whispralViewIDs.Remove(whispralViewID) && whispralViewIDs.Count == 0
+        return _whispralViewIDs.Remove(whispralViewID) && _whispralViewIDs.Count == 0
             ? HauntedTransition.StoppedBeingHaunted
             : HauntedTransition.NoChange;
     }

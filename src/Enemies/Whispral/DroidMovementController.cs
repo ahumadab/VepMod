@@ -372,8 +372,8 @@ public sealed class DroidMovementController : MonoBehaviour
 
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
         var levelPoint = SemiFunc.LevelPointGet(controllerPos, DroidController.SpawnDistanceMin,
-                             DroidController.SpawnDistanceMax)
-                         ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
+                             DroidController.SpawnDistanceMax);
+        if (levelPoint == null) levelPoint = SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null)
         {
@@ -431,8 +431,8 @@ public sealed class DroidMovementController : MonoBehaviour
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
 
         var levelPoint = SemiFunc.LevelPointGet(controllerPos, DroidController.SpawnDistanceMin,
-                             DroidController.SpawnDistanceMax)
-                         ?? SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
+                             DroidController.SpawnDistanceMax);
+        if (levelPoint == null) levelPoint = SemiFunc.LevelPointGet(controllerPos, 0f, 20f);
 
         if (levelPoint == null) return false;
 

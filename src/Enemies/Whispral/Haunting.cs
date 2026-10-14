@@ -11,17 +11,17 @@ public sealed class Haunting : MonoBehaviour
 {
     private static readonly VepLogger LOG = VepLogger.Create<Haunting>();
 
-    private readonly Attachments attachments = new();
-    private PlayerAvatar victim = null!;
+    private readonly Attachments _attachments = new();
+    private PlayerAvatar _victim = null!;
 
     private void Awake()
     {
-        victim = GetComponent<PlayerAvatar>();
+        _victim = GetComponent<PlayerAvatar>();
     }
 
     private void OnDestroy()
     {
-        if (attachments.IsHaunted)
+        if (_attachments.IsHaunted)
         {
             StopEffects();
         }
@@ -29,15 +29,15 @@ public sealed class Haunting : MonoBehaviour
 
     public void Attach(int whispralViewID)
     {
-        var transition = attachments.Attach(whispralViewID);
-        LOG.Debug($"Whispral {whispralViewID} attached to {victim.playerName}: {transition}");
+        var transition = _attachments.Attach(whispralViewID);
+        LOG.Debug($"Whispral {whispralViewID} attached to {_victim.playerName}: {transition}");
         Apply(transition);
     }
 
     public void Detach(int whispralViewID)
     {
-        var transition = attachments.Detach(whispralViewID);
-        LOG.Debug($"Whispral {whispralViewID} detached from {victim.playerName}: {transition}");
+        var transition = _attachments.Detach(whispralViewID);
+        LOG.Debug($"Whispral {whispralViewID} detached from {_victim.playerName}: {transition}");
         Apply(transition);
     }
 
@@ -56,12 +56,12 @@ public sealed class Haunting : MonoBehaviour
 
     private bool IsVictimsClient()
     {
-        return !SemiFunc.IsMultiplayer() || (victim && victim.photonView && victim.photonView.IsMine);
+        return !SemiFunc.IsMultiplayer() || (_victim && _victim.photonView && _victim.photonView.IsMine);
     }
 
     private void StartEffects()
     {
-        LOG.Debug($"{victim.playerName} is Haunted.");
+        LOG.Debug($"{_victim.playerName} is Haunted.");
 
         if (IsVictimsClient())
         {
@@ -75,7 +75,7 @@ public sealed class Haunting : MonoBehaviour
 
     private void StopEffects()
     {
-        LOG.Debug($"{victim.playerName} is no longer Haunted.");
+        LOG.Debug($"{_victim.playerName} is no longer Haunted.");
 
         if (IsVictimsClient())
         {

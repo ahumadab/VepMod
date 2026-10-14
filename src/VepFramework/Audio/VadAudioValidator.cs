@@ -193,7 +193,10 @@ public sealed class VadAudioValidator : IDisposable
             {
                 sample = short.MaxValue;
             }
-            else if (sample < short.MinValue) sample = short.MinValue;
+            else if (sample < short.MinValue)
+            {
+                sample = short.MinValue;
+            }
 
             dst[i] = (short)sample;
             pos += step;
