@@ -325,11 +325,11 @@ WhispralMimics (MonoBehaviour, one per PlayerAvatar)
 │     │           ├── duration < ConfigAudioMinDuration → reject
 │     │           ├── trim trailing silence (analysis only)
 │     │           ├── vadValidator.Validate() → reject if not enough speech [fail-open]
-│     │           └── SaveRecordingAsync() → WAV file + hasNewRecording flag
+│     │           └── SaveRecordingAsync() → VoiceBanks + hasNewRecording flag
 │     └── ShareAudioWithOthersAsync() → Photon RPC chunks to other players
 │
 ├── RPC ReceiveSharedAudioChunk()     ← all clients
-│     └── SaveReceivedAudioAsync() → stored in WavFileManager per player
+│     └── SaveReceivedAudioAsync() → VoiceBanks, under the sender's Steam ID
 │
 └── Loop 2 — PlayVoiceCommandRPC()    ← sent by Master via EnemyWhispral
       └── PlayAudioAtTransform() → AudioSource on hallucination droid

@@ -202,10 +202,10 @@ public sealed class DroidDevTools : MonoBehaviour
     /// </summary>
     private void ReplayWavFolderThroughVad()
     {
-        var folder = Path.Combine(Application.dataPath, "AudioFiles");
+        var folder = VepMod.VoiceBanks.RootFolder;
         if (!Directory.Exists(folder))
         {
-            LOG.Warning($"DevTools: no AudioFiles folder at {folder}.");
+            LOG.Warning($"DevTools: no Voice Bank folder at {folder}.");
             return;
         }
 
@@ -227,50 +227,29 @@ public sealed class DroidDevTools : MonoBehaviour
 
         foreach (var file in files)
         {
-            if (!TryLoadWav(file, out var samples, out var sr))
+            VoiceSample sample;
+            try
             {
-                LOG.Warning($"  skip (unreadable): {Path.GetFileName(file)}");
+                sample = WavCodec.Decode(File.ReadAllBytes(file));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException)
+            {
+                LOG.Warning($"  skip (unreadable: {ex.Message}): {Path.GetFileName(file)}");
                 continue;
             }
 
-            var result = validator.Validate(samples, sr);
+            var result = validator.Validate(sample.Samples, sample.SampleRate);
             total++;
             var ratio = result.Analysis?.SpeechRatio ?? 0f;
             ratioSum += ratio;
             if (result.IsValid) accepted++;
 
-            LOG.Info($"  {(result.IsValid ? "ACCEPT" : "REJECT")} ratio={ratio:P0} [{sr}Hz] {Path.GetFileName(file)}");
+            LOG.Info($"  {(result.IsValid ? "ACCEPT" : "REJECT")} ratio={ratio:P0} [{sample.SampleRate}Hz] {Path.GetFileName(file)}");
         }
 
         var meanRatio = total > 0 ? ratioSum / total : 0f;
         LOG.Info($"DevTools: VAD replay done — accepted {accepted}/{total} (rejected {total - accepted}), mean speechRatio={meanRatio:P0}. " +
                  "Note: whole-clip analysis (no trailing-silence trim), matches the offline benchmark.");
-    }
-
-    /// <summary>
-    ///     Reads a mono PCM16 WAV written by WavFileManager, with its canonical 44-byte header.
-    /// </summary>
-    private static bool TryLoadWav(string path, out float[] samples, out int sampleRate)
-    {
-        samples = Array.Empty<float>();
-        sampleRate = 0;
-        try
-        {
-            var bytes = File.ReadAllBytes(path);
-            if (bytes.Length <= 44) return false;
-            sampleRate = BitConverter.ToInt32(bytes, 24); // standard WAV sample rate offset
-            if (sampleRate <= 0) return false;
-
-            var pcmLength = bytes.Length - 44;
-            var pcm = new byte[pcmLength];
-            Array.Copy(bytes, 44, pcm, 0, pcmLength);
-            samples = AudioFilters.ConvertBytesToFloats(pcm);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 #endif
 

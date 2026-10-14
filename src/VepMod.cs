@@ -1,3 +1,4 @@
+using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -6,6 +7,7 @@ using UnityEngine;
 using VepMod.Dev;
 #endif
 using VepMod.Enemies.Whispral;
+using VepMod.VepFramework;
 #if !VEPMOD_NO_VAD
 using VepMod.VepFramework.Audio;
 #endif
@@ -61,11 +63,19 @@ public class VepMod : BaseUnityPlugin
     public static ConfigEntry<VadSensitivity> ConfigVadSensitivity;
 #endif
 
+    private static readonly VepLogger LOG = VepLogger.Create<VepMod>();
+
+    public static VoiceBanks VoiceBanks { get; private set; }
+
     private void Awake()
     {
         PreventDelete();
 
         InitConfig();
+
+        VoiceBanks = new VoiceBanks(Path.Combine(Application.dataPath, "AudioFiles"),
+            () => ConfigSamplesPerPlayer.Value);
+        LOG.Debug($"Voice Bank store created at {VoiceBanks.RootFolder}.");
 
         new Harmony("VepMod.Plugin").PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
