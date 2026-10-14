@@ -27,7 +27,6 @@ public sealed class VoiceSampleSharing : MonoBehaviour
     private PlayerAvatar _playerAvatar;
 
 #if DEBUG
-    /// <summary>Shown on the DroidDevTools HUD.</summary>
     public static string? LastCaptureVerdict { get; private set; }
 #endif
 

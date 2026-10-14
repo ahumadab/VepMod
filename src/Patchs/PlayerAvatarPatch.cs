@@ -18,18 +18,9 @@ internal class PlayerAvatarPatch
             return;
         }
 
-        var mimics = __instance.GetComponent<WhispralMimics>();
-        if (!mimics)
-        {
-            mimics = __instance.gameObject.AddComponent<WhispralMimics>();
-            LOG.Debug($"Added Mimics component to PlayerAvatar: {__instance.name}");
-        }
-        else
-        {
-            LOG.Warning($"PlayerAvatar: {__instance.name} already has a WhispralMimics component.");
-        }
-
+        var mimics = __instance.gameObject.AddComponent<WhispralMimics>();
         __instance.gameObject.AddComponent<VoiceSampleSharing>();
+        LOG.Debug($"Mimics and Voice Sample sharing added to PlayerAvatar: {__instance.name}");
 
         var photonView = __instance.GetComponent<PhotonView>();
         if (!photonView || !photonView.IsMine)
