@@ -43,9 +43,10 @@ library with a managed wrapper, usable in the Unity runtime, with no model files
 
 ### Tool
 
-`tests/AudioBenchmark/` is a standalone .NET 8 console app. It keeps its own copies of the validators, including the
-energy-threshold one that production dropped. Run it with `dotnet run -c Release` from that folder; it writes
-`results/benchmark_<timestamp>.csv` and refreshes `results/labeling_report.html`.
+`tests/AudioBenchmark/` is a standalone .NET 8 console app. It compiles the shipped `VadAudioValidator` source, so its
+numbers describe the code players run, and keeps its own copy only of the energy-threshold validator that production
+dropped. Run it with `dotnet run -c Release` from that folder; it writes `benchmark_results.csv`, `labels.json` and
+`labeling_report.html` to `bin/Release/net8.0/results/`.
 
 ### Configurations tested
 

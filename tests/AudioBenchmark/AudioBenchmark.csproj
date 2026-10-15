@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\Enemies\Whispral\WavCodec.cs" Link="WavCodec.cs" />
+    <Compile Include="..\..\src\VepFramework\Audio\VadAudioValidator.cs" Link="VadAudioValidator.cs" />
   </ItemGroup>
 
 </Project>
