@@ -2,7 +2,7 @@
 //   node tooling/prefab-tree.mjs "../Repo_04/Assets/REPO/Game/Resources/PlayerAvatar.prefab"
 //   --transforms      adds each object's local scale and its height above the root, rotations ignored
 //   --refs <Script>   prints that script's references to other objects, by name, instead of the tree
-// Scripts are named through the .cs.meta files under ../Repo_04/Assets (or the folder given second), layers through
+// Scripts are named through the .cs.meta files under Repo_04/Assets beside this repo (or the folder given second), layers through
 // the ProjectSettings/TagManager.asset beside that folder.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -159,7 +159,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     };
     const refs = take("--refs", true);
     const withTransforms = take("--transforms", false) !== undefined;
-    const [prefab, assets = "../Repo_04/Assets"] = args;
+    const [prefab, assets = fileURLToPath(new URL("../../Repo_04/Assets", import.meta.url))] = args;
     if (!prefab) {
         console.error("Usage: node tooling/prefab-tree.mjs <file.prefab> [assets folder] [--transforms] [--refs <Script>]");
         process.exit(1);
