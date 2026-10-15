@@ -266,8 +266,9 @@ public sealed class HallucinationMovement : MonoBehaviour
         return true;
     }
 
-    private bool TryCalculateCompletePath(Vector3 destination, NavMeshPath path)
+    private bool TryCalculateCompletePath(Vector3 destination, out NavMeshPath path)
     {
+        path = new NavMeshPath();
         return IsOnNavMesh
                && _navAgent.CalculatePath(destination, path)
                && path.status == NavMeshPathStatus.PathComplete;
@@ -275,12 +276,7 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     private bool TrySetPath(Vector3 destination)
     {
-        var path = new NavMeshPath();
-        if (!TryCalculateCompletePath(destination, path))
-        {
-            LOG.Debug($"TrySetPath: No complete path to {destination}");
-            return false;
-        }
+        if (!TryCalculateCompletePath(destination, out var path)) return false;
 
         _destination = destination;
         _navAgent.SetPath(path);
@@ -375,7 +371,7 @@ public sealed class HallucinationMovement : MonoBehaviour
             yield break;
         }
 
-        if (TryCalculateCompletePath(hit.position, new NavMeshPath()))
+        if (TryCalculateCompletePath(hit.position, out _))
         {
             _precomputedDestination = hit.position;
         }
@@ -420,7 +416,7 @@ public sealed class HallucinationMovement : MonoBehaviour
 
         yield return null;
 
-        if (!TryCalculateCompletePath(point, new NavMeshPath()))
+        if (!TryCalculateCompletePath(point, out _))
         {
             LOG.Debug($"PrecomputeForward: No complete path to {point}");
             _isPrecomputingForward = false;
