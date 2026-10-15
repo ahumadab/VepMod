@@ -32,7 +32,7 @@ belongs to the tooling, not here.
   `Find` or serialized reference that reached it at its old place.
 - Undoing a change to a game object gives back the value the game would hold now: recorded before the change, or
   read from its owner's state (`FlashlightController.currentState`), not a hard-coded one.
-- Per-frame code does not allocate, and does not retry the same failure every frame.
+- Per-frame and timer-driven code does not allocate, and does not log or retry the same failure every tick.
 
 ## Network contract
 

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VepMod.VepFramework;
 
 #pragma warning disable CS8618
 
@@ -12,6 +13,8 @@ namespace VepMod.Enemies.Whispral.Visuals;
 /// </summary>
 public sealed class HallucinationVisualsRelay : MonoBehaviour
 {
+    private static readonly VepLogger LOG = VepLogger.Create<HallucinationVisualsRelay>();
+
     private CosmeticCustomSpring[] _customSprings = System.Array.Empty<CosmeticCustomSpring>();
     private Hallucination _hallucination;
     private CosmeticSprings[] _springs = System.Array.Empty<CosmeticSprings>();
@@ -33,6 +36,14 @@ public sealed class HallucinationVisualsRelay : MonoBehaviour
             _springs = cloneRoot.GetComponentsInChildren<CosmeticSprings>(true);
             _customSprings = cloneRoot.GetComponentsInChildren<CosmeticCustomSpring>(true);
         }
+
+        var typed = 0;
+        foreach (var spring in _springs)
+        {
+            if (_springTypes.ContainsKey(spring)) typed++;
+        }
+
+        LOG.Debug($"Initialize: springs={_springs.Length}, typed={typed}, customSprings={_customSprings.Length}");
     }
 
     private bool TryGetSpringType(CosmeticSprings spring, out SemiFunc.CosmeticType type)
