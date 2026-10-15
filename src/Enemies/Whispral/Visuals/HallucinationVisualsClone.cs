@@ -38,9 +38,6 @@ internal static class HallucinationVisualsClone
         "CosmeticBlocked"
     };
 
-    // Held from TryCloneRig to AttachRelay, in the same frame.
-    private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType>? _springTypeCache;
-
     /// <summary>
     ///     MyDroid/Enable/Cube, which holds the Animator and the [RIG].
     /// </summary>
@@ -92,9 +89,11 @@ internal static class HallucinationVisualsClone
     public static bool TryCloneRig(
         PlayerAvatar imitatedPlayer,
         Transform cube,
-        out GameObject? cloneRig)
+        out GameObject? cloneRig,
+        out Dictionary<CosmeticSprings, SemiFunc.CosmeticType> springTypes)
     {
         cloneRig = null;
+        springTypes = new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>();
 
         if (imitatedPlayer == null || cube == null)
         {
@@ -124,8 +123,7 @@ internal static class HallucinationVisualsClone
         clone.SetActive(true);
 
         // Before Sanitize destroys the Cosmetic MonoBehaviours that know each spring's type.
-        var springTypes = CaptureSpringTypes(clone);
-        _springTypeCache = springTypes;
+        springTypes = CaptureSpringTypes(clone);
 
         Sanitize(clone);
         ApplyColors(clone, imitatedPlayer);
@@ -326,12 +324,15 @@ internal static class HallucinationVisualsClone
         return true;
     }
 
-    public static void AttachRelay(Animator animator, Hallucination hallucination, GameObject cloneRig)
+    public static void AttachRelay(
+        Animator animator,
+        Hallucination hallucination,
+        GameObject cloneRig,
+        Dictionary<CosmeticSprings, SemiFunc.CosmeticType> springTypes)
     {
         if (animator == null) return;
         var relay = animator.gameObject.AddComponent<HallucinationVisualsRelay>();
-        relay.Initialize(hallucination, cloneRig, _springTypeCache ?? new Dictionary<CosmeticSprings, SemiFunc.CosmeticType>());
-        _springTypeCache = null;
+        relay.Initialize(hallucination, cloneRig, springTypes);
     }
 
     private static Dictionary<CosmeticSprings, SemiFunc.CosmeticType> CaptureSpringTypes(GameObject clone)

@@ -20,6 +20,8 @@ public sealed class HallucinationMovement : MonoBehaviour
     private const float MaxFallSpeed = 55f; // m/s, anti-tunnelling clamp, never reached in a level
     private const float FallAnimDelay = 0.12f; // s airborne before the fall animation starts
 
+    private const float ForwardMaxAngleDeviation = 30f;
+
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationMovement>();
 
     private CharacterController _charController;
@@ -126,11 +128,11 @@ public sealed class HallucinationMovement : MonoBehaviour
         StartCoroutine(PrecomputeDestinationCoroutine());
     }
 
-    public void StartPrecomputeForwardDestination(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
+    public void StartPrecomputeForwardDestination()
     {
         if (_isPrecomputingForward) return;
         _precomputedForwardDestination = null;
-        StartCoroutine(PrecomputeForwardDestinationCoroutine(minDistance, maxDistance, maxAngleDeviation));
+        StartCoroutine(PrecomputeForwardDestinationCoroutine());
     }
 
     public void ClearPrecomputedForwardDestination()
@@ -184,17 +186,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         if (player == null || !IsOnNavMesh) return false;
 
         var playerPos = player.transform.position;
-        if (!NavMesh.SamplePosition(playerPos, out var hit, 5f, _savedAreaMask)) return false;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _destination = hit.position;
-        _navAgent.SetPath(path);
-        return true;
+        return NavMesh.SamplePosition(playerPos, out var hit, 5f, _savedAreaMask) && TrySetPath(hit.position);
     }
 
     public bool TrySetFleeDestination(float fleeDistance)
@@ -205,26 +197,16 @@ public sealed class HallucinationMovement : MonoBehaviour
         var directionAway = (_controllerTransform.position - player.transform.position).normalized;
         var fleeTarget = _controllerTransform.position + directionAway * fleeDistance;
 
-        if (!NavMesh.SamplePosition(fleeTarget, out var hit, 10f, _savedAreaMask)) return false;
-
-        if (!IsOnNavMesh) return false;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _destination = hit.position;
-        _navAgent.SetPath(path);
-        return true;
+        return NavMesh.SamplePosition(fleeTarget, out var hit, 10f, _savedAreaMask) && TrySetPath(hit.position);
     }
 
     public bool TrySetRandomDestination()
     {
         if (_precomputedDestination.HasValue)
         {
-            return TrySetDestination(_precomputedDestination.Value);
+            var destination = _precomputedDestination.Value;
+            _precomputedDestination = null;
+            return TrySetPath(destination);
         }
 
         LOG.Warning("No precomputed destination, falling back to sync search");
@@ -233,23 +215,23 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public bool TryExtendCurrentPath()
     {
-        if (_precomputedForwardDestination.HasValue)
-        {
-            LOG.Debug($"TryExtendCurrentPath: Using precomputed forward destination at {_precomputedForwardDestination.Value}");
-            return TrySetForwardDestination(_precomputedForwardDestination.Value);
-        }
+        var precomputed = _precomputedForwardDestination;
+        _precomputedForwardDestination = null;
 
-        LOG.Debug("TryExtendCurrentPath: No precomputed forward destination, falling back to sync calculation");
-        return TryExtendCurrentPathSync();
+        Vector3 destination;
+        if (precomputed.HasValue) destination = precomputed.Value;
+        else if (!TryFindForwardPoint(out destination)) return false;
+
+        var extended = TrySetPath(destination);
+        LOG.Debug($"TryExtendCurrentPath: {(precomputed.HasValue ? "precomputed" : "sync")} destination " +
+                  $"{destination}, extended={extended}");
+        return extended;
     }
 
-    private bool TryExtendCurrentPathSync(float minDistance = 5f, float maxDistance = 15f, float maxAngleDeviation = 30f)
+    private bool TryFindForwardPoint(out Vector3 point)
     {
-        if (_controllerTransform == null || !IsOnNavMesh)
-        {
-            LOG.Debug("TryExtendCurrentPathSync: Invalid controller or NavAgent");
-            return false;
-        }
+        point = default;
+        if (_controllerTransform == null || !IsOnNavMesh) return false;
 
         var direction = _currentVelocity.normalized;
         var directionSource = "velocity";
@@ -262,51 +244,40 @@ public sealed class HallucinationMovement : MonoBehaviour
 
         if (direction.sqrMagnitude < 0.01f)
         {
-            LOG.Debug("TryExtendCurrentPathSync: No valid direction found");
+            LOG.Debug("TryFindForwardPoint: No valid direction found");
             return false;
         }
 
-        var angleDeviation = UnityEngine.Random.Range(-maxAngleDeviation, maxAngleDeviation);
+        var angleDeviation = UnityEngine.Random.Range(-ForwardMaxAngleDeviation, ForwardMaxAngleDeviation);
         direction = Quaternion.Euler(0f, angleDeviation, 0f) * direction;
 
-        var distance = UnityEngine.Random.Range(minDistance, maxDistance);
-        var targetPos = _controllerTransform.position + direction * distance;
+        var distance = UnityEngine.Random.Range(Hallucination.SpawnDistanceMin, Hallucination.SpawnDistanceMax);
+        var aheadPos = _controllerTransform.position + direction * distance;
 
-        LOG.Debug($"TryExtendCurrentPathSync: source={directionSource}, angle={angleDeviation:F1}°, dist={distance:F1}m");
+        LOG.Debug($"TryFindForwardPoint: source={directionSource}, angle={angleDeviation:F1}°, dist={distance:F1}m");
 
-        if (!NavMesh.SamplePosition(targetPos, out var hit, 10f, _savedAreaMask))
+        if (!NavMesh.SamplePosition(aheadPos, out var hit, 10f, _savedAreaMask))
         {
-            LOG.Debug($"TryExtendCurrentPathSync: No NavMesh position found near {targetPos}");
+            LOG.Debug($"TryFindForwardPoint: No NavMesh position found near {aheadPos}");
             return false;
         }
 
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            LOG.Debug($"TryExtendCurrentPathSync: Path calculation failed to {hit.position}");
-            return false;
-        }
-
-        LOG.Debug($"TryExtendCurrentPathSync: SUCCESS - new destination at {hit.position}");
-        _destination = hit.position;
-        _navAgent.SetPath(path);
+        point = hit.position;
         return true;
     }
 
-    private bool TrySetForwardDestination(Vector3 destination)
+    private bool TryCalculateCompletePath(Vector3 destination, out NavMeshPath path)
     {
-        _precomputedForwardDestination = null;
+        path = new NavMeshPath();
+        return IsOnNavMesh
+               && _navAgent.CalculatePath(destination, path)
+               && path.status == NavMeshPathStatus.PathComplete;
+    }
 
-        if (!IsOnNavMesh) return false;
+    private bool TrySetPath(Vector3 destination)
+    {
+        if (!TryCalculateCompletePath(destination, out var path)) return false;
 
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            LOG.Debug($"TrySetForwardDestination: Path recalculation failed to {destination}");
-            return false;
-        }
-
-        LOG.Debug($"TrySetForwardDestination: SUCCESS - destination set to {destination}");
         _destination = destination;
         _navAgent.SetPath(path);
         return true;
@@ -400,32 +371,12 @@ public sealed class HallucinationMovement : MonoBehaviour
             yield break;
         }
 
-        var path = new NavMeshPath();
-        if (IsOnNavMesh &&
-            _navAgent.CalculatePath(hit.position, path) &&
-            path.status == NavMeshPathStatus.PathComplete)
+        if (TryCalculateCompletePath(hit.position, out _))
         {
             _precomputedDestination = hit.position;
         }
 
         _isPrecomputingDestination = false;
-    }
-
-    private bool TrySetDestination(Vector3 destination)
-    {
-        _precomputedDestination = null;
-
-        if (!IsOnNavMesh) return false;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(destination, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _destination = destination;
-        _navAgent.SetPath(path);
-        return true;
     }
 
     private bool TrySetDestinationSync()
@@ -450,78 +401,30 @@ public sealed class HallucinationMovement : MonoBehaviour
             return false;
         }
 
-        _destination = hit.position;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(_destination, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            return false;
-        }
-
-        _navAgent.SetPath(path);
-        return true;
+        return TrySetPath(hit.position);
     }
 
-    private IEnumerator PrecomputeForwardDestinationCoroutine(float minDistance, float maxDistance, float maxAngleDeviation)
+    private IEnumerator PrecomputeForwardDestinationCoroutine()
     {
         _isPrecomputingForward = true;
-        LOG.Debug("PrecomputeForward: Starting coroutine");
 
-        if (_controllerTransform == null || !IsOnNavMesh)
+        if (!TryFindForwardPoint(out var point))
         {
-            LOG.Debug("PrecomputeForward: Invalid controller or NavAgent");
-            _isPrecomputingForward = false;
-            yield break;
-        }
-
-        var direction = _currentVelocity.normalized;
-        var directionSource = "velocity";
-
-        if (direction.sqrMagnitude < 0.01f)
-        {
-            direction = (_destination - _controllerTransform.position).normalized;
-            directionSource = "destination";
-        }
-
-        if (direction.sqrMagnitude < 0.01f)
-        {
-            LOG.Debug("PrecomputeForward: No valid direction found");
             _isPrecomputingForward = false;
             yield break;
         }
 
         yield return null;
 
-        var angleDeviation = UnityEngine.Random.Range(-maxAngleDeviation, maxAngleDeviation);
-        direction = Quaternion.Euler(0f, angleDeviation, 0f) * direction;
-
-        var distance = UnityEngine.Random.Range(minDistance, maxDistance);
-        var currentPos = _controllerTransform.position;
-        var targetPos = currentPos + direction * distance;
-
-        LOG.Debug($"PrecomputeForward: source={directionSource}, angle={angleDeviation:F1}°, dist={distance:F1}m");
-
-        yield return null;
-
-        if (!NavMesh.SamplePosition(targetPos, out var hit, 10f, _savedAreaMask))
+        if (!TryCalculateCompletePath(point, out _))
         {
-            LOG.Debug($"PrecomputeForward: No NavMesh position found near {targetPos}");
+            LOG.Debug($"PrecomputeForward: No complete path to {point}");
             _isPrecomputingForward = false;
             yield break;
         }
 
-        yield return null;
-
-        var path = new NavMeshPath();
-        if (!_navAgent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete)
-        {
-            LOG.Debug($"PrecomputeForward: Path calculation failed to {hit.position}");
-            _isPrecomputingForward = false;
-            yield break;
-        }
-
-        _precomputedForwardDestination = hit.position;
-        LOG.Debug($"PrecomputeForward: SUCCESS - precomputed destination at {hit.position}");
+        _precomputedForwardDestination = point;
+        LOG.Debug($"PrecomputeForward: SUCCESS - precomputed destination at {point}");
         _isPrecomputingForward = false;
     }
 }

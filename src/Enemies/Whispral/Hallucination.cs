@@ -82,11 +82,6 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     protected override StateId DefaultState => StateId.Idle;
 
-    protected override void Awake()
-    {
-        // base.Awake() is skipped: the FSM is built in Initialize().
-    }
-
     protected override void Update()
     {
         if (Movement == null || !Movement.IsOnNavMesh) return;
@@ -170,7 +165,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         SetupGaze();
         SetupAnimationController();
         SetupNameplate();
-        InitializeFsm();
+        AddStates();
 
         LOG.Info($"Hallucination created for {imitatedPlayer.playerName} at {ControllerTransform.position}");
     }
@@ -319,9 +314,8 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         _nameplateController.Initialize(ControllerTransform, ImitatedPlayer, Gaze);
     }
 
-    private void InitializeFsm()
+    private void AddStates()
     {
-        Fsm = new StateMachine(this, DefaultState);
         Fsm.AddState(StateId.Idle, new IdleState());
         Fsm.AddState(StateId.Wander, new WanderState());
         Fsm.AddState(StateId.Sprint, new SprintState());
@@ -477,7 +471,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
         HallucinationVisualsClone.StripExistingRig(cube);
 
-        if (!HallucinationVisualsClone.TryCloneRig(ImitatedPlayer, cube, out var cloneRig))
+        if (!HallucinationVisualsClone.TryCloneRig(ImitatedPlayer, cube, out var cloneRig, out var springTypes))
         {
             LOG.Warning("Failed to clone Imitated Player [RIG]");
             return;
@@ -493,7 +487,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
             _animator.Rebind();
             _animator.Update(0f);
 
-            HallucinationVisualsClone.AttachRelay(_animator, this, cloneRig);
+            HallucinationVisualsClone.AttachRelay(_animator, this, cloneRig, springTypes);
             HallucinationVisualsClone.TryCloneFlashlight(ImitatedPlayer, cloneRig);
             HallucinationVisualsClone.TryCloneMapTool(ImitatedPlayer, cloneRig, out var mapTool);
 
