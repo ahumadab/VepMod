@@ -15,8 +15,9 @@ the data behind it. A criterion about what the Victim sees is proved by what Uni
 not by the line of the code that asked for it. A criterion about a bound (an angle limit, a cap, a timeout) needs an
 action that reaches the bound, and the test plan says how to reach it. An action the tester cannot trigger at will (a command the Master sends, a state reached only by
 chance) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
-(`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about.
-After the test, `node tooling/test-log.mjs [--grep <regex>]` prints VepMod's lines from every instance's log of that
+(`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about. Work with
+criteria seen in game is handed back with that deploy and the test plan, in the same reply.
+After the test, `node tooling/test-log.mjs [--grep <regex>] [--exclude <regex>]` prints VepMod's lines from every instance's log of that
 test, one section per level, with its local player and Master.
 
 ## Coding standards

@@ -27,3 +27,26 @@ test("filters by the regex but keeps the level headers", () => {
         "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
     ]);
 });
+
+test("drops the lines the exclude regex matches", () => {
+    assert.deepEqual(summarizeLog(log, undefined, /NavMesh|renderers/), [
+        "--- 23:01:02.788 level start, local player VieuxPoulpe, Master: True",
+        "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
+    ]);
+});
+
+test("shows the game's errors of a launch that reached no level", () => {
+    const failedLaunch = [
+        "[Info   :    VepMod] com.vep.vepMod v1.1.0 has loaded!",
+        "[Error  : Unity Log] Steamworks failed to initialize. Error: SteamApi_Init failed with NoSteamClient",
+        "[Error  : Unity Log] NullReferenceException: Object reference not set to an instance of an object",
+        "Stack trace:",
+        "[Error  : Unity Log] NullReferenceException: Object reference not set to an instance of an object",
+    ].join("\r\n");
+
+    assert.deepEqual(summarizeLog(failedLaunch), [
+        "no level start; the game's errors:",
+        "[Error  : Unity Log] Steamworks failed to initialize. Error: SteamApi_Init failed with NoSteamClient",
+        "[Error  : Unity Log] NullReferenceException: Object reference not set to an instance of an object ×2",
+    ]);
+});
