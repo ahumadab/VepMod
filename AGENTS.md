@@ -6,6 +6,8 @@ Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04
 
 Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components; `--refs <Script>` names the object each of that script's fields points to (`PlayerEyes.targetIdle → Eye Target Idle`).
 
+Unity's modules as the game ships them (`UnityEngine.*Module.dll`): `../Repo_04/AssetRipperOutput/AuxiliaryFiles/GameAssemblies/`. Read them before relying on an attribute or a base class of a Unity type (`[RequireComponent]` on `AudioLowPassFilter`).
+
 ## In-game tests
 
 The tester confirms what the game shows; only the BepInEx logs show the state behind it (a Hallucination on the floor
@@ -17,8 +19,8 @@ action that reaches the bound, and the test plan says how to reach it. An action
 chance) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
 (`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about. Work with
 criteria seen in game is handed back with that deploy and the test plan, in the same reply.
-After the test, `node tooling/test-log.mjs [--grep <regex>] [--exclude <regex>]` prints VepMod's lines from every instance's log of that
-test, one section per level, with its local player and Master.
+After the test, `node tooling/test-log.mjs [--grep <regex>] [--exclude <regex>]` prints VepMod's lines and the game's errors from every
+instance's log of that test, one section per level, with its local player and Master.
 
 ## Coding standards
 

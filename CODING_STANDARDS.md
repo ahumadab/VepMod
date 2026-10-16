@@ -55,6 +55,8 @@ belongs to the tooling, not here.
 - Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
   action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
+  (another player's Map Tool, not the local player's, who has none).
 
 ## Decisions
 

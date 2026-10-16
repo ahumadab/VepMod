@@ -10,14 +10,17 @@ const log = [
     "[Warning:VepMod.HallucinationMovement] 23:09:55.793 Controller off NavMesh at (-10.08, 6.90, 7.54)",
     "[Warning:VepMod.HallucinationMovement] 23:09:55.810 Controller off NavMesh at (-10.08, 6.90, 7.54)",
     "[Info   :VepMod.HallucinationDevTools] 23:12:23.730 DevTools: 50 renderers of Hallucination_VieuxPoulpe",
+    "[Error  : Unity Log] Can't remove AudioSource because AudioLowPassFilter depends on it",
+    "[Error  : Unity Log] Can't remove AudioSource because AudioLowPassFilter depends on it",
 ].join("\r\n");
 
-test("keeps VepMod's lines, heads each level, folds repeats", () => {
+test("keeps VepMod's lines and the game's errors, heads each level, folds repeats", () => {
     assert.deepEqual(summarizeLog(log), [
         "--- 23:01:02.788 level start, local player VieuxPoulpe, Master: True",
         "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
         "23:09:55.776 Warning HallucinationMovement: Controller off NavMesh at (-10.08, 6.90, 7.54) ×3",
         "23:12:23.730 HallucinationDevTools: DevTools: 50 renderers of Hallucination_VieuxPoulpe",
+        "[Error  : Unity Log] Can't remove AudioSource because AudioLowPassFilter depends on it ×2",
     ]);
 });
 
@@ -29,7 +32,7 @@ test("filters by the regex but keeps the level headers", () => {
 });
 
 test("drops the lines the exclude regex matches", () => {
-    assert.deepEqual(summarizeLog(log, undefined, /NavMesh|renderers/), [
+    assert.deepEqual(summarizeLog(log, undefined, /NavMesh|renderers|Can't remove/), [
         "--- 23:01:02.788 level start, local player VieuxPoulpe, Master: True",
         "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",
     ]);
