@@ -39,6 +39,7 @@ internal sealed class HallucinationBody
     private readonly PlayerAvatarVisuals _visuals;
     private int _footstepsBlocked;
     private float _logTimer;
+    private bool _wasFalling;
 
     private HallucinationBody(Hallucination hallucination, PlayerAvatarVisuals source, Transform cube,
         Animator animator)
@@ -132,6 +133,15 @@ internal sealed class HallucinationBody
         _visuals.Update();
 
         if (!LOG.DebugEnabled) return;
+        // A fall lasts less than a periodic line's interval.
+        var falling = _animator.GetBool(FallingKey);
+        if (falling != _wasFalling)
+        {
+            _wasFalling = falling;
+            LOG.Debug($"Body of {Name}: {(falling ? "falls" : "lands")}, {_hallucination.Movement.VerticalVelocity:F1} m/s");
+        }
+
+
         _logTimer -= Time.deltaTime;
         if (_logTimer > 0f) return;
         _logTimer = LogInterval;
