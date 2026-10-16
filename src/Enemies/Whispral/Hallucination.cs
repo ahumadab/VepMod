@@ -120,6 +120,14 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     }
 
     /// <summary>
+    ///     Dev tools only.
+    /// </summary>
+    public void DebugGlanceToBoundNext()
+    {
+        _wait.GlanceToBoundNext();
+    }
+
+    /// <summary>
     ///     Dev tools only: walks to <paramref name="point" />, which must be on the NavMesh.
     /// </summary>
     public void DebugWalkTo(Vector3 point)

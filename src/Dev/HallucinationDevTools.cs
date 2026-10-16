@@ -77,6 +77,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Input.GetKeyDown(DropKey))
         {
             if (ShiftHeld()) MimicNearest();
+            else if (AltHeld()) GlanceToBoundWithNearest();
             else DropNearest();
         }
 
@@ -228,6 +229,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         _nearest.DebugTurnRoundNextWait();
         LOG.Info($"DevTools: {_nearest.name} turns round at the start of its next wait.");
+    }
+
+    private void GlanceToBoundWithNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to glance.");
+            return;
+        }
+
+        _nearest.DebugGlanceToBoundNext();
+        LOG.Info($"DevTools: {_nearest.name}'s next Glance goes to 120°, away from its body.");
     }
 
     private void DropNearest()
@@ -557,6 +571,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Alt+F8 the two nearest Hallucinations walk to each other's place\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Alt+F7 the nearest Hallucination turns round at the start of its next wait\n" +
+                 "Alt+F9 the nearest Hallucination's next Glance goes to 120°\n" +
                  "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command to every attached Victim (Master)\n" +
@@ -591,7 +606,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 380), sb, style);
+        GUI.Box(new Rect(10, 10, 440, 400), sb, style);
     }
 }
 #endif

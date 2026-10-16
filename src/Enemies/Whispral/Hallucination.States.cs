@@ -56,6 +56,7 @@ public sealed partial class Hallucination
                 Machine.Owner.Movement.Face(_facing + glance.Body);
                 Machine.Owner.BodyPose.Glance(_facing + glance.Head);
                 LOG.Debug($"IdleState: {Machine.Owner.name} glances {glance.Head:F0}° from its wait's facing, " +
+                          $"{glance.OffBody:F0}° off the body, " +
                           (glance.BodyFollows ? $"the body following to {glance.Body:F0}°" : "the head alone"));
             }
 

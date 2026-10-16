@@ -21,7 +21,7 @@ internal sealed class HallucinationBody
     private const float LogInterval = 0.5f; // s
 
     // Far enough that the head's own motion does not change the direction it looks in.
-    private const float GlanceTargetDistance = 10f; // m
+    private const float GlancePointDistance = 10f; // m
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationBody>();
 
@@ -38,7 +38,7 @@ internal sealed class HallucinationBody
     private readonly Transform _body;
     private readonly PlayerAvatar _fake;
     private readonly PlayerEyes _fakeEyes;
-    private readonly Transform _glanceTarget;
+    private readonly Transform _glancePoint;
     private readonly Hallucination _hallucination;
     private readonly PlayerAvatarVisuals _visuals;
     private int _footstepsBlocked;
@@ -62,8 +62,8 @@ internal sealed class HallucinationBody
         var playersBefore = playerList.Count;
         _fake = CreateFake(hallucination.transform, hallucination.ImitatedPlayer, source, out _fakeEyes);
         Fakes[_fake] = this;
-        _glanceTarget = new GameObject("Glance Target").transform;
-        _glanceTarget.SetParent(hallucination.transform, false);
+        _glancePoint = new GameObject("Glance Point").transform;
+        _glancePoint.SetParent(hallucination.transform, false);
 
         _visuals = cube.gameObject.AddComponent<PlayerAvatarVisuals>();
         JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(source), _visuals);
@@ -233,9 +233,9 @@ internal sealed class HallucinationBody
         var lookAt = victimCamera != null ? victimCamera.transform : null;
         if (pose.GlanceYaw is { } yaw)
         {
-            _glanceTarget.position = _visuals.headLookAtTransform.position +
-                                     Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlanceTargetDistance;
-            lookAt = _glanceTarget;
+            _glancePoint.position = _visuals.headLookAtTransform.position +
+                                     Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlancePointDistance;
+            lookAt = _glancePoint;
         }
 
         _fakeEyes.lookAtActive = lookAt != null;
@@ -253,7 +253,7 @@ internal sealed class HallucinationBody
             {
                 LOG.Debug($"Body of {Name}: Glance at {Mathf.Repeat(ended, 360f):F0}° held {Time.time - _glanceStart:F1}s, body turned " +
                           $"{Mathf.DeltaAngle(_glanceBodyYawFrom, bodyYaw):F0}°, head looked up to " +
-                          $"{_glanceWidestLook:F0}° off the body, head mesh up to {_glanceWidestHead:F0}°");
+                          $"{_glanceWidestLook:F0}° off the camera, head mesh up to {_glanceWidestHead:F0}° off the body");
             }
 
             _glanceYaw = yaw;
@@ -264,13 +264,15 @@ internal sealed class HallucinationBody
         }
 
         if (_glanceYaw == null) return;
-        _glanceWidestLook = Widest(_glanceWidestLook, _visuals.headLookAtTransform.eulerAngles.y, bodyYaw);
+        // The game clamps the look around the camera, which leads the body's spring.
+        _glanceWidestLook = Widest(_glanceWidestLook, _visuals.headLookAtTransform.eulerAngles.y,
+            _fake.localCamera.transform.eulerAngles.y);
         _glanceWidestHead = Widest(_glanceWidestHead, _visuals.headSideTransform.eulerAngles.y, bodyYaw);
     }
 
-    private static float Widest(float widest, float yaw, float bodyYaw)
+    private static float Widest(float widest, float yaw, float fromYaw)
     {
-        var off = Mathf.DeltaAngle(bodyYaw, yaw);
+        var off = Mathf.DeltaAngle(fromYaw, yaw);
         return Mathf.Abs(off) > Mathf.Abs(widest) ? off : widest;
     }
 

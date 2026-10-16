@@ -23,6 +23,7 @@ internal sealed class Wait
     private float _elapsed;
     private float _nextGlance;
     private bool _turnRoundNext;
+    private bool _glanceToBoundNext;
 
     /// <param name="roll">A random value in [0, 1].</param>
     public Wait(Func<float> roll)
@@ -52,6 +53,14 @@ internal sealed class Wait
         _turnRoundNext = true;
     }
 
+    /// <summary>
+    ///     The next Glance goes to the bound, on the side away from the body.
+    /// </summary>
+    public void GlanceToBoundNext()
+    {
+        _glanceToBoundNext = true;
+    }
+
     /// <returns>The Glance that starts on this update, if any; none once the Wait is over.</returns>
     public Glance? Update(float deltaTime)
     {
@@ -60,10 +69,16 @@ internal sealed class Wait
 
         _nextGlance += Between(MinGlanceInterval, MaxGlanceInterval);
         var head = Between(-MaxGlanceAngle, MaxGlanceAngle);
+        if (_glanceToBoundNext)
+        {
+            head = _bodyAngle > 0f ? -MaxGlanceAngle : MaxGlanceAngle;
+            _glanceToBoundNext = false;
+        }
+
         var offBody = head - _bodyAngle;
         var bodyFollows = Math.Abs(offBody) > HeadReach;
         if (bodyFollows) _bodyAngle = head - Math.Sign(offBody) * HeadReach;
-        return new Glance(head, _bodyAngle, bodyFollows);
+        return new Glance(head, offBody, _bodyAngle, bodyFollows);
     }
 
     private float Between(float min, float max)
@@ -74,12 +89,16 @@ internal sealed class Wait
     public readonly struct Glance
     {
         public readonly float Head;
+
+        // From where the body faced before the Glance.
+        public readonly float OffBody;
         public readonly float Body;
         public readonly bool BodyFollows;
 
-        public Glance(float head, float body, bool bodyFollows)
+        public Glance(float head, float offBody, float body, bool bodyFollows)
         {
             Head = head;
+            OffBody = offBody;
             Body = body;
             BodyFollows = bodyFollows;
         }

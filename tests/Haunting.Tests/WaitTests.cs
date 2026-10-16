@@ -69,6 +69,25 @@ public class WaitTests
     }
 
     [Fact]
+    public void AGlanceAskedForGoesToTheBoundAwayFromTheBody()
+    {
+        // A 4 s Wait, without a turn round, with a Glance every second.
+        var rolls = new Queue<float>(new[] { 1f, 0f, 0.9f, 0f, 0.5f, 0f, 0.5f });
+        var wait = new Wait(() => rolls.Dequeue());
+        wait.Start();
+        wait.GlanceToBoundNext();
+
+        var toBound = wait.Update(1f);
+        wait.GlanceToBoundNext();
+        var back = wait.Update(1f);
+
+        Assert.Equal(120f, toBound!.Value.Head, 3);
+        Assert.Equal(80f, toBound.Value.Body, 3);
+        Assert.Equal(-120f, back!.Value.Head, 3);
+        Assert.Equal(-200f, back.Value.OffBody, 3);
+    }
+
+    [Fact]
     public void GlancesStayWithin120Degrees()
     {
         var wait = new Wait(Seeded(3));
