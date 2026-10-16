@@ -518,9 +518,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
             sb += $"\nNearest Hallucination:\n" +
                   $"  State      : {_nearest.DebugStateName}\n" +
                   $"  Gaze       : {(_nearest.Gaze.IsOn ? "on" : "off")}\n" +
-                  $"  Grounded   : {m.DebugIsGrounded}\n" +
-                  $"  Falling    : {m.IsFalling}\n" +
-                  $"  VertVel    : {m.DebugVerticalVelocity:F2} m/s\n" +
+                  $"  Grounded   : {m.IsGrounded}\n" +
+                  $"  VertVel    : {m.VerticalVelocity:F2} m/s\n" +
                   $"  Gravity    : {Physics.gravity.y:F2} m/s²";
         }
         else

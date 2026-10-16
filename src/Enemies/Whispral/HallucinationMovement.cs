@@ -18,7 +18,6 @@ public sealed class HallucinationMovement : MonoBehaviour
     // instead of descending at constant speed, with the game's own Physics.gravity.
     private const float GroundedStickSpeed = 2f; // m/s, keeps the controller on the ground and slopes
     private const float MaxFallSpeed = 55f; // m/s, anti-tunnelling clamp, never reached in a level
-    private const float FallAnimDelay = 0.12f; // s airborne before the fall animation starts
 
     private const float ForwardMaxAngleDeviation = 30f;
 
@@ -28,7 +27,6 @@ public sealed class HallucinationMovement : MonoBehaviour
     private Transform _controllerTransform;
     private Vector3 _currentVelocity;
     private float _verticalVelocity;
-    private float _airborneTime;
     private Vector3 _destination;
     private bool _isPrecomputingDestination;
     private bool _isPrecomputingForward;
@@ -46,17 +44,9 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public Vector3 CurrentVelocity => _currentVelocity;
 
-    /// <summary>
-    ///     Drives the animator's 'Falling' bool; the airborne delay keeps it from flickering on stairs.
-    /// </summary>
-    public bool IsFalling => _charController != null
-                             && !_charController.isGrounded
-                             && _airborneTime >= FallAnimDelay
-                             && _verticalVelocity < 0f;
+    public float VerticalVelocity => _verticalVelocity;
 
-    public float DebugVerticalVelocity => _verticalVelocity;
-
-    public bool DebugIsGrounded => _charController != null && _charController.isGrounded;
+    public bool IsGrounded => _charController != null && _charController.isGrounded;
 
     internal bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
 
@@ -166,18 +156,13 @@ public sealed class HallucinationMovement : MonoBehaviour
         }
     }
 
-    public void SyncVisualsToController(Transform? animatorTransform)
+    public void SyncRigidbodyToController()
     {
         if (_rigidbodyTransform == null || _controllerTransform == null) return;
 
         var yOffset = new Vector3(0f, VisualYOffset, 0f);
         _rigidbodyTransform.position = _controllerTransform.position + yOffset;
         _rigidbodyTransform.rotation = _controllerTransform.rotation;
-
-        if (animatorTransform != null && animatorTransform.localPosition != Vector3.zero)
-        {
-            animatorTransform.localPosition = Vector3.zero;
-        }
     }
 
     public bool TrySetDestinationToPlayer()
@@ -305,13 +290,11 @@ public sealed class HallucinationMovement : MonoBehaviour
         if (_charController.isGrounded)
         {
             _verticalVelocity = -GroundedStickSpeed;
-            _airborneTime = 0f;
         }
         else
         {
             _verticalVelocity -= Mathf.Abs(Physics.gravity.y) * Time.deltaTime;
             if (_verticalVelocity < -MaxFallSpeed) _verticalVelocity = -MaxFallSpeed;
-            _airborneTime += Time.deltaTime;
         }
 
         var motion = horizontalVelocity;
