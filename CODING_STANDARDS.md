@@ -50,6 +50,12 @@ belongs to the tooling, not here.
 - A Harmony patch on a voice-thread method only forwards to plain C# that a net8 test project compiles, so the compiler
   keeps Unity out of it (`LocalVoiceFramedPatch` → `VoiceRecorder`).
 
+## Testability
+
+- Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
+  action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
+  `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+
 ## Decisions
 
 - A change that contradicts an ADR in `docs/adr/` supersedes that ADR in the same change; otherwise it is a finding.
