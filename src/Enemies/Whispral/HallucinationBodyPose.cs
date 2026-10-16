@@ -15,13 +15,12 @@ internal enum Gait
 
 /// <summary>
 ///     Poses the PlayerAvatar clone mounted on a Hallucination from what its states say it is doing, the way the game
-///     scripts stripped from the clone pose a player: the animator parameters of PlayerAvatarVisuals.AnimationLogic, the
-///     arm poses of PlayerAvatarRightArm and PlayerAvatarLeftArm, the eyes of PlayerEyes, and the map tool.
+///     scripts stripped from the clone pose a player: the arm poses of PlayerAvatarRightArm and PlayerAvatarLeftArm, the
+///     eyes of PlayerEyes, and the map tool. The game's PlayerAvatarVisuals animates the rest from the same gait and
+///     situation (HallucinationBody).
 /// </summary>
 internal sealed class HallucinationBodyPose : MonoBehaviour
 {
-    private const float TurningAngle = 7f; // °
-
     // From PlayerEyes.Update in the game.
     private const float EyeClampCone = 50f; // °
     private const float EyeClampYaw = 30f; // °
@@ -29,23 +28,6 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationBodyPose>();
 
-    private static readonly int MovingKey = Animator.StringToHash("Moving");
-    private static readonly int SprintingKey = Animator.StringToHash("Sprinting");
-    private static readonly int TurningKey = Animator.StringToHash("Turning");
-    private static readonly int GrabbingKey = Animator.StringToHash("Grabbing");
-    private static readonly int CrouchingKey = Animator.StringToHash("Crouching");
-    private static readonly int CrawlingKey = Animator.StringToHash("Crawling");
-    private static readonly int TumblingKey = Animator.StringToHash("Tumbling");
-    private static readonly int TumblingMoveKey = Animator.StringToHash("TumblingMove");
-    private static readonly int SlidingKey = Animator.StringToHash("Sliding");
-    private static readonly int JumpingKey = Animator.StringToHash("Jumping");
-    private static readonly int FallingKey = Animator.StringToHash("Falling");
-    private static readonly int StunKey = Animator.StringToHash("stun");
-    private static readonly int SprintingImpulseKey = Animator.StringToHash("SprintingImpulse");
-
-    private Animator? _animator;
-    private Transform _controller;
-    private HallucinationMovement _movement;
     private GameObject? _mapTool;
     private Transform? _mapLookTarget;
 
@@ -60,7 +42,12 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     private Situation _situation = Situation.Moving;
     private Gait _gait = Gait.Still;
-    private bool _wasSprinting;
+
+    public Gait Gait => _gait;
+
+    public bool IsCheckingMap => _situation == Situation.CheckingMap;
+
+    public bool IsStaring => _situation == Situation.Staring;
 
     public string DebugEyes => _eyeLeft == null || _eyeRight == null
         ? "no eyes"
@@ -68,10 +55,8 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     private void Update()
     {
-        var checkingMap = _situation == Situation.CheckingMap;
-        _rightArm?.Update(checkingMap ? _mapPose : _basePose);
+        _rightArm?.Update(IsCheckingMap ? _mapPose : _basePose);
         _leftArm?.Update(_flashlightPose);
-        if (_animator != null) Animate(_animator, checkingMap);
     }
 
     // After the animator, which would otherwise overwrite the eye bones.
@@ -95,19 +80,12 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     ///     Called once the rig is cloned; until then the body pose only records the situation.
     /// </summary>
     /// <param name="source">The Imitated Player's visuals, which hold the arm and eye scripts the pose is read from.</param>
-    public void Initialize(Animator animator, HallucinationMovement movement, Transform controller,
-        PlayerAvatarVisuals? source, Transform cloneRig, GameObject? mapTool)
+    public void Initialize(PlayerAvatarVisuals? source, Transform cloneRig, GameObject? mapTool)
     {
-        _animator = animator;
-        _movement = movement;
-        _controller = controller;
         _mapTool = mapTool;
         _mapLookTarget = mapTool != null
             ? HallucinationVisualsClone.FindChildByName(mapTool.transform, "Player Look Target")
             : null;
-
-        // Simplified from PlayerAvatarVisuals.cs:853-866: the Hallucination has no sprint stat bonus.
-        animator.speed = 1f;
 
         if (source == null)
         {
@@ -172,33 +150,6 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
         _gait = gait;
         if (_mapTool != null) _mapTool.SetActive(situation == Situation.CheckingMap);
         LOG.Debug($"Body pose of {name}: {situation}, {gait}");
-    }
-
-    private void Animate(Animator animator, bool checkingMap)
-    {
-        var sprinting = _gait == Gait.Sprint;
-        var turning = (_gait != Gait.Still || _situation == Situation.Staring) &&
-                      Quaternion.Angle(_controller.rotation, _movement.TargetRotation) > TurningAngle;
-
-        animator.SetBool(MovingKey, _gait != Gait.Still);
-        animator.SetBool(SprintingKey, sprinting);
-        animator.SetBool(TurningKey, turning);
-
-        // 'Grabbing' raises the hand to the grabber pose. Every other player bool the Hallucination never uses stays
-        // false, or the animator transitions would not fall back to locomotion.
-        animator.SetBool(GrabbingKey, checkingMap);
-        animator.SetBool(CrouchingKey, false);
-        animator.SetBool(CrawlingKey, false);
-        animator.SetBool(TumblingKey, false);
-        animator.SetBool(TumblingMoveKey, false);
-        animator.SetBool(SlidingKey, false);
-        animator.SetBool(JumpingKey, false);
-        animator.SetBool(FallingKey, _movement.IsFalling);
-        animator.SetBool(StunKey, false);
-
-        // Fired on the rising edge, like PlayerAvatarVisuals.cs:767, for the sprint snap.
-        if (sprinting && !_wasSprinting) animator.SetTrigger(SprintingImpulseKey);
-        _wasSprinting = sprinting;
     }
 
     private Vector3? LookTarget()

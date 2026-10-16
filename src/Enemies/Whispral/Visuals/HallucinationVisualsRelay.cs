@@ -8,7 +8,8 @@ namespace VepMod.Enemies.Whispral.Visuals;
 
 /// <summary>
 ///     Receives the AnimationEvents of a Hallucination's cloned player visuals: the 15 PlayerAvatarVisuals methods
-///     the animations call, without playerAvatar or playerCosmetics, which are destroyed on the clone.
+///     the animations call. The PlayerAvatarVisuals beside it forwards them to a fake PlayerAvatar and PlayerCosmetics
+///     that run none of them (HallucinationBody).
 ///     Must sit on the Animator's GameObject.
 /// </summary>
 public sealed class HallucinationVisualsRelay : MonoBehaviour

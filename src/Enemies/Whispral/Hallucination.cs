@@ -19,9 +19,9 @@ namespace VepMod.Enemies.Whispral;
 ///     Hallucination built on the MyDroid prefab of the embedded bundle; it wanders without attacking.
 ///     Non-visual backbone of the prefab:
 ///     - Controller: NavMeshAgent + CharacterController (movement)
-///     - Rigidbody: transform followed by the visuals
+///     - Rigidbody: follows the Controller
 ///     The prefab visuals (Cube) are removed and replaced by a clone of the Imitated Player's
-///     PlayerAvatarVisuals (cosmetics and colors included).
+///     PlayerAvatarVisuals (cosmetics and colors included), which HallucinationBody animates.
 /// </summary>
 public sealed partial class Hallucination : StateMachineComponent<Hallucination, Hallucination.StateId>
 {
@@ -62,6 +62,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private NavMeshAgent _navAgent;
     private Transform? _rigidbodyTransform;
     private Animator? _animator;
+    private HallucinationBody? _body;
 
     // NavMesh settings (saved for initialization)
     private int _savedAgentTypeID;
@@ -93,8 +94,9 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
         Movement.UpdateMovement(isMovementState);
         Movement.UpdateRotation();
-        Movement.SyncVisualsToController(_animator != null ? _animator.transform : null);
+        Movement.SyncRigidbodyToController();
         Movement.SyncNavAgentPosition(isMovementState);
+        _body?.Animate();
     }
 
     /// <summary>
@@ -278,6 +280,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private void OnDestroy()
     {
         LogMimicsCutShort();
+        _body?.Release();
         if (Movement != null)
         {
             Movement.OnNavMeshError -= HandleNavMeshError;
@@ -493,8 +496,8 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
             // The arm and eye scripts live on the 'Player Visuals' GameObject, a sibling of the 'Player Avatar
             // Controller' that holds PlayerAvatar.cs: GetComponentInChildren on the Imitated Player misses them.
-            BodyPose.Initialize(_animator, Movement, ControllerTransform, ImitatedPlayer.playerAvatarVisuals,
-                cloneRig.transform, mapTool);
+            BodyPose.Initialize(ImitatedPlayer.playerAvatarVisuals, cloneRig.transform, mapTool);
+            _body = HallucinationBody.Create(this, cube, _animator);
         }
         else if (_animator == null)
         {
