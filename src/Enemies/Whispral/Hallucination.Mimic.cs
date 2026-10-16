@@ -17,6 +17,10 @@ public sealed partial class Hallucination
     private const float MimicMinDistance = 5f;
     private const float MimicMaxDistance = 25f;
 
+    private float _mimicEndsAt;
+
+    internal bool IsPlayingMimic => Time.time < _mimicEndsAt;
+
     public void PlayMimic(bool voiceFilter)
     {
         if (ImitatedPlayer == null || ControllerTransform == null) return;
@@ -88,6 +92,7 @@ public sealed partial class Hallucination
         lowPassLogic.Setup();
 
         audioSource.Play();
+        _mimicEndsAt = Mathf.Max(_mimicEndsAt, Time.time + clip.length);
         LOG.Debug($"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()} started ({clip.length:F2}s)");
 
         var lifetime = clip.length + 0.1f;

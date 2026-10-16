@@ -31,7 +31,7 @@ internal sealed class HallucinationBody
     private static readonly int GrabbingKey = Animator.StringToHash("Grabbing");
     private static readonly int FallingKey = Animator.StringToHash("Falling");
 
-    // Read by the PlayerAvatar guard, which runs for every player.
+    // Read by the PlayerAvatar guard, which runs for every player, and by every Hallucination listening for a Talker.
     private static readonly Dictionary<PlayerAvatar, HallucinationBody> Fakes = new();
 
     private readonly Animator _animator;
@@ -40,8 +40,11 @@ internal sealed class HallucinationBody
     private readonly PlayerEyes _fakeEyes;
     private readonly Transform _glancePoint;
     private readonly Hallucination _hallucination;
+    private readonly TalkerLook<Transform> _talkerLook = new(() => UnityEngine.Random.value);
     private readonly PlayerAvatarVisuals _visuals;
     private int _footstepsBlocked;
+    private HashSet<Transform> _heard = new();
+    private HashSet<Transform> _heardNow = new();
     private float? _glanceYaw;
     private float _glanceStart;
     private float _glanceBodyYawFrom;
@@ -49,6 +52,10 @@ internal sealed class HallucinationBody
     private float _glanceWidestHead;
     private Gait _lastGait = Gait.Still;
     private float _logTimer;
+    private Transform? _lookedAtTalker;
+    private string? _lookedAtTalkerName;
+    private float _talkerWidestLook;
+    private float _talkerWidestOff;
     private bool _wasFalling;
 
     private HallucinationBody(Hallucination hallucination, PlayerAvatarVisuals source, Transform cube,
@@ -146,6 +153,7 @@ internal sealed class HallucinationBody
 
         if (!LOG.DebugEnabled) return;
         TrackGlance();
+        TrackTalkerLook();
         // A fall lasts less than a periodic line's interval.
         var falling = _animator.GetBool(FallingKey);
         if (falling != _wasFalling)
@@ -229,9 +237,21 @@ internal sealed class HallucinationBody
         // A remote player's camera is its PlayerLocalCamera's transform, here the fake's: its forward centres the
         // head's 40° look cone, its pitch tilts the head.
         _fake.localCamera.transform.rotation = controller.rotation;
+        HearTalkers(controller.position);
+
+        // As PlayerEyes does for a player, the map holds the look over a Talker.
         var victimCamera = pose.IsStaring ? Camera.main : null;
-        var lookAt = victimCamera != null ? victimCamera.transform : null;
-        if (pose.GlanceYaw is { } yaw)
+        var talker = _talkerLook.Talker;
+        Transform? lookAt = null;
+        if (victimCamera != null)
+        {
+            lookAt = victimCamera.transform;
+        }
+        else if (talker != null && !pose.IsCheckingMap)
+        {
+            lookAt = talker;
+        }
+        else if (pose.GlanceYaw is { } yaw)
         {
             _glancePoint.position = _visuals.headLookAtTransform.position +
                                      Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlancePointDistance;
@@ -240,6 +260,82 @@ internal sealed class HallucinationBody
 
         _fakeEyes.lookAtActive = lookAt != null;
         _fakeEyes.lookAt = lookAt;
+    }
+
+    // Vanish mutes every hidden teammate for the Victim: the only Talkers are the Victim and Hallucinations playing a
+    // Mimic.
+    private void HearTalkers(Vector3 position)
+    {
+        var victim = PlayerAvatar.instance;
+        var victimCamera = Camera.main;
+        if (victim != null && victim.voiceChat != null && victim.voiceChat.isTalking && victimCamera != null)
+        {
+            Hear(victimCamera.transform, Vector3.Distance(position, victim.transform.position));
+        }
+
+        foreach (var other in Fakes.Values)
+        {
+            if (other == this || !other._hallucination.IsPlayingMimic) continue;
+            Hear(other._visuals.headLookAtTransform,
+                Vector3.Distance(position, other._hallucination.ControllerTransform.position));
+        }
+
+        _talkerLook.Update(Time.deltaTime);
+        if (!LOG.DebugEnabled) return;
+        (_heard, _heardNow) = (_heardNow, _heard);
+        _heardNow.Clear();
+    }
+
+    private void Hear(Transform talker, float distance)
+    {
+        _talkerLook.Hear(talker, distance);
+        if (!LOG.DebugEnabled || !_heardNow.Add(talker) || _heard.Contains(talker)) return;
+
+        var pose = _hallucination.BodyPose;
+        var holder = pose.IsStaring ? ", the stare holds the head" : pose.IsCheckingMap ? ", the map holds the head" : "";
+        LOG.Debug($"Body of {Name}: hears {TalkerName(talker)} talk {distance:F1} m away, " +
+                  $"{OffCamera(talker.position):F0}° off its camera" +
+                  (TalkerLook<Transform>.InReach(distance) ? holder : ", out of reach"));
+    }
+
+    // Logged as the look ends, with its widest head turn: the head is still turning as it starts.
+    private void TrackTalkerLook()
+    {
+        var talker = _fakeEyes.lookAt != null && _fakeEyes.lookAt == _talkerLook.Talker ? _fakeEyes.lookAt : null;
+        // By reference: a Talker destroyed while looked at still ends its look.
+        if (!ReferenceEquals(talker, _lookedAtTalker))
+        {
+            if (_lookedAtTalkerName != null)
+            {
+                LOG.Debug($"Body of {Name}: stops looking at {_lookedAtTalkerName} {_talkerLook.Silence:F1}s after " +
+                          $"the last talk heard; head looked up to {_talkerWidestLook:F0}° off the camera, the " +
+                          $"Talker up to {_talkerWidestOff:F0}° off it");
+            }
+
+            _lookedAtTalker = talker;
+            _lookedAtTalkerName = talker != null ? TalkerName(talker) : null;
+            _talkerWidestLook = 0f;
+            _talkerWidestOff = 0f;
+            if (talker != null) LOG.Debug($"Body of {Name}: looks at {_lookedAtTalkerName}");
+        }
+
+        if (talker == null) return;
+        _talkerWidestLook = Widest(_talkerWidestLook, _visuals.headLookAtTransform.eulerAngles.y,
+            _fake.localCamera.transform.eulerAngles.y);
+        _talkerWidestOff = Widest(_talkerWidestOff, OffCamera(talker.position), 0f);
+    }
+
+    private static string TalkerName(Transform talker)
+    {
+        var victimCamera = Camera.main;
+        return victimCamera != null && talker == victimCamera.transform ? "the Victim" : talker.root.name;
+    }
+
+    private float OffCamera(Vector3 point)
+    {
+        var toPoint = point - _visuals.headLookAtTransform.position;
+        return Mathf.DeltaAngle(_fake.localCamera.transform.eulerAngles.y,
+            Mathf.Atan2(toPoint.x, toPoint.z) * Mathf.Rad2Deg);
     }
 
     // Logged as the Glance ends, with its widest head turn: the head is still turning as it starts.

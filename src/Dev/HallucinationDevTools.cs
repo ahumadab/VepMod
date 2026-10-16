@@ -78,6 +78,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         {
             if (ShiftHeld()) MimicNearest();
             else if (AltHeld()) GlanceToBoundWithNearest();
+            else if (CtrlHeld()) MimicNextToStalker();
             else DropNearest();
         }
 
@@ -313,6 +314,36 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
 
         _nearest.PlayMimic(false);
+    }
+
+    // Shift+F9 would pick the Hallucination Stalking the tester, the nearest one, rather than one beside it.
+    private static void MimicNextToStalker()
+    {
+        var hallucinations = FindObjectsOfType<Hallucination>()
+            .Where(hallucination => hallucination.ControllerTransform != null)
+            .ToList();
+        var stalker = hallucinations.FirstOrDefault(hallucination => hallucination.IsStalkingBeforeFlee);
+        if (stalker == null)
+        {
+            LOG.Warning("DevTools: no Hallucination is Stalking.");
+            return;
+        }
+
+        var stalkerPosition = stalker.ControllerTransform.position;
+        var talker = hallucinations
+            .Where(hallucination => hallucination != stalker)
+            .OrderBy(hallucination => Vector3.Distance(hallucination.ControllerTransform.position, stalkerPosition))
+            .FirstOrDefault();
+        if (talker == null)
+        {
+            LOG.Warning("DevTools: no other Hallucination to perform a Mimic beside the one Stalking.");
+            return;
+        }
+
+        LOG.Info($"DevTools: {talker.name} performs a Mimic " +
+                 $"{Vector3.Distance(talker.ControllerTransform.position, stalkerPosition):F1} m from {stalker.name}, " +
+                 $"which is in {stalker.DebugStateName}.");
+        talker.PlayMimic(false);
     }
 
     // What Unity draws, where the Debug lines only say what the code asked for: pressed twice, the two dumps diff.
@@ -572,6 +603,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Alt+F7 the nearest Hallucination turns round at the start of its next wait\n" +
                  "Alt+F9 the nearest Hallucination's next Glance goes to 120°\n" +
+                 "Ctrl+F9 the Hallucination nearest to the one Stalking performs a Mimic\n" +
                  "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command to every attached Victim (Master)\n" +
