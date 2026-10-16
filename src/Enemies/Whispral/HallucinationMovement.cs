@@ -46,6 +46,7 @@ public sealed class HallucinationMovement : MonoBehaviour
     private Vector3 _currentVelocity;
     private float _verticalVelocity;
     private Vector3 _destination;
+    private Quaternion? _facing;
     private bool _isOnTrip;
     private string? _stepAsideFor;
     private float _stepAsideMaxAngle;
@@ -142,8 +143,16 @@ public sealed class HallucinationMovement : MonoBehaviour
         direction.y = 0f;
         if (direction.sqrMagnitude > 0.01f)
         {
-            TargetRotation = Quaternion.LookRotation(direction);
+            _facing = Quaternion.LookRotation(direction);
         }
+    }
+
+    /// <summary>
+    ///     Turns the Hallucination to <paramref name="yaw" />, in degrees, once it stands still, until its next trip.
+    /// </summary>
+    public void Face(float yaw)
+    {
+        _facing = Quaternion.Euler(0f, yaw, 0f);
     }
 
     /// <summary>
@@ -310,6 +319,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         if (!TryCalculateCompletePath(destination)) return false;
 
         _destination = destination;
+        _facing = null;
         _navAgent.SetPath(_calculatedPath);
 
         var count = _calculatedPath.GetCornersNonAlloc(_navMeshCorners);
@@ -515,6 +525,10 @@ public sealed class HallucinationMovement : MonoBehaviour
             {
                 TargetRotation = Quaternion.LookRotation(velocityDirection);
             }
+        }
+        else if (_facing is { } facing)
+        {
+            TargetRotation = facing;
         }
 
         _controllerTransform.rotation = Quaternion.Slerp(

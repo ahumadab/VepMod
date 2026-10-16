@@ -10,27 +10,55 @@ public sealed partial class Hallucination
 {
     private sealed class IdleState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
     {
-        private const float MinIdleTime = 2f;
-        private const float MaxIdleTime = 4f;
         private const float PrecomputeRetryInterval = 1f;
         private const float CheckMapChance = 0.25f;
 
-        private float _duration;
+        private float _facing;
+        private int _glances;
         private float _precomputeTimer;
+
+        private Wait Wait => Machine.Owner._wait;
 
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
-            _duration = Random.Range(MinIdleTime, MaxIdleTime);
             _precomputeTimer = 0f;
+            _glances = 0;
             Machine.Owner.Movement.Stop();
             Machine.Owner.BodyPose.Move(Gait.Still);
             Machine.Owner.Movement.StartPrecomputeDestination();
+
+            _facing = Machine.Owner.Movement.TargetRotation.eulerAngles.y;
+            var turnsRound = Wait.Start();
+            LOG.Debug($"IdleState: {Machine.Owner.name} waits {Wait.Duration:F1}s" +
+                      (turnsRound ? ", turning round first" : ""));
+            if (!turnsRound) return;
+
+            _facing += 180f;
+            Machine.Owner.Movement.Face(_facing);
+            Machine.Owner.BodyPose.Glance(_facing);
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            Machine.Owner.BodyPose.Glance(null);
+            LOG.Debug($"IdleState: {Machine.Owner.name} glanced {_glances} times in its wait of {Wait.Duration:F1}s");
         }
 
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
+
+            if (Wait.Update(Time.deltaTime) is { } glance)
+            {
+                _glances++;
+                Machine.Owner.Movement.Face(_facing + glance.Body);
+                Machine.Owner.BodyPose.Glance(_facing + glance.Head);
+                LOG.Debug($"IdleState: {Machine.Owner.name} glances {glance.Head:F0}° from its wait's facing, " +
+                          $"{glance.OffBody:F0}° off the body, " +
+                          (glance.BodyFollows ? $"the body following to {glance.Body:F0}°" : "the head alone"));
+            }
 
             if (!Machine.Owner.Movement.HasPrecomputedDestination)
             {
@@ -42,7 +70,7 @@ public sealed partial class Hallucination
                 }
             }
 
-            if (TimeElapsed >= _duration)
+            if (Wait.IsOver)
             {
                 var distanceToPlayer = Machine.Owner.Movement.GetDistanceToPlayer();
                 if (distanceToPlayer > StalkMinDistance && Random.value < StalkChance)

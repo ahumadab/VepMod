@@ -44,6 +44,12 @@ _Avoid_: Fake player, droid, clone, LostDroid
 **Trip**:
 A Hallucination walking or sprinting along a NavMesh path to a point, from its start to the stop it eases into at the end; a switch between walking and sprinting does not end it.
 
+**Wait**:
+A Hallucination standing still for 2 to 4 s between two Trips, never during Stalking; one Wait in four starts with a turn round.
+
+**Glance**:
+A waiting Hallucination looking off in a random direction, up to 120° either side of where it faced as its Wait started; the head turns alone up to 40° off the body, and the body follows beyond.
+
 **Stalking**:
 A Hallucination approaching the Victim, staring at them, then fleeing a moment after the Victim's Gaze lands on it, even if the Victim looks away.
 
