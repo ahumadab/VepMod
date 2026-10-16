@@ -25,6 +25,7 @@ public sealed class HallucinationMovement : MonoBehaviour
     private const float SteeringLookahead = 1.25f; // m
     private const int MaxCorners = 64;
     private const float MinEdgeSteering = 0.5f; // m
+    private const float StepAsideProbe = 0.5f; // m
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationMovement>();
 
@@ -440,7 +441,8 @@ public sealed class HallucinationMovement : MonoBehaviour
         }
 
         var deflected = (heading + push).normalized;
-        if (steppingAsideFor == null || _navAgent.Raycast(position + deflected * SteeringLookahead, out _))
+        // Probed a short step ahead: a lookahead's length would reach the walls of a narrow corridor.
+        if (steppingAsideFor == null || _navAgent.Raycast(position + deflected * StepAsideProbe, out _))
         {
             if (_stepAsideFor != null)
             {

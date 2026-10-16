@@ -7,8 +7,8 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 internal static class Avoidance
 {
-    public const float Reach = 1.5f; // m
-    private const float Strength = 1.5f; // sideways push at contact, per unit of heading
+    private const float Reach = 2f; // m
+    private const float Strength = 2f; // sideways push at contact, per unit of heading
 
     /// <param name="dirX">The heading, normalised.</param>
     /// <param name="toOtherX">From this Hallucination to the other.</param>
