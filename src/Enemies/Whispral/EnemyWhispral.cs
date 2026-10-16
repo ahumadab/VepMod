@@ -268,35 +268,30 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     }
 
     /// <summary>Master only.</summary>
-    internal void SendMimicCommand(PlayerAvatar victim, PlayerAvatar imitatedPlayer, bool voiceFilter)
+    internal void SendMimicCommand(PlayerAvatar victim, bool voiceFilter)
     {
-        LOG.Debug($"Mimic command: Victim={victim.playerName}, Imitated Player={imitatedPlayer.playerName}, " +
-                  $"voice filter={voiceFilter}");
-        _photonView.RPC(nameof(MimicRPC), victim.photonView.Owner, imitatedPlayer.photonView.ViewID, voiceFilter);
+        LOG.Debug($"Mimic command: Victim={victim.playerName}, voice filter={voiceFilter}");
+        _photonView.RPC(nameof(MimicRPC), victim.photonView.Owner, voiceFilter);
     }
 
-    // Sent to the Victim's client only.
+    // Sent to the Victim's client only, which picks the Hallucination that speaks (ADR-0002).
     [PunRPC]
-    private void MimicRPC(int imitatedPlayerViewID, bool voiceFilter, PhotonMessageInfo _info = default)
+    private void MimicRPC(bool voiceFilter, PhotonMessageInfo _info = default)
     {
         if (!SemiFunc.MasterOnlyRPC(_info))
         {
             return;
         }
 
-        var imitatedPlayer = SemiFunc.PlayerAvatarGetFromPhotonID(imitatedPlayerViewID);
         var imitations = Imitations.Local;
-        var hallucination = imitatedPlayer && imitations ? imitations!.FindHallucination(imitatedPlayer) : null;
-        if (!hallucination)
+        if (!imitations)
         {
-            var name = imitatedPlayer ? imitatedPlayer.playerName : $"ViewID {imitatedPlayerViewID}";
-            LOG.Debug($"Mimic command for {name}: no Hallucination, nothing plays.");
+            LOG.Debug("Mimic command: the local player is not a Victim, nothing plays.");
             return;
         }
 
-        LOG.Debug($"Mimic command for {imitatedPlayer.playerName}: Hallucination {hallucination!.GetInstanceID()}, " +
-                  $"voice filter={voiceFilter}.");
-        hallucination.PlayMimic(voiceFilter);
+        var speaker = imitations!.PickMimicSpeaker();
+        if (speaker) speaker!.PlayMimic(voiceFilter);
     }
 
     private void ReportAttachment(int victimViewID, bool attached)
@@ -754,21 +749,14 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var victim = Whispral.playerTarget;
             if (victim == null) return;
 
-            var imitatedPlayer = ChooseRandomImitatedPlayer(victim);
-            if (imitatedPlayer == null)
+            if (!SemiFunc.PlayerGetList().Any(p => p && p != victim))
             {
-                LOG.Debug($"No Imitated Player for a Mimic command to {victim.playerName}.");
+                LOG.Debug($"No Mimic command to {victim.playerName}: they are alone in the room.");
                 return;
             }
 
             var voiceFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
-            Whispral.SendMimicCommand(victim, imitatedPlayer, voiceFilter);
-        }
-
-        private static PlayerAvatar? ChooseRandomImitatedPlayer(PlayerAvatar victim)
-        {
-            var players = SemiFunc.PlayerGetList().Where(p => p && p != victim).ToList();
-            return players.Count == 0 ? null : players[Random.Range(0, players.Count)];
+            Whispral.SendMimicCommand(victim, voiceFilter);
         }
 
         private void CheckDetachState()

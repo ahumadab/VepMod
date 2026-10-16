@@ -50,6 +50,15 @@ public sealed class VoiceBanks(string rootFolder, Func<int> samplesPerPlayer)
         }
     }
 
+    public bool HasVoiceSample(PlayerKey player)
+    {
+        lock (_lock)
+        {
+            var folder = BankFolder(player);
+            return Directory.Exists(folder) && Directory.EnumerateFiles(folder, SamplePattern).Any();
+        }
+    }
+
     /// <returns>Null when the player's Voice Bank is empty.</returns>
     /// <exception cref="InvalidDataException">The picked file is not a Voice Sample.</exception>
     public VoiceSample? PickRandom(PlayerKey player)

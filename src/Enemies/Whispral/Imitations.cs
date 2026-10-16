@@ -23,6 +23,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     private static readonly List<Renderer> RendererBuffer = new();
     private static readonly List<Light> LightBuffer = new();
     private static readonly List<AudioSource> AudioSourceBuffer = new();
+    private static readonly List<Hallucination> SpeakerBuffer = new();
 
     private readonly Dictionary<PlayerAvatar, Imitation> _imitations = new();
     private Coroutine? _spawning;
@@ -119,12 +120,37 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         _imitations.Remove(leavingPlayer);
     }
 
-    /// <returns>Null before the Hallucination has spawned, or for a player who is not imitated.</returns>
-    public Hallucination? FindHallucination(PlayerAvatar imitatedPlayer)
+    /// <returns>
+    ///     A spawned Hallucination whose Imitated Player has a Voice Sample in the local Voice Bank, at random; null when
+    ///     none has.
+    /// </returns>
+    public Hallucination? PickMimicSpeaker()
     {
-        return _imitations.TryGetValue(imitatedPlayer, out var imitation) && imitation.Hallucination
-            ? imitation.Hallucination
-            : null;
+        var spawned = 0;
+        SpeakerBuffer.Clear();
+        foreach (var (imitatedPlayer, imitation) in _imitations)
+        {
+            if (!imitatedPlayer || !imitation.Hallucination) continue;
+
+            spawned++;
+            if (VepMod.VoiceBanks.HasVoiceSample(imitatedPlayer.VoiceBankKey()))
+            {
+                SpeakerBuffer.Add(imitation.Hallucination!);
+            }
+        }
+
+        if (SpeakerBuffer.Count == 0)
+        {
+            LOG.Debug(spawned == 0
+                ? $"Mimic for {_victim.playerName}: no Hallucination spawned yet, nothing plays."
+                : $"Mimic for {_victim.playerName}: none of the {spawned} Hallucinations has a Voice Sample, nothing plays.");
+            return null;
+        }
+
+        var speaker = SpeakerBuffer[UnityEngine.Random.Range(0, SpeakerBuffer.Count)];
+        LOG.Debug($"Mimic for {_victim.playerName}: {SpeakerBuffer.Count} of {spawned} Hallucinations have a Voice " +
+                  $"Sample, picked Hallucination {speaker.GetInstanceID()} of {speaker.ImitatedPlayer.playerName}.");
+        return speaker;
     }
 
     public bool IsImitatedPlayer(PlayerAvatar player)
