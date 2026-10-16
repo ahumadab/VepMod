@@ -156,8 +156,10 @@ public sealed class HallucinationDevTools : MonoBehaviour
         var hallucination = Hallucination.Create(source, spawnPos);
         if (hallucination != null)
         {
+            // Two dev Hallucinations of one player would share a name in every log line.
             _spawned.Add(hallucination);
-            LOG.Info($"DevTools: spawned a Hallucination at {spawnPos} (dev Hallucinations: {_spawned.Count}).");
+            hallucination.name += $"#{_spawned.Count}";
+            LOG.Info($"DevTools: spawned {hallucination.name} at {spawnPos} (dev Hallucinations: {_spawned.Count}).");
         }
         else
         {
