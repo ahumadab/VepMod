@@ -348,9 +348,10 @@ internal static class HallucinationVisualsClone
 
     private static void Strip(Component[] components, Func<Component, bool> keep)
     {
-        foreach (var onOneObject in components.Where(comp => comp != null && !keep(comp)).GroupBy(comp => comp.gameObject))
+        foreach (var componentsOfObject in components.Where(comp => comp != null && !keep(comp))
+                     .GroupBy(comp => comp.gameObject))
         {
-            foreach (var comp in StripOrder.DependentsFirst(onOneObject.ToList(), Requires))
+            foreach (var comp in StripOrder.DependentsFirst(componentsOfObject.ToList(), Requires))
             {
                 Object.DestroyImmediate(comp);
             }
@@ -371,7 +372,7 @@ internal static class HallucinationVisualsClone
         return false;
     }
 
-    // What the Map Tool's Controller carries, each requiring the next; a strip removes all three.
+    // The [RequireComponent] chain on the player Map Tool's Controller that Unity refused to strip out of order.
     private static int CountLowPassAudio(GameObject clone)
     {
         return clone.GetComponentsInChildren<AudioLowPassLogic>(true).Length +
