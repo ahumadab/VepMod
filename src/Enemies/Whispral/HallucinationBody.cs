@@ -38,6 +38,7 @@ internal sealed class HallucinationBody
     private readonly Hallucination _hallucination;
     private readonly PlayerAvatarVisuals _visuals;
     private int _footstepsBlocked;
+    private Gait _lastGait = Gait.Still;
     private float _logTimer;
     private bool _wasFalling;
 
@@ -206,8 +207,10 @@ internal sealed class HallucinationBody
         velocity.y = 0f;
         _fake.rbVelocity = controller.InverseTransformDirection(velocity);
         _fake.rbVelocityRaw = new Vector3(velocity.x, movement.IsGrounded ? 0f : movement.VerticalVelocity, velocity.z);
-        _fake.isMoving = pose.Gait != Gait.Still;
-        _fake.isSprinting = pose.Gait == Gait.Sprint;
+        // A player keeps moving, and sprinting, until its stop has eased out (PlayerController).
+        if (pose.Gait != Gait.Still) _lastGait = pose.Gait;
+        _fake.isMoving = movement.IsMoving;
+        _fake.isSprinting = movement.IsMoving && _lastGait == Gait.Sprint;
         _fake.isGrounded = movement.IsGrounded;
         _fake.mapToolController.Active = pose.IsCheckingMap;
 

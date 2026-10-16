@@ -76,9 +76,6 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     public bool IsStalkingBeforeFlee => Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare;
 
-    private bool IsInMovementState => IsStalkingBeforeFlee ||
-                                     Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint or StateId.StalkFlee;
-
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
     protected override StateId DefaultState => StateId.Idle;
@@ -90,12 +87,10 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
         Fsm.Update();
 
-        var isMovementState = IsInMovementState;
-
-        Movement.UpdateMovement(isMovementState);
+        Movement.UpdateMovement();
         Movement.UpdateRotation();
         Movement.SyncRigidbodyToController();
-        Movement.SyncNavAgentPosition(isMovementState);
+        Movement.SyncNavAgentPosition();
         _body?.Animate();
     }
 
