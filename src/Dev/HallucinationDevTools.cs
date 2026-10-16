@@ -85,7 +85,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Input.GetKeyDown(StunWhispralsKey)) StunWhisprals(false);
         if (Input.GetKeyDown(KillWhispralsKey))
         {
-            if (ShiftHeld()) SendMimicCommandsWithoutHallucination();
+            if (ShiftHeld()) SendMimicCommands();
             else KillWhisprals();
         }
         if (Input.GetKeyDown(KillLocalPlayerKey))
@@ -407,8 +407,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
     }
 
-    // Names the Victim as the Imitated Player: a Victim is never imitated, so no Hallucination plays it.
-    private static void SendMimicCommandsWithoutHallucination()
+    private static void SendMimicCommands()
     {
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
 
@@ -417,8 +416,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
             var victim = whispral.playerTarget;
             if (whispral.CurrentState != EnemyWhispral.State.Attached || victim == null) continue;
 
-            LOG.Info($"DevTools: Mimic command without a Hallucination to {victim.playerName}.");
-            whispral.SendMimicCommand(victim, victim, false);
+            LOG.Info($"DevTools: Mimic command to {victim.playerName}.");
+            whispral.SendMimicCommand(victim, false);
         }
     }
 
@@ -488,7 +487,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
-                 "Shift+F4 Mimic command without a Hallucination (Master)\n" +
+                 "Shift+F4 Mimic command to every attached Victim (Master)\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n" +
                  "Shift+F6 capture your voice now\n" +

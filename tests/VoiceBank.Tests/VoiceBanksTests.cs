@@ -33,6 +33,15 @@ public sealed class VoiceBanksTests : IDisposable
     }
 
     [Fact]
+    public void OnlyAPlayerWithASavedVoiceSampleHasOne()
+    {
+        _banks.Save(Bob, Sample(0.5f));
+
+        Assert.True(_banks.HasVoiceSample(Bob));
+        Assert.False(_banks.HasVoiceSample(OtherBob));
+    }
+
+    [Fact]
     public void PicksTheSavedVoiceSampleDecoded()
     {
         _banks.Save(Bob, Sample(0.5f, 16000));
