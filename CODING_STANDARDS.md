@@ -57,6 +57,8 @@ belongs to the tooling, not here.
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
 - A state shorter than a periodic line's interval (a fall, an impulse) gets its own line on each edge: the periodic
   line samples past it.
+- A line that proves a magnitude (a clearance, an angle, a distance) logs its extreme over the episode, the closest
+  approach or the widest deflection, on the episode's last edge: on its first edge the value has not moved yet.
 - The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
   (another player's Map Tool, not the local player's, who has none).
 
