@@ -12,6 +12,7 @@ internal sealed class SteeringPath
     private readonly float[] _z;
     private int _count;
     private int _next;
+    private bool _isNew;
 
     public SteeringPath(int capacity)
     {
@@ -22,7 +23,8 @@ internal sealed class SteeringPath
     public bool IsEmpty => _count < 2;
 
     /// <summary>
-    ///     The corner the last <see cref="Steer" /> began to round, if it did; the start is never one.
+    ///     The corner the last <see cref="Steer" /> began to round, if it did; the start is never one, nor a corner
+    ///     already within reach of a new path, which a re-path to the same point would report again.
     /// </summary>
     public int? RoundedCorner { get; private set; }
 
@@ -45,17 +47,13 @@ internal sealed class SteeringPath
     public void Add(float x, float z)
     {
         if (_count == _x.Length) return;
-        if (_count > 0) RemainingDistance += MathF.Sqrt(Square(x - _x[_count - 1]) + Square(z - _z[_count - 1]));
         _x[_count] = x;
         _z[_count] = z;
+        if (_count > 0) RemainingDistance += SegmentLength(_count);
         _count++;
         _next = 1;
+        _isNew = true;
     }
-
-    /// <summary>
-    ///     The corner ending the segment the last steering point lies on.
-    /// </summary>
-    public int SegmentEnd => _next;
 
     public (float X, float Z) Steer(float x, float z, float lookahead)
     {
@@ -68,14 +66,16 @@ internal sealed class SteeringPath
 
         while (_next < _count - 1 && Distance(x, z, _next) <= lookahead)
         {
-            RoundedCorner = _next;
+            if (!_isNew) RoundedCorner = _next;
             _next++;
         }
+
+        _isNew = false;
 
         RemainingDistance = Distance(x, z, _next);
         for (var i = _next + 1; i < _count; i++)
         {
-            RemainingDistance += MathF.Sqrt(Square(_x[i] - _x[i - 1]) + Square(_z[i] - _z[i - 1]));
+            RemainingDistance += SegmentLength(i);
         }
 
         var t = SegmentFraction(x, z, lookahead);
@@ -105,6 +105,11 @@ internal sealed class SteeringPath
     private float Distance(float x, float z, int corner)
     {
         return MathF.Sqrt(Square(_x[corner] - x) + Square(_z[corner] - z));
+    }
+
+    private float SegmentLength(int end)
+    {
+        return Distance(_x[end - 1], _z[end - 1], end);
     }
 
     private static float Square(float value)

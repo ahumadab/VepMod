@@ -56,6 +56,16 @@ public class SteeringPathTests
     }
 
     [Fact]
+    public void ACornerAlreadyWithinReachOfANewPathIsNotReportedAsRounded()
+    {
+        var path = RightAngle();
+
+        path.Steer(9f, 0f, Lookahead);
+
+        Assert.Null(path.RoundedCorner);
+    }
+
+    [Fact]
     public void ItSteersAtTheLastCornerOnceWithinReach()
     {
         var path = RightAngle();

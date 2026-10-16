@@ -3,16 +3,20 @@ using System;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     A player's movement friction on a Hallucination's speed: PlayerController lerps its velocity twice towards the
-///     input's, at MoveFriction per second each time.
+///     A player's movement friction on a Hallucination's speed: PlayerController lerps a stopping player's velocity
+///     twice, at MoveFriction per second each time.
 /// </summary>
+// A player starting from rest skips the first lerp (PlayerController.VelocityIdle), which starts it in about 0.27 s:
+// both lerps run here on a start too, so a start eases over 0.3 to 0.5 s like a stop (#65).
 internal sealed class MovementFriction
 {
     private const float Friction = 10f; // /s, PlayerController.MoveFriction in Main.unity
     private const float MovingSpeed = 0.1f; // m/s, PlayerController's "moving" threshold on the first lerp
+    private const float RestSpeed = 0.02f; // m/s
     private const float SettledFraction = 0.05f; // of the ease's change, below which it counts as done
 
-    private float _lead;
+    // PlayerController.VelocityRelativeNew's speed.
+    private float _firstLerpSpeed;
     private float _target;
     private float _easeFrom;
     private float _easeTime;
@@ -20,12 +24,12 @@ internal sealed class MovementFriction
 
     public float Speed { get; private set; }
 
-    public bool IsMoving => _lead > MovingSpeed;
+    public bool IsMoving => _firstLerpSpeed > MovingSpeed;
 
     /// <summary>
     ///     The distance, in metres, covered by easing from now to a stop.
     /// </summary>
-    public float StoppingDistance => (Speed + _lead) / Friction;
+    public float StoppingDistance => (Speed + _firstLerpSpeed) / Friction;
 
     /// <param name="target">The speed to ease towards, in m/s.</param>
     /// <returns>The ease that settles on this update, if any: one superseded by a new target is never returned.</returns>
@@ -40,8 +44,12 @@ internal sealed class MovementFriction
         }
 
         var step = Math.Min(1f, Friction * deltaTime);
-        _lead += (target - _lead) * step;
-        Speed += (_lead - Speed) * step;
+        _firstLerpSpeed += (target - _firstLerpSpeed) * step;
+        Speed += (_firstLerpSpeed - Speed) * step;
+
+        // The game zeroes a stopping player's velocity once it falls below "moving"; zeroing it lower avoids the jolt
+        // without crawling along the path for seconds.
+        if (target == 0f && Speed < RestSpeed) Speed = _firstLerpSpeed = 0f;
 
         if (!_isEasing) return null;
 

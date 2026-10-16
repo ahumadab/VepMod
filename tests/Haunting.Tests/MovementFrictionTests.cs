@@ -79,6 +79,17 @@ public class MovementFrictionTests
     }
 
     [Fact]
+    public void AStopEndsAtRest()
+    {
+        var friction = new MovementFriction();
+        EaseTo(friction, SprintSpeed, 60f);
+
+        for (var frame = 0; frame < 60; frame++) friction.Update(0f, 1f / 60f);
+
+        Assert.Equal(0f, friction.Speed);
+    }
+
+    [Fact]
     public void AnEaseInterruptedByAnotherReportsOnlyTheLastOne()
     {
         var friction = new MovementFriction();
