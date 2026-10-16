@@ -105,6 +105,22 @@ public class SteeringPathTests
     }
 
     [Fact]
+    public void ACornerMovesOutsideItsTurnAlongTheBisector()
+    {
+        var moved = SteeringPath.OutsideOfTurn(0f, 0f, 10f, 0f, 10f, 10f, 1f);
+
+        Assert.NotNull(moved);
+        Assert.Equal(10f + MathF.Sqrt(0.5f), moved.Value.X, 3);
+        Assert.Equal(-MathF.Sqrt(0.5f), moved.Value.Z, 3);
+    }
+
+    [Fact]
+    public void ANearlyStraightCornerStaysPut()
+    {
+        Assert.Null(SteeringPath.OutsideOfTurn(0f, 0f, 10f, 0f, 20f, 0.2f, 1f));
+    }
+
+    [Fact]
     public void AnEmptyPathHasNothingLeft()
     {
         var path = new SteeringPath(8);

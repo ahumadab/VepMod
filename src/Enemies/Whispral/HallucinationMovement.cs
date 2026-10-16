@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.VepFramework;
@@ -21,10 +22,16 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     private const float ForwardMaxAngleDeviation = 30f;
 
-    private const float SteeringLookahead = 1.5f; // m
+    private const float SteeringLookahead = 1.25f; // m
     private const int MaxCorners = 64;
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationMovement>();
+
+    // A NavMesh path's corners lie on the NavMesh edge, so rounding one cuts off the NavMesh: moved this far outside
+    // its turn, the first margin that keeps the path on the NavMesh, a corner is rounded without leaving it.
+    private static readonly float[] CornerMargins = { 1f, 0.5f }; // m
+
+    private static readonly List<HallucinationMovement> All = new();
 
     private readonly Vector3[] _corners = new Vector3[MaxCorners];
     private readonly MovementFriction _friction = new();
@@ -37,6 +44,7 @@ public sealed class HallucinationMovement : MonoBehaviour
     private float _verticalVelocity;
     private Vector3 _destination;
     private bool _isOnTrip;
+    private bool _isSteppingAside;
     private float _tripSpeed;
     private bool _isPrecomputingDestination;
     private bool _isPrecomputingForward;
@@ -92,6 +100,28 @@ public sealed class HallucinationMovement : MonoBehaviour
         _charController = charController;
         _savedAreaMask = areaMask;
         _calculatedPath = new NavMeshPath();
+        All.Add(this);
+    }
+
+    private void OnDestroy()
+    {
+        All.Remove(this);
+    }
+
+    /// <summary>
+    ///     Dev tools only: replaces the current trip's destination.
+    /// </summary>
+    public bool DebugSetDestination(Vector3 point)
+    {
+        return TrySetPath(point);
+    }
+
+    /// <summary>
+    ///     Dev tools only: the destination of the next trip.
+    /// </summary>
+    public void DebugQueueDestination(Vector3 point)
+    {
+        _precomputedDestination = point;
     }
 
     public void LookAtPlayer()
@@ -274,6 +304,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         _navAgent.SetPath(_calculatedPath);
 
         var count = _calculatedPath.GetCornersNonAlloc(_corners);
+        MoveCornersOutsideTurns(count);
         _steering.Clear();
         for (var i = 0; i < count; i++)
         {
@@ -282,6 +313,38 @@ public sealed class HallucinationMovement : MonoBehaviour
 
         _isOnTrip = true;
         return true;
+    }
+
+    private void MoveCornersOutsideTurns(int count)
+    {
+        var moved = 0;
+        for (var i = 1; i < count - 1; i++)
+        {
+            var previous = _corners[i - 1];
+            var corner = _corners[i];
+            var next = _corners[i + 1];
+            foreach (var margin in CornerMargins)
+            {
+                if (SteeringPath.OutsideOfTurn(previous.x, previous.z, corner.x, corner.z, next.x, next.z, margin)
+                    is not { } outside)
+                {
+                    break;
+                }
+
+                var candidate = new Vector3(outside.X, corner.y, outside.Z);
+                if (NavMesh.Raycast(previous, candidate, out _, _savedAreaMask) ||
+                    NavMesh.Raycast(candidate, next, out _, _savedAreaMask))
+                {
+                    continue;
+                }
+
+                _corners[i] = candidate;
+                moved++;
+                break;
+            }
+        }
+
+        if (count > 2) LOG.Debug($"{name}: path of {count} corners, {moved} moved off the NavMesh edge");
     }
 
     /// <summary>
@@ -328,7 +391,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         if (_steering.RoundedCorner is { } rounded)
         {
             var corner = _corners[rounded];
-            LOG.Debug($"{name} rounds the NavMesh corner at {corner}, {HorizontalDistance(position, corner):F1} m " +
+            LOG.Debug($"{name} rounds the corner at {corner}, {HorizontalDistance(position, corner):F1} m " +
                       $"away: steering at {steeringPoint}, {HorizontalDistance(corner, steeringPoint):F1} m past it" +
                       (keptToCorner ? ", kept to the corner by the NavMesh edge" : ""));
         }
@@ -339,7 +402,37 @@ public sealed class HallucinationMovement : MonoBehaviour
         if (distance < 0.01f) return Vector3.zero;
 
         // Capped so the end of the path is never overshot.
-        return toPoint / distance * Mathf.Min(_friction.Speed, distance / Time.deltaTime);
+        return StepAside(position, toPoint / distance) * Mathf.Min(_friction.Speed, distance / Time.deltaTime);
+    }
+
+    private Vector3 StepAside(Vector3 position, Vector3 heading)
+    {
+        HallucinationMovement? steppingAsideFor = null;
+        var push = Vector3.zero;
+        foreach (var other in All)
+        {
+            if (other == this || other._controllerTransform == null) continue;
+
+            var toOther = other._controllerTransform.position - position;
+            var (x, z) = Avoidance.Deflection(heading.x, heading.z, toOther.x, toOther.z);
+            if (x == 0f && z == 0f) continue;
+
+            push.x += x;
+            push.z += z;
+            steppingAsideFor = other;
+        }
+
+        var deflected = (heading + push).normalized;
+        var isSteppingAside = steppingAsideFor != null && !_navAgent.Raycast(position + deflected * SteeringLookahead, out _);
+        if (isSteppingAside && !_isSteppingAside)
+        {
+            LOG.Debug($"{name} steps aside for {steppingAsideFor!.name}, " +
+                      $"{HorizontalDistance(position, steppingAsideFor._controllerTransform.position):F1} m away, " +
+                      $"{Vector3.Angle(heading, deflected):F0}° off its path");
+        }
+
+        _isSteppingAside = isSteppingAside;
+        return isSteppingAside ? deflected : heading;
     }
 
     private static float HorizontalDistance(Vector3 a, Vector3 b)

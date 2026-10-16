@@ -70,6 +70,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Input.GetKeyDown(TeleportKey))
         {
             if (ShiftHeld()) StalkWithNearest();
+            else if (AltHeld()) CrossNearestTwo();
             else TeleportNearestToAim();
         }
         if (Input.GetKeyDown(DropKey))
@@ -241,6 +242,35 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private static bool CtrlHeld()
     {
         return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+    }
+
+    private static bool AltHeld()
+    {
+        return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+    }
+
+    // Two Hallucinations crossing by chance is rare: each walks to the other's place, so they meet head-on.
+    private static void CrossNearestTwo()
+    {
+        var cam = Camera.main;
+        var origin = cam != null ? cam.transform.position : Vector3.zero;
+        var nearest = FindObjectsOfType<Hallucination>()
+            .Where(h => h != null && h.ControllerTransform != null)
+            .OrderBy(h => (h.ControllerTransform.position - origin).sqrMagnitude)
+            .Take(2)
+            .ToList();
+        if (nearest.Count < 2)
+        {
+            LOG.Warning("DevTools: two Hallucinations are needed to cross them.");
+            return;
+        }
+
+        var first = nearest[0].ControllerTransform.position;
+        var second = nearest[1].ControllerTransform.position;
+        nearest[0].DebugWalkTo(second);
+        nearest[1].DebugWalkTo(first);
+        LOG.Info($"DevTools: {nearest[0].name} and {nearest[1].name} walk to each other's place, " +
+                 $"{Vector3.Distance(first, second):F1} m apart.");
     }
 
     private void MimicNearest()
@@ -508,6 +538,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  $"F7 spawn yourself | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
+                 "Alt+F8 the two nearest Hallucinations walk to each other's place\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +

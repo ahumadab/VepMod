@@ -8,6 +8,8 @@ namespace VepMod.Enemies.Whispral;
 /// </summary>
 internal sealed class SteeringPath
 {
+    private const float MinTurn = 0.1f; // between unit headings, about 6°
+
     private readonly float[] _x;
     private readonly float[] _z;
     private int _count;
@@ -81,6 +83,25 @@ internal sealed class SteeringPath
         var t = SegmentFraction(x, z, lookahead);
         var start = _next - 1;
         return (_x[start] + (_x[_next] - _x[start]) * t, _z[start] + (_z[_next] - _z[start]) * t);
+    }
+
+    /// <summary>
+    ///     The corner moved <paramref name="margin" /> metres outside its turn, along the bisector; null when the path
+    ///     barely turns there.
+    /// </summary>
+    public static (float X, float Z)? OutsideOfTurn(float previousX, float previousZ, float x, float z, float nextX,
+        float nextZ, float margin)
+    {
+        var inLength = MathF.Sqrt(Square(x - previousX) + Square(z - previousZ));
+        var outLength = MathF.Sqrt(Square(nextX - x) + Square(nextZ - z));
+        if (inLength <= 0f || outLength <= 0f) return null;
+
+        var insideX = (nextX - x) / outLength - (x - previousX) / inLength;
+        var insideZ = (nextZ - z) / outLength - (z - previousZ) / inLength;
+        var insideLength = MathF.Sqrt(Square(insideX) + Square(insideZ));
+        if (insideLength < MinTurn) return null;
+
+        return (x - insideX / insideLength * margin, z - insideZ / insideLength * margin);
     }
 
     private float SegmentFraction(float x, float z, float lookahead)

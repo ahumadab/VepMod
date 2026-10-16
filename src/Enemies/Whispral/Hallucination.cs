@@ -111,6 +111,22 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     }
 
     /// <summary>
+    ///     Dev tools only: walks to <paramref name="point" />, which must be on the NavMesh.
+    /// </summary>
+    public void DebugWalkTo(Vector3 point)
+    {
+        // A trip under way only changes its destination: the state machine does not re-enter its current state.
+        if (Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint)
+        {
+            Movement.DebugSetDestination(point);
+            return;
+        }
+
+        Movement.DebugQueueDestination(point);
+        Fsm.NextStateStateId = StateId.Wander;
+    }
+
+    /// <summary>
     ///     Dev tools only. The CharacterController is disabled during the move to avoid stray collisions; a position
     ///     in mid-air falls and resyncs with the NavMesh on landing.
     /// </summary>
