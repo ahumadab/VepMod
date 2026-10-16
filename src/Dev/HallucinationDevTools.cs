@@ -606,7 +606,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 400), sb, style);
+        const float width = 440f;
+        GUI.Box(new Rect(10, 10, width, style.CalcHeight(new GUIContent(sb), width)), sb, style);
     }
 }
 #endif
