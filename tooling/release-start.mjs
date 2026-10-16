@@ -57,8 +57,9 @@ if (!hotfix && git("branch", "--all", "--list", releaseBranch, `origin/${release
 
 console.log(`Releasing ${version} from ${releaseBranch}.`);
 if (!hotfix) run("git", ["switch", "--create", releaseBranch]);
-// A dry run stays on develop, which git.requireBranch refuses.
-releaseIt([version, "--ci", ...(dryRun ? ["--dry-run", "--no-git.requireBranch"] : [])]);
+// A dry run stays on develop, which git.requireBranch refuses, and release-it's own dry run still runs npm version,
+// which writes package.json.
+releaseIt([version, "--ci", ...(dryRun ? ["--dry-run", "--no-git.requireBranch", "--no-npm"] : [])]);
 
 // A squash merge leaves develop's commits out of main, so the two would diverge for good.
 const mergeAsCommit =
