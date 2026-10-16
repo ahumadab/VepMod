@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Rendering;
 using VepMod.VepFramework;
+using Object = UnityEngine.Object;
 
 namespace VepMod.Enemies.Whispral.Visuals;
 
@@ -68,12 +71,7 @@ internal static class HallucinationVisualsClone
     {
         if (cube == null) return;
 
-        foreach (var comp in cube.GetComponents<Component>())
-        {
-            if (comp == null) continue;
-            if (ShouldKeep(comp)) continue;
-            Object.DestroyImmediate(comp);
-        }
+        Strip(cube.GetComponents<Component>(), ShouldKeep);
     }
 
     /// <summary>
@@ -137,7 +135,8 @@ internal static class HallucinationVisualsClone
                   $"rigLocalPos={clone.transform.localPosition}, " +
                   $"cubeLossy={cube.lossyScale}, " +
                   $"rigLossy={clone.transform.lossyScale}, " +
-                  $"renderers={rendererCount}, isLocal={imitatedPlayer.isLocal}");
+                  $"renderers={rendererCount}, lowPassAudio={CountLowPassAudio(clone)}, " +
+                  $"isLocal={imitatedPlayer.isLocal}");
 
         return true;
     }
@@ -183,15 +182,8 @@ internal static class HallucinationVisualsClone
         var halo = clonedController != null ? clonedController.halo : null;
 
         // Before Start runs: it would reparent the flashlight to the player's FollowTransformLocal.
-        foreach (var comp in clone.GetComponentsInChildren<Component>(true))
-        {
-            if (comp == null) continue;
-            if (comp is Transform) continue;
-            if (comp is MeshFilter) continue;
-            if (comp is MeshRenderer) continue;
-            if (comp is Light) continue;
-            Object.DestroyImmediate(comp);
-        }
+        Strip(clone.GetComponentsInChildren<Component>(true),
+            comp => comp is Transform or MeshFilter or MeshRenderer or Light);
 
         if (mesh != null) mesh.enabled = true;
         if (meshShadows != null) meshShadows.enabled = true;
@@ -208,7 +200,8 @@ internal static class HallucinationVisualsClone
         }
 
         clone.SetActive(true);
-        LOG.Debug($"Flashlight cloned under '{FlashlightAnchorName}'");
+        LOG.Debug($"Flashlight cloned under '{FlashlightAnchorName}' " +
+                  $"(renderers={clone.GetComponentsInChildren<Renderer>(true).Length})");
         return true;
     }
 
@@ -277,16 +270,8 @@ internal static class HallucinationVisualsClone
         clone.transform.localScale = Vector3.one;
 
         // Before their Start runs, which reaches for the player's PlayerAvatar and photonView.
-        foreach (var comp in clone.GetComponentsInChildren<Component>(true))
-        {
-            if (comp == null) continue;
-            if (comp is Transform) continue;
-            if (comp is MeshFilter) continue;
-            if (comp is MeshRenderer) continue;
-            if (comp is SkinnedMeshRenderer) continue;
-            if (comp is Light) continue;
-            Object.DestroyImmediate(comp);
-        }
+        Strip(clone.GetComponentsInChildren<Component>(true),
+            comp => comp is Transform or MeshFilter or MeshRenderer or SkinnedMeshRenderer or Light);
 
         // MapToolController hides them by default and animates them through HideLerp.
         foreach (var r in clone.GetComponentsInChildren<Renderer>(true))
@@ -317,7 +302,8 @@ internal static class HallucinationVisualsClone
 
         var rendererCount = clone.GetComponentsInChildren<Renderer>(true).Length;
         LOG.Debug($"MapTool cloned under '{MapToolAnchorName}' " +
-                  $"(renderers={rendererCount}, visualsFound={visuals != null}, hideFound={hide != null})");
+                  $"(renderers={rendererCount}, lowPassAudio={CountLowPassAudio(clone)}, " +
+                  $"visualsFound={visuals != null}, hideFound={hide != null})");
 
         clone.SetActive(false);
         clonedMapTool = clone;
@@ -357,12 +343,41 @@ internal static class HallucinationVisualsClone
     /// </summary>
     private static void Sanitize(GameObject clone)
     {
-        foreach (var comp in clone.GetComponentsInChildren<Component>(true))
+        Strip(clone.GetComponentsInChildren<Component>(true), ShouldKeep);
+    }
+
+    private static void Strip(Component[] components, Func<Component, bool> keep)
+    {
+        foreach (var componentsOfObject in components.Where(comp => comp != null && !keep(comp))
+                     .GroupBy(comp => comp.gameObject))
         {
-            if (comp == null) continue;
-            if (ShouldKeep(comp)) continue;
-            Object.DestroyImmediate(comp);
+            foreach (var comp in StripOrder.DependentsFirst(componentsOfObject.ToList(), Requires))
+            {
+                Object.DestroyImmediate(comp);
+            }
         }
+    }
+
+    private static bool Requires(Component dependent, Component required)
+    {
+        var requiredType = required.GetType();
+        foreach (RequireComponent attribute in dependent.GetType().GetCustomAttributes(typeof(RequireComponent), true))
+        {
+            foreach (var type in new[] { attribute.m_Type0, attribute.m_Type1, attribute.m_Type2 })
+            {
+                if (type != null && type.IsAssignableFrom(requiredType)) return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The [RequireComponent] chain on the player Map Tool's Controller that Unity refused to strip out of order.
+    private static int CountLowPassAudio(GameObject clone)
+    {
+        return clone.GetComponentsInChildren<AudioLowPassLogic>(true).Length +
+               clone.GetComponentsInChildren<AudioLowPassFilter>(true).Length +
+               clone.GetComponentsInChildren<AudioSource>(true).Length;
     }
 
     private static bool ShouldKeep(Component comp)
