@@ -48,6 +48,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private Hallucination? _nearest;
     private float _nearestRefreshTimer;
     private bool _hudVisible = true;
+    private int _otherPlayerIndex = -1;
 
     private void Update()
     {
@@ -61,7 +62,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Input.GetKeyDown(SpawnKey))
         {
             if (ShiftHeld()) CheckMapWithNearest();
-            else SpawnAtAim();
+            else if (CtrlHeld()) SpawnAtAim(NextOtherPlayer());
+            else SpawnAtAim(PlayerAvatar.instance);
         }
         if (Input.GetKeyDown(TeleportKey))
         {
@@ -120,12 +122,20 @@ public sealed class HallucinationDevTools : MonoBehaviour
         VepMod.VoiceRecorder.RequestCapture();
     }
 
-    private void SpawnAtAim()
+    // Each press imitates the next player after the last one picked, so every other player gets their turn.
+    private PlayerAvatar? NextOtherPlayer()
     {
-        var source = PlayerAvatar.instance;
+        var others = GameDirector.instance.PlayerList.Where(player => player && !player.isLocal).ToList();
+        if (others.Count == 0) return null;
+        _otherPlayerIndex = (_otherPlayerIndex + 1) % others.Count;
+        return others[_otherPlayerIndex];
+    }
+
+    private void SpawnAtAim(PlayerAvatar? source)
+    {
         if (source == null)
         {
-            LOG.Warning("DevTools: no local PlayerAvatar to clone, cannot spawn.");
+            LOG.Warning("DevTools: no PlayerAvatar to imitate, cannot spawn.");
             return;
         }
 
@@ -218,6 +228,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private static bool ShiftHeld()
     {
         return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+    }
+
+    private static bool CtrlHeld()
+    {
+        return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
     }
 
     private void MimicNearest()
@@ -486,6 +501,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
+                 "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command to every attached Victim (Master)\n" +
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
