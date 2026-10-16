@@ -9,7 +9,8 @@
     "format": "node tooling/check.mjs fix",
     "format:check": "node tooling/check.mjs format",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "release": "release-it"
+    "release:start": "node tooling/release-start.mjs",
+    "release:finish": "node tooling/release-finish.mjs"
   },
   "keywords": [],
   "author": "",
