@@ -29,11 +29,18 @@ const builtInNames = {
     137: "SkinnedMeshRenderer",
     153: "ConfigurableJoint",
     169: "AudioLowPassFilter",
+    195: "NavMeshAgent",
     198: "ParticleSystem",
     199: "ParticleSystemRenderer",
     212: "SpriteRenderer",
     222: "CanvasRenderer",
     223: "Canvas",
+    895512359: "AimConstraint",
+    1183024399: "LookAtConstraint",
+    1773428102: "ParentConstraint",
+    1818360608: "PositionConstraint",
+    1818360609: "RotationConstraint",
+    1818360610: "ScaleConstraint",
 };
 
 const transformClasses = new Set(["4", "224"]);
@@ -70,7 +77,10 @@ export function prefabTree(yaml, scriptNames = new Map(), { layerNames = [], tra
         }
         const owner = fileId(body, "m_GameObject");
         if (!owner) continue;
-        componentsOf.set(owner, [...(componentsOf.get(owner) ?? []), describeComponent(classId, body, scriptNames)]);
+        componentsOf.set(owner, [
+            ...(componentsOf.get(owner) ?? []),
+            describeComponent(classId, body, scriptNames, objects),
+        ]);
     }
 
     const lines = [];
@@ -98,9 +108,15 @@ export function prefabTree(yaml, scriptNames = new Map(), { layerNames = [], tra
     return lines;
 }
 
-function describeComponent(classId, body, scriptNames) {
+function describeComponent(classId, body, scriptNames, objects) {
     const guid = scriptGuid(body);
     let name = guid ? (scriptNames.get(guid) ?? `Script:${guid.slice(0, 8)}`) : (builtInNames[classId] ?? `Class${classId}`);
+    // A constraint moves its object after every Update, without a script writing it: its sources show what it follows.
+    const sources = [...body.matchAll(/sourceTransform: \{fileID: (-?\d+)\}/g)].map(([, id]) => {
+        const gameObject = objects.get(fileId(objects.get(id)?.body ?? "", "m_GameObject") ?? "")?.body;
+        return (gameObject && field(gameObject, "m_Name")) ?? (id === "0" ? "none" : id);
+    });
+    if (sources.length > 0) name += ` ← ${sources.join(", ")}`;
     const shadows = field(body, "m_CastShadows");
     if (shadows !== undefined) name += `[shadows:${shadowModes[shadows] ?? shadows}]`;
     if (field(body, "m_IsTrigger") === "1") name += "[trigger]";
