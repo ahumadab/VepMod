@@ -55,10 +55,14 @@ belongs to the tooling, not here.
 - Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
   action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- A criterion about a bound (an angle limit, a cap, a timeout) has an action that reaches the bound; a bound reached
+  only by chance is a finding.
 - A state shorter than a periodic line's interval (a fall, an impulse) gets its own line on each edge: the periodic
   line samples past it.
 - A line that proves a magnitude (a clearance, an angle, a distance) logs its extreme over the episode, the closest
-  approach or the widest deflection, on the episode's last edge: on its first edge the value has not moved yet.
+  approach or the widest deflection, on the episode's last edge: on its first edge the value has not moved yet. An
+  episode that starts where the previous one ended also logs its settled value on that edge: the extreme alone carries
+  the previous episode's.
 - The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
   (another player's Map Tool, not the local player's, who has none).
 

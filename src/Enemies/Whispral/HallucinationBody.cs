@@ -243,6 +243,8 @@ internal sealed class HallucinationBody
     }
 
     // Logged as the Glance ends, with its widest head turn: the head is still turning as it starts.
+    // headLookAtTransform sits under bodyTopSideTransform, which PlayerAvatarVisuals turns after aiming the look: its
+    // world yaw carries that turn on top of the look's 40° clamp while the body follows.
     private void TrackGlance()
     {
         var yaw = _hallucination.BodyPose.GlanceYaw;
