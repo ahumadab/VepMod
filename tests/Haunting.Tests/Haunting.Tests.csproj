@@ -21,6 +21,7 @@
     <Compile Include="..\..\src\Enemies\Whispral\MovementFriction.cs" Link="MovementFriction.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\SteeringPath.cs" Link="SteeringPath.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\Avoidance.cs" Link="Avoidance.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\Wait.cs" Link="Wait.cs" />
   </ItemGroup>
 
 </Project>

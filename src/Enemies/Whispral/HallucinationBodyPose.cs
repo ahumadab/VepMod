@@ -49,6 +49,11 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     public bool IsStaring => _situation == Situation.Staring;
 
+    /// <summary>
+    ///     The world yaw, in degrees, the head turns to during a Glance.
+    /// </summary>
+    public float? GlanceYaw { get; private set; }
+
     public string DebugEyes => _eyeLeft == null || _eyeRight == null
         ? "no eyes"
         : $"{_situation}: left {_eyeLeft}, right {_eyeRight}";
@@ -140,6 +145,12 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     public void Stare(Gait gait)
     {
         Set(Situation.Staring, gait);
+    }
+
+    /// <param name="yaw">The world yaw in degrees, or null to end the Glance.</param>
+    public void Glance(float? yaw)
+    {
+        GlanceYaw = yaw;
     }
 
     private void Set(Situation situation, Gait gait)

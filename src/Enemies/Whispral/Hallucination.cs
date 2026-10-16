@@ -56,6 +56,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private static readonly VepLogger LOG = VepLogger.Create<Hallucination>();
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
+    private readonly Wait _wait = new(() => UnityEngine.Random.value);
     private HallucinationFace _face;
     private CharacterController _charController;
     private HallucinationNameplate _nameplateController;
@@ -108,6 +109,14 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public void DebugCheckMap()
     {
         Fsm.NextStateStateId = StateId.CheckMap;
+    }
+
+    /// <summary>
+    ///     Dev tools only.
+    /// </summary>
+    public void DebugTurnRoundNextWait()
+    {
+        _wait.TurnRoundNextWait();
     }
 
     /// <summary>

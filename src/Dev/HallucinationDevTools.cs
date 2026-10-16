@@ -64,6 +64,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Input.GetKeyDown(SpawnKey))
         {
             if (ShiftHeld()) CheckMapWithNearest();
+            else if (AltHeld()) TurnRoundWithNearest();
             else if (CtrlHeld()) SpawnAtAim(NextOtherPlayer());
             else SpawnAtAim(PlayerAvatar.instance);
         }
@@ -214,6 +215,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         _nearest.DebugCheckMap();
         LOG.Info("DevTools: the nearest Hallucination checks its map.");
+    }
+
+    private void TurnRoundWithNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to turn round.");
+            return;
+        }
+
+        _nearest.DebugTurnRoundNextWait();
+        LOG.Info($"DevTools: {_nearest.name} turns round at the start of its next wait.");
     }
 
     private void DropNearest()
@@ -542,6 +556,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Alt+F8 the two nearest Hallucinations walk to each other's place\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
+                 "Alt+F7 the nearest Hallucination turns round at the start of its next wait\n" +
                  "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
                  "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
                  "Shift+F4 Mimic command to every attached Victim (Master)\n" +
@@ -576,7 +591,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 360), sb, style);
+        GUI.Box(new Rect(10, 10, 440, 380), sb, style);
     }
 }
 #endif

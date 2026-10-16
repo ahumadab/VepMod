@@ -20,6 +20,9 @@ internal sealed class HallucinationBody
 {
     private const float LogInterval = 0.5f; // s
 
+    // Far enough that the head's own motion does not change the direction it looks in.
+    private const float GlanceTargetDistance = 10f; // m
+
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationBody>();
 
     private static readonly int MovingKey = Animator.StringToHash("Moving");
@@ -35,9 +38,15 @@ internal sealed class HallucinationBody
     private readonly Transform _body;
     private readonly PlayerAvatar _fake;
     private readonly PlayerEyes _fakeEyes;
+    private readonly Transform _glanceTarget;
     private readonly Hallucination _hallucination;
     private readonly PlayerAvatarVisuals _visuals;
     private int _footstepsBlocked;
+    private float? _glanceYaw;
+    private float _glanceStart;
+    private float _glanceBodyYawFrom;
+    private float _glanceWidestLook;
+    private float _glanceWidestHead;
     private Gait _lastGait = Gait.Still;
     private float _logTimer;
     private bool _wasFalling;
@@ -53,6 +62,8 @@ internal sealed class HallucinationBody
         var playersBefore = playerList.Count;
         _fake = CreateFake(hallucination.transform, hallucination.ImitatedPlayer, source, out _fakeEyes);
         Fakes[_fake] = this;
+        _glanceTarget = new GameObject("Glance Target").transform;
+        _glanceTarget.SetParent(hallucination.transform, false);
 
         _visuals = cube.gameObject.AddComponent<PlayerAvatarVisuals>();
         JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(source), _visuals);
@@ -134,6 +145,7 @@ internal sealed class HallucinationBody
         _visuals.Update();
 
         if (!LOG.DebugEnabled) return;
+        TrackGlance();
         // A fall lasts less than a periodic line's interval.
         var falling = _animator.GetBool(FallingKey);
         if (falling != _wasFalling)
@@ -218,8 +230,48 @@ internal sealed class HallucinationBody
         // head's 40° look cone, its pitch tilts the head.
         _fake.localCamera.transform.rotation = controller.rotation;
         var victimCamera = pose.IsStaring ? Camera.main : null;
-        _fakeEyes.lookAtActive = victimCamera != null;
-        _fakeEyes.lookAt = victimCamera != null ? victimCamera.transform : null;
+        var lookAt = victimCamera != null ? victimCamera.transform : null;
+        if (pose.GlanceYaw is { } yaw)
+        {
+            _glanceTarget.position = _visuals.headLookAtTransform.position +
+                                     Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlanceTargetDistance;
+            lookAt = _glanceTarget;
+        }
+
+        _fakeEyes.lookAtActive = lookAt != null;
+        _fakeEyes.lookAt = lookAt;
+    }
+
+    // Logged as the Glance ends, with its widest head turn: the head is still turning as it starts.
+    private void TrackGlance()
+    {
+        var yaw = _hallucination.BodyPose.GlanceYaw;
+        var bodyYaw = _body.eulerAngles.y;
+        if (yaw != _glanceYaw)
+        {
+            if (_glanceYaw is { } ended)
+            {
+                LOG.Debug($"Body of {Name}: Glance at {Mathf.Repeat(ended, 360f):F0}° held {Time.time - _glanceStart:F1}s, body turned " +
+                          $"{Mathf.DeltaAngle(_glanceBodyYawFrom, bodyYaw):F0}°, head looked up to " +
+                          $"{_glanceWidestLook:F0}° off the body, head mesh up to {_glanceWidestHead:F0}°");
+            }
+
+            _glanceYaw = yaw;
+            _glanceStart = Time.time;
+            _glanceBodyYawFrom = bodyYaw;
+            _glanceWidestLook = 0f;
+            _glanceWidestHead = 0f;
+        }
+
+        if (_glanceYaw == null) return;
+        _glanceWidestLook = Widest(_glanceWidestLook, _visuals.headLookAtTransform.eulerAngles.y, bodyYaw);
+        _glanceWidestHead = Widest(_glanceWidestHead, _visuals.headSideTransform.eulerAngles.y, bodyYaw);
+    }
+
+    private static float Widest(float widest, float yaw, float bodyYaw)
+    {
+        var off = Mathf.DeltaAngle(bodyYaw, yaw);
+        return Mathf.Abs(off) > Mathf.Abs(widest) ? off : widest;
     }
 
     private void LogPose()
