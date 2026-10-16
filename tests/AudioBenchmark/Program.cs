@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 using AudioBenchmark.Models;
 using AudioBenchmark.Reports;
 using AudioBenchmark.Validators;
+using VepMod.VepFramework.Audio;
+using WebRtcVadSharp;
 
 const string DEFAULT_DATASET_PATH = @"C:\Program Files (x86)\Steam\steamapps\common\REPO\REPO_Data\AudioFiles";
 
@@ -59,8 +61,27 @@ Console.WriteLine($"  Sample rates: {string.Join(", ", dataset.Select(w => w.Sam
 // ===== Phase 2: audio analysis and VAD =====
 Console.WriteLine("\n--- Phase 2: Analyse audio ---");
 
-using var vadDefault = new VadAudioValidator(VadValidationCriteria.Default);
-using var vadStrict = new VadAudioValidator(VadValidationCriteria.Strict);
+// The two configurations the benchmark has always measured, spelled out so the numbers stay comparable across runs;
+// they are not the shipped VadSensitivity levels.
+var vadDefaultCriteria = new VadValidationCriteria
+{
+    MinDurationSeconds = 0.3f,
+    MinSpeechRatio = 0.1f,
+    OperatingMode = OperatingMode.HighQuality,
+    FrameLength = FrameLength.Is20ms,
+    SampleRate = SampleRate.Is16kHz
+};
+var vadStrictCriteria = new VadValidationCriteria
+{
+    MinDurationSeconds = 1f,
+    MinSpeechRatio = 0.6f,
+    OperatingMode = OperatingMode.Aggressive,
+    FrameLength = FrameLength.Is20ms,
+    SampleRate = SampleRate.Is16kHz
+};
+
+using var vadDefault = new VadAudioValidator(vadDefaultCriteria);
+using var vadStrict = new VadAudioValidator(vadStrictCriteria);
 
 var fileMetrics = new List<(WavFile wav, AudioAnalysisResult analysis, VadAnalysisResult vadDefault, VadAnalysisResult vadStrict)>();
 
@@ -290,7 +311,7 @@ perfSw.Stop();
 var preFilterAvgMs = perfSw.Elapsed.TotalMilliseconds / dataset.Count;
 
 perfSw.Restart();
-using (var vadPerf = new VadAudioValidator(VadValidationCriteria.Default))
+using (var vadPerf = new VadAudioValidator(vadDefaultCriteria))
 {
     foreach (var wav in dataset)
         vadPerf.Validate(wav.Samples, wav.SampleRate);
