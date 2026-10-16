@@ -142,7 +142,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         if (SpeakerBuffer.Count == 0)
         {
             LOG.Debug(spawned == 0
-                ? $"Mimic for {_victim.playerName}: no Hallucination spawned yet, nothing plays."
+                ? $"Mimic for {_victim.playerName}: no spawned Hallucination, nothing plays."
                 : $"Mimic for {_victim.playerName}: none of the {spawned} Hallucinations has a Voice Sample, nothing plays.");
             return null;
         }

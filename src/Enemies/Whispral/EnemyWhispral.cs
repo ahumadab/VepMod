@@ -274,7 +274,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         _photonView.RPC(nameof(MimicRPC), victim.photonView.Owner, voiceFilter);
     }
 
-    // Sent to the Victim's client only, which picks the Hallucination that speaks (ADR-0002).
+    // Sent to the Victim's client only (ADR-0002).
     [PunRPC]
     private void MimicRPC(bool voiceFilter, PhotonMessageInfo _info = default)
     {
