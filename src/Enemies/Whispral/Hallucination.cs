@@ -280,7 +280,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private void OnDestroy()
     {
         LogMimicsCutShort();
-        _body?.Destroy();
+        _body?.Release();
         if (Movement != null)
         {
             Movement.OnNavMeshError -= HandleNavMeshError;

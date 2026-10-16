@@ -86,7 +86,10 @@ internal sealed class HallucinationBody
 
     private string Name => _hallucination.name;
 
-    /// <returns>Null in singleplayer, where the body stays still and follows the controller.</returns>
+    /// <returns>
+    ///     Null in singleplayer, or when the Imitated Player has no visuals: the body then stays still and follows the
+    ///     controller.
+    /// </returns>
     public static HallucinationBody? Create(Hallucination hallucination, Transform cube, Animator animator)
     {
         if (!GameManager.Multiplayer())
@@ -108,10 +111,10 @@ internal sealed class HallucinationBody
     }
 
     /// <summary>
-    ///     Called by the PlayerAvatar guard before each method it watches.
+    ///     Called by the PlayerAvatar guard before each method it watches; counts the footsteps it blocks.
     /// </summary>
     /// <returns>Whether the avatar is a Hallucination's fake, whose original method must not run.</returns>
-    public static bool IsFake(PlayerAvatar avatar, string method)
+    public static bool BlocksCall(PlayerAvatar avatar, string method)
     {
         if (!Fakes.TryGetValue(avatar, out var body)) return false;
 
@@ -128,13 +131,14 @@ internal sealed class HallucinationBody
         Feed();
         _visuals.Update();
 
+        if (!LOG.DebugEnabled) return;
         _logTimer -= Time.deltaTime;
         if (_logTimer > 0f) return;
         _logTimer = LogInterval;
         LogPose();
     }
 
-    public void Destroy()
+    public void Release()
     {
         Fakes.Remove(_fake);
 
@@ -216,8 +220,8 @@ internal sealed class HallucinationBody
         LOG.Debug($"Body of {Name} [{_hallucination.DebugStateName}]: lean {Euler(_visuals.leanTransform)}, " +
                   $"sprint tilt {Euler(_visuals.tiltTransform)}, leg twist {Euler(_visuals.legTwistTransform)}, " +
                   $"head side-steer {Euler(_visuals.headSideTransform)}, " +
-                  $"body {Quaternion.Angle(_body.rotation, _hallucination.ControllerTransform.rotation):F1}° " +
-                  $"from the controller, head look {headLook:F0}° from the camera (Victim {victim}) | " +
+                  $"body {Quaternion.Angle(_body.rotation, _fake.clientRotationCurrent):F1}° behind its spring " +
+                  $"target, head look {headLook:F0}° from the camera (Victim {victim}) | " +
                   $"Moving={_animator.GetBool(MovingKey)} Sprinting={_animator.GetBool(SprintingKey)} " +
                   $"Turning={_animator.GetBool(TurningKey)} Grabbing={_animator.GetBool(GrabbingKey)} " +
                   $"Falling={_animator.GetBool(FallingKey)} | footsteps blocked {_footstepsBlocked}");

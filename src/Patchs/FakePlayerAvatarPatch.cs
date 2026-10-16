@@ -14,55 +14,55 @@ internal static class FakePlayerAvatarPatch
     [HarmonyPatch(typeof(PlayerAvatar), "Awake")]
     private static bool Awake_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, "Awake");
+        return !HallucinationBody.BlocksCall(__instance, "Awake");
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), "Start")]
     private static bool Start_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, "Start");
+        return !HallucinationBody.BlocksCall(__instance, "Start");
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), "OnDestroy")]
     private static bool OnDestroy_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, "OnDestroy");
+        return !HallucinationBody.BlocksCall(__instance, "OnDestroy");
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.Footstep))]
     private static bool Footstep_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, nameof(PlayerAvatar.Footstep));
+        return !HallucinationBody.BlocksCall(__instance, nameof(PlayerAvatar.Footstep));
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.StandToCrouch))]
     private static bool StandToCrouch_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, nameof(PlayerAvatar.StandToCrouch));
+        return !HallucinationBody.BlocksCall(__instance, nameof(PlayerAvatar.StandToCrouch));
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.CrouchToStand))]
     private static bool CrouchToStand_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, nameof(PlayerAvatar.CrouchToStand));
+        return !HallucinationBody.BlocksCall(__instance, nameof(PlayerAvatar.CrouchToStand));
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.CrouchToCrawl))]
     private static bool CrouchToCrawl_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, nameof(PlayerAvatar.CrouchToCrawl));
+        return !HallucinationBody.BlocksCall(__instance, nameof(PlayerAvatar.CrouchToCrawl));
     }
 
     [HarmonyPrefix]
     [HarmonyPatch(typeof(PlayerAvatar), nameof(PlayerAvatar.CrawlToCrouch))]
     private static bool CrawlToCrouch_Prefix(PlayerAvatar __instance)
     {
-        return !HallucinationBody.IsFake(__instance, nameof(PlayerAvatar.CrawlToCrouch));
+        return !HallucinationBody.BlocksCall(__instance, nameof(PlayerAvatar.CrawlToCrouch));
     }
 }
