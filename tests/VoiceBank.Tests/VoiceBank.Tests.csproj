@@ -20,6 +20,7 @@
     <Compile Include="..\..\src\Enemies\Whispral\VoiceRecorder.cs" Link="VoiceRecorder.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\VoiceSampleChunks.cs" Link="VoiceSampleChunks.cs" />
     <Compile Include="..\..\src\VepFramework\Extensions\FileSystemSanitizer.cs" Link="FileSystemSanitizer.cs" />
+    <Compile Include="..\..\src\VepFramework\InvariantLogMessage.cs" Link="InvariantLogMessage.cs" />
   </ItemGroup>
 
 </Project>
