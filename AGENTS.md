@@ -36,6 +36,12 @@ Gitflow, with `develop` as the default branch:
   `fix`, `refactor`, `docs`, `chore`…), and open the PR against `develop`.
 - `release/<version>` and `hotfix/<slug>` merge into `main`, then back into `develop`.
 
+To publish a version, run `npm run release:start [version]` from an up-to-date `develop` (or a `hotfix/<slug>` cut from
+`main`): it commits the version bump and the `CHANGELOG.md` on `release/<version>` and opens its PR against `main`.
+Merge that PR with a merge commit, never a squash, then run `npm run release:finish` from an up-to-date `main`: it
+builds `dist/VieuxPoulpe-VepMod-<version>.zip`, tags the version and merges `main` back into `develop`. Uploading the zip
+to Thunderstore stays manual. Both take `--dry-run`.
+
 ## Agent skills
 
 ### Issue tracker

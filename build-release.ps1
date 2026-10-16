@@ -27,9 +27,9 @@ $requiredFiles = @(
     @{ Source = Join-Path $OutputDir "WebRtcVad.dll";                           Dest = "WebRtcVad.dll" },
     @{ Source = Join-Path $PSScriptRoot "CHANGELOG.md";                         Dest = "CHANGELOG.md" },
     @{ Source = Join-Path $PSScriptRoot "README.md";                            Dest = "README.md" },
-    @{ Source = Join-Path $PSScriptRoot "Ressources\manifest.json";             Dest = "manifest.json" },
+    @{ Source = Join-Path $PSScriptRoot "thunderstore\manifest.json";           Dest = "manifest.json" },
     @{ Source = Join-Path $PSScriptRoot "Ressources\$ProjectName.repobundle";   Dest = "$ProjectName.repobundle" },
-    @{ Source = Join-Path $PSScriptRoot "Ressources\icon.png";                  Dest = "icon.png" }
+    @{ Source = Join-Path $PSScriptRoot "thunderstore\icon.png";                Dest = "icon.png" }
 )
 
 $missingFiles = @()

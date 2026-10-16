@@ -2,8 +2,11 @@
 branch=$(git branch --show-current)
 case "$branch" in
 develop | main)
-    echo "Commit on a <type>/<slug> branch created from develop, not on $branch." >&2
-    exit 1
+    # A conflict stops release:finish's merge of main into develop, which git commit then concludes.
+    if [ "$branch" != develop ] || [ "$(git rev-parse -q --verify MERGE_HEAD)" != "$(git rev-parse main)" ]; then
+        echo "Commit on a <type>/<slug> branch created from develop, not on $branch." >&2
+        exit 1
+    fi
     ;;
 esac
 exec npm run --silent format:check -- --staged
