@@ -62,6 +62,11 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     private Gait _gait = Gait.Still;
     private bool _wasSprinting;
 
+    // PROTOTYPE for #65: what the fake PlayerAvatar is fed.
+    internal Gait PrototypeGait => _gait;
+    internal bool PrototypeCheckingMap => _situation == Situation.CheckingMap;
+    internal bool PrototypeStaring => _situation == Situation.Staring;
+
     public string DebugEyes => _eyeLeft == null || _eyeRight == null
         ? "no eyes"
         : $"{_situation}: left {_eyeLeft}, right {_eyeRight}";

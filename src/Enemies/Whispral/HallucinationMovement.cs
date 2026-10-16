@@ -12,7 +12,7 @@ namespace VepMod.Enemies.Whispral;
 public sealed class HallucinationMovement : MonoBehaviour
 {
     private const float RotationSpeed = 10f;
-    private const float VisualYOffset = 0.25f;
+    internal const float VisualYOffset = 0.25f;
 
     // The NavMesh drives horizontal motion only: gravity is simulated so a Hallucination falls from heights
     // instead of descending at constant speed, with the game's own Physics.gravity.

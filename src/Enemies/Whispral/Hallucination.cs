@@ -80,6 +80,9 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
+    // PROTOTYPE for #65: the game's PlayerAvatarVisuals places the Cube itself.
+    internal bool PrototypeGameVisuals { get; set; }
+
     protected override StateId DefaultState => StateId.Idle;
 
     protected override void Update()
@@ -93,7 +96,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
         Movement.UpdateMovement(isMovementState);
         Movement.UpdateRotation();
-        Movement.SyncVisualsToController(_animator != null ? _animator.transform : null);
+        Movement.SyncVisualsToController(_animator != null && !PrototypeGameVisuals ? _animator.transform : null);
         Movement.SyncNavAgentPosition(isMovementState);
     }
 

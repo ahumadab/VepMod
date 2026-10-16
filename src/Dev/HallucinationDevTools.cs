@@ -61,7 +61,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
         if (Input.GetKeyDown(SpawnKey))
         {
-            if (ShiftHeld()) CheckMapWithNearest();
+            if (AltHeld()) SwitchNearestToGameVisuals();
+            else if (ShiftHeld()) CheckMapWithNearest();
             else if (CtrlHeld()) SpawnAtAim(NextOtherPlayer());
             else SpawnAtAim(PlayerAvatar.instance);
         }
@@ -233,6 +234,24 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private static bool CtrlHeld()
     {
         return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+    }
+
+    private static bool AltHeld()
+    {
+        return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+    }
+
+    // PROTOTYPE for #65.
+    private void SwitchNearestToGameVisuals()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to switch to the game's PlayerAvatarVisuals.");
+            return;
+        }
+
+        PrototypePlayerVisuals.Enable(_nearest);
     }
 
     private void MimicNearest()
@@ -507,7 +526,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
                  "F12 hurt yourself | Shift+F12 heal yourself\n" +
                  "Shift+F6 capture your voice now\n" +
-                 "Shift+F10 log what the nearest Hallucination renders, eyes included\n";
+                 "Shift+F10 log what the nearest Hallucination renders, eyes included\n" +
+                 "Alt+F7 PROTOTYPE #65: the nearest Hallucination runs the game's PlayerAvatarVisuals\n";
 #if !VEPMOD_NO_VAD
         sb += "F6 replay AudioFiles through VAD (see log)\n";
 #endif
@@ -536,7 +556,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             fontSize = 13,
             padding = new RectOffset(10, 10, 10, 10)
         };
-        GUI.Box(new Rect(10, 10, 440, 360), sb, style);
+        GUI.Box(new Rect(10, 10, 500, 380), sb, style);
     }
 }
 #endif
