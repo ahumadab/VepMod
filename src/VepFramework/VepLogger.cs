@@ -35,6 +35,7 @@ public sealed class VepLogger
         return new VepLogger(className, debugEnabled);
     }
 
+    // An interpolated message binds to the InvariantLogMessage overloads, so its numbers ignore the Windows language.
     public void Debug(string message)
     {
         if (DebugEnabled)
@@ -43,9 +44,19 @@ public sealed class VepLogger
         }
     }
 
+    public void Debug(ref InvariantLogMessage message)
+    {
+        Debug(message.ToString());
+    }
+
     public void Info(string message)
     {
         _log.LogInfo(Stamped(message));
+    }
+
+    public void Info(ref InvariantLogMessage message)
+    {
+        Info(message.ToString());
     }
 
     public void Warning(string message)
@@ -53,9 +64,19 @@ public sealed class VepLogger
         _log.LogWarning(Stamped(message));
     }
 
+    public void Warning(ref InvariantLogMessage message)
+    {
+        Warning(message.ToString());
+    }
+
     public void Error(string message)
     {
         _log.LogError(Stamped(message));
+    }
+
+    public void Error(ref InvariantLogMessage message)
+    {
+        Error(message.ToString());
     }
 
     // BepInEx 5 writes no time. The UTC clock, unlike Time.time, is safe off the main thread and lines up the logs of
