@@ -107,6 +107,18 @@ test("adds each Transform's local scale and its height, rotations ignored", () =
     ]);
 });
 
+test("names a constraint and the objects it follows", () => {
+    const constrained = `${physics}--- !u!1773428102 &13
+ParentConstraint:
+  m_GameObject: {fileID: 10}
+  m_Enabled: 1
+  m_Sources:
+  - sourceTransform: {fileID: 21}
+    weight: 1
+`;
+    assert.equal(prefabTree(constrained)[0], "Root  Script:abc123, ParentConstraint ← Collider");
+});
+
 test("resolves a component's references to GameObject names", () => {
     assert.deepEqual(componentRefs(physics, new Map([["abc123", "PlayerExpression"]]), "PlayerExpression"), [
         "head → Collider (Transform)",
