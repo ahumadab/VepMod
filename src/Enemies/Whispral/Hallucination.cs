@@ -76,9 +76,6 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     public bool IsStalkingBeforeFlee => Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare;
 
-    private bool IsInMovementState => IsStalkingBeforeFlee ||
-                                     Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint or StateId.StalkFlee;
-
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
     protected override StateId DefaultState => StateId.Idle;
@@ -90,12 +87,10 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
         Fsm.Update();
 
-        var isMovementState = IsInMovementState;
-
-        Movement.UpdateMovement(isMovementState);
+        Movement.UpdateMovement();
         Movement.UpdateRotation();
         Movement.SyncRigidbodyToController();
-        Movement.SyncNavAgentPosition(isMovementState);
+        Movement.SyncNavAgentPosition();
         _body?.Animate();
     }
 
@@ -113,6 +108,22 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public void DebugCheckMap()
     {
         Fsm.NextStateStateId = StateId.CheckMap;
+    }
+
+    /// <summary>
+    ///     Dev tools only: walks to <paramref name="point" />, which must be on the NavMesh.
+    /// </summary>
+    public void DebugWalkTo(Vector3 point)
+    {
+        // A trip under way only changes its destination: the state machine does not re-enter its current state.
+        if (Fsm.CurrentStateStateId is StateId.Wander or StateId.Sprint)
+        {
+            Movement.DebugSetDestination(point);
+            return;
+        }
+
+        Movement.DebugQueueDestination(point);
+        Fsm.NextStateStateId = StateId.Wander;
     }
 
     /// <summary>

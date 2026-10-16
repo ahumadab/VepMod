@@ -18,6 +18,9 @@
     <Compile Include="..\..\src\Enemies\Whispral\Attachments.cs" Link="Attachments.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\AngryEyes.cs" Link="AngryEyes.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\Visuals\StripOrder.cs" Link="StripOrder.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\MovementFriction.cs" Link="MovementFriction.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\SteeringPath.cs" Link="SteeringPath.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\Avoidance.cs" Link="Avoidance.cs" />
   </ItemGroup>
 
 </Project>

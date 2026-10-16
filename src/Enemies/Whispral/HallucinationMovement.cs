@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using VepMod.VepFramework;
@@ -21,13 +22,39 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     private const float ForwardMaxAngleDeviation = 30f;
 
+    private const float SteeringLookahead = 1.25f; // m
+    private const int MaxCorners = 64;
+    private const float MinEdgeSteering = 0.5f; // m
+    private const float StepAsideProbe = 0.5f; // m
+
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationMovement>();
 
+    // A NavMesh path's corners lie on the NavMesh edge, so rounding one cuts off the NavMesh: moved this far outside
+    // its turn, the first margin that keeps the path on the NavMesh, a corner is rounded without leaving it.
+    private static readonly float[] CornerMargins = { 1f, 0.5f }; // m
+
+    private static readonly List<HallucinationMovement> All = new();
+
+    private readonly Vector3[] _navMeshCorners = new Vector3[MaxCorners];
+    private readonly Vector3[] _corners = new Vector3[MaxCorners];
+    private readonly MovementFriction _friction = new();
+    private readonly SteeringPath _steering = new(MaxCorners);
+
+    private NavMeshPath _calculatedPath;
     private CharacterController _charController;
     private Transform _controllerTransform;
     private Vector3 _currentVelocity;
     private float _verticalVelocity;
     private Vector3 _destination;
+    private bool _isOnTrip;
+    private string? _stepAsideFor;
+    private float _stepAsideMaxAngle;
+    private float _stepAsideClosest;
+    private int _passingCorner = -1;
+    private float _passClosest;
+    private float _passSteeringPast;
+    private bool _passCutShort;
+    private float _tripSpeed;
     private bool _isPrecomputingDestination;
     private bool _isPrecomputingForward;
     private NavMeshAgent _navAgent;
@@ -48,6 +75,8 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public bool IsGrounded => _charController != null && _charController.isGrounded;
 
+    public bool IsMoving => _friction.IsMoving;
+
     internal bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
 
     public event Action? OnNavMeshError;
@@ -59,14 +88,12 @@ public sealed class HallucinationMovement : MonoBehaviour
         return Vector3.Distance(_controllerTransform.position, player.transform.position);
     }
 
+    /// <summary>
+    ///     True once the trip is close enough to its end for the stop to ease into it.
+    /// </summary>
     public bool HasReachedDestination()
     {
-        if (_navAgent == null || _navAgent.pathPending) return false;
-
-        var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
-        var distance = Vector3.Distance(controllerPos, _destination);
-
-        return !_navAgent.hasPath || distance <= _navAgent.stoppingDistance;
+        return !_isOnTrip || _steering.RemainingDistance <= _friction.StoppingDistance;
     }
 
     public void Initialize(
@@ -81,6 +108,29 @@ public sealed class HallucinationMovement : MonoBehaviour
         _navAgent = navAgent;
         _charController = charController;
         _savedAreaMask = areaMask;
+        _calculatedPath = new NavMeshPath();
+        All.Add(this);
+    }
+
+    private void OnDestroy()
+    {
+        All.Remove(this);
+    }
+
+    /// <summary>
+    ///     Dev tools only: replaces the current trip's destination.
+    /// </summary>
+    public bool DebugSetDestination(Vector3 point)
+    {
+        return TrySetPath(point);
+    }
+
+    /// <summary>
+    ///     Dev tools only: the destination of the next trip.
+    /// </summary>
+    public void DebugQueueDestination(Vector3 point)
+    {
+        _precomputedDestination = point;
     }
 
     public void LookAtPlayer()
@@ -96,20 +146,17 @@ public sealed class HallucinationMovement : MonoBehaviour
         }
     }
 
-    public void ResetPath()
+    /// <summary>
+    ///     Ends the trip: the Hallucination eases to a stop along its path.
+    /// </summary>
+    public void Stop()
     {
-        if (IsOnNavMesh)
-        {
-            _navAgent.ResetPath();
-        }
+        _isOnTrip = false;
     }
 
     public void SetSpeed(float speed)
     {
-        if (_navAgent != null)
-        {
-            _navAgent.speed = speed;
-        }
+        _tripSpeed = speed;
     }
 
     public void StartPrecomputeDestination()
@@ -130,7 +177,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         _precomputedForwardDestination = null;
     }
 
-    public void SyncNavAgentPosition(bool isMovementState)
+    public void SyncNavAgentPosition()
     {
         if (_navAgent == null || _controllerTransform == null) return;
 
@@ -144,9 +191,9 @@ public sealed class HallucinationMovement : MonoBehaviour
         {
             _navAgent.nextPosition = hit.position;
 
-            if (Vector3.Distance(controllerPos, hit.position) > 0.5f && isMovementState && _navAgent.hasPath)
+            if (Vector3.Distance(controllerPos, hit.position) > 0.5f && _isOnTrip)
             {
-                _navAgent.SetDestination(_destination);
+                TrySetPath(_destination);
             }
         }
         else
@@ -251,41 +298,79 @@ public sealed class HallucinationMovement : MonoBehaviour
         return true;
     }
 
-    private bool TryCalculateCompletePath(Vector3 destination, out NavMeshPath path)
+    private bool TryCalculateCompletePath(Vector3 destination)
     {
-        path = new NavMeshPath();
         return IsOnNavMesh
-               && _navAgent.CalculatePath(destination, path)
-               && path.status == NavMeshPathStatus.PathComplete;
+               && _navAgent.CalculatePath(destination, _calculatedPath)
+               && _calculatedPath.status == NavMeshPathStatus.PathComplete;
     }
 
     private bool TrySetPath(Vector3 destination)
     {
-        if (!TryCalculateCompletePath(destination, out var path)) return false;
+        if (!TryCalculateCompletePath(destination)) return false;
 
         _destination = destination;
-        _navAgent.SetPath(path);
+        _navAgent.SetPath(_calculatedPath);
+
+        var count = _calculatedPath.GetCornersNonAlloc(_navMeshCorners);
+        Array.Copy(_navMeshCorners, _corners, count);
+        MoveCornersOutsideTurns(count);
+        _passingCorner = -1;
+        _steering.Clear();
+        for (var i = 0; i < count; i++)
+        {
+            _steering.Add(_corners[i].x, _corners[i].z);
+        }
+
+        _isOnTrip = true;
         return true;
     }
 
-    /// <summary>
-    ///     Applies gravity every frame, even outside movement states, so the Hallucination always lands.
-    /// </summary>
-    public void UpdateMovement(bool isMovementState)
+    private void MoveCornersOutsideTurns(int count)
     {
-        if (_charController == null) return;
+        var moved = 0;
+        for (var i = 1; i < count - 1; i++)
+        {
+            var previous = _corners[i - 1];
+            var corner = _corners[i];
+            var next = _corners[i + 1];
+            foreach (var margin in CornerMargins)
+            {
+                if (SteeringPath.OutsideOfTurn(previous.x, previous.z, corner.x, corner.z, next.x, next.z, margin)
+                    is not { } outside)
+                {
+                    break;
+                }
 
-        var horizontalVelocity = Vector3.zero;
-        if (isMovementState && _navAgent != null && _navAgent.hasPath)
-        {
-            _currentVelocity = Vector3.Lerp(_currentVelocity, _navAgent.desiredVelocity, 5f * Time.deltaTime);
-            horizontalVelocity = _currentVelocity;
-            horizontalVelocity.y = 0f;
+                var candidate = new Vector3(outside.X, corner.y, outside.Z);
+                if (NavMesh.Raycast(previous, candidate, out _, _savedAreaMask) ||
+                    NavMesh.Raycast(candidate, next, out _, _savedAreaMask))
+                {
+                    continue;
+                }
+
+                _corners[i] = candidate;
+                moved++;
+                break;
+            }
         }
-        else
+
+        if (count > 2) LOG.Debug($"{name}: path of {count} corners, {moved} moved off the NavMesh edge");
+    }
+
+    /// <summary>
+    ///     Applies gravity every frame, even outside a trip, so the Hallucination always lands.
+    /// </summary>
+    public void UpdateMovement()
+    {
+        if (_charController == null || _controllerTransform == null) return;
+
+        if (_friction.Update(_isOnTrip ? _tripSpeed : 0f, Time.deltaTime) is { } ease)
         {
-            _currentVelocity = Vector3.zero;
+            LOG.Debug($"{name}: speed eased from {ease.From:F1} to {ease.To:F1} m/s in {ease.Duration:F2}s");
         }
+
+        _currentVelocity = SteeringVelocity();
 
         if (_charController.isGrounded)
         {
@@ -297,9 +382,125 @@ public sealed class HallucinationMovement : MonoBehaviour
             if (_verticalVelocity < -MaxFallSpeed) _verticalVelocity = -MaxFallSpeed;
         }
 
-        var motion = horizontalVelocity;
+        var motion = _currentVelocity;
         motion.y = _verticalVelocity;
         _charController.Move(motion * Time.deltaTime);
+    }
+
+    private Vector3 SteeringVelocity()
+    {
+        var position = _controllerTransform.position;
+        var (x, z) = _steering.Steer(position.x, position.z, SteeringLookahead);
+        if (_steering.IsEmpty || _friction.Speed <= 0f) return Vector3.zero;
+
+        var steeringPoint = new Vector3(x, position.y, z);
+
+        // Rounding a corner cuts inside it: where the NavMesh edge is in the way, the Hallucination steers to the
+        // edge, or close to it to the agent's next corner, which is always in the clear.
+        var cutShort = _navAgent.Raycast(steeringPoint, out var edge);
+        if (cutShort)
+        {
+            steeringPoint = HorizontalDistance(position, edge.position) >= MinEdgeSteering
+                ? edge.position
+                : _navAgent.steeringTarget;
+        }
+
+        if (_steering.RoundedCorner is { } rounded)
+        {
+            LogCornerPass();
+            _passingCorner = rounded;
+            _passClosest = float.MaxValue;
+        }
+
+        TrackCornerPass(position, steeringPoint, cutShort);
+
+        var toPoint = steeringPoint - position;
+        toPoint.y = 0f;
+        var distance = toPoint.magnitude;
+        if (distance < 0.01f) return Vector3.zero;
+
+        // Capped so the end of the path is never overshot.
+        return StepAside(position, toPoint / distance) * Mathf.Min(_friction.Speed, distance / Time.deltaTime);
+    }
+
+    private Vector3 StepAside(Vector3 position, Vector3 heading)
+    {
+        HallucinationMovement? steppingAsideFor = null;
+        var push = Vector3.zero;
+        foreach (var other in All)
+        {
+            if (other == this || other._controllerTransform == null) continue;
+
+            var toOther = other._controllerTransform.position - position;
+            var (x, z) = Avoidance.Deflection(heading.x, heading.z, toOther.x, toOther.z);
+            if (x == 0f && z == 0f) continue;
+
+            push.x += x;
+            push.z += z;
+            steppingAsideFor = other;
+        }
+
+        var deflected = (heading + push).normalized;
+        // Probed a short step ahead: a lookahead's length would reach the walls of a narrow corridor.
+        if (steppingAsideFor == null || _navAgent.Raycast(position + deflected * StepAsideProbe, out _))
+        {
+            if (_stepAsideFor != null)
+            {
+                LOG.Debug($"{name} stepped aside for {_stepAsideFor}: up to {_stepAsideMaxAngle:F0}° off its path, " +
+                          $"{_stepAsideClosest:F1} m from it at the closest");
+                _stepAsideFor = null;
+            }
+
+            return heading;
+        }
+
+        if (_stepAsideFor == null)
+        {
+            _stepAsideFor = steppingAsideFor.name;
+            _stepAsideMaxAngle = 0f;
+            _stepAsideClosest = float.MaxValue;
+        }
+
+        _stepAsideMaxAngle = Mathf.Max(_stepAsideMaxAngle, Vector3.Angle(heading, deflected));
+        _stepAsideClosest = Mathf.Min(_stepAsideClosest,
+            HorizontalDistance(position, steppingAsideFor._controllerTransform.position));
+        return deflected;
+    }
+
+    // Logged at the closest approach: when the corner starts being rounded, the steering point is still on it.
+    private void TrackCornerPass(Vector3 position, Vector3 steeringPoint, bool cutShort)
+    {
+        if (_passingCorner < 0) return;
+
+        var corner = _navMeshCorners[_passingCorner];
+        var distance = HorizontalDistance(position, corner);
+        if (distance < _passClosest)
+        {
+            _passClosest = distance;
+            _passSteeringPast = HorizontalDistance(corner, steeringPoint);
+            _passCutShort = cutShort;
+        }
+        else if (distance > _passClosest + 0.1f)
+        {
+            LogCornerPass();
+        }
+    }
+
+    private void LogCornerPass()
+    {
+        if (_passingCorner < 0) return;
+
+        var corner = _navMeshCorners[_passingCorner];
+        LOG.Debug($"{name} passes the NavMesh corner at {corner} {_passClosest:F1} m from it, steering " +
+                  $"{_passSteeringPast:F1} m past it, the path {HorizontalDistance(corner, _corners[_passingCorner]):F1} m " +
+                  "outside it" + (_passCutShort ? ", cut short by the NavMesh edge" : ""));
+        _passingCorner = -1;
+    }
+
+    private static float HorizontalDistance(Vector3 a, Vector3 b)
+    {
+        a.y = b.y;
+        return Vector3.Distance(a, b);
     }
 
     public void UpdateRotation()
@@ -354,7 +555,7 @@ public sealed class HallucinationMovement : MonoBehaviour
             yield break;
         }
 
-        if (TryCalculateCompletePath(hit.position, out _))
+        if (TryCalculateCompletePath(hit.position))
         {
             _precomputedDestination = hit.position;
         }
@@ -399,7 +600,7 @@ public sealed class HallucinationMovement : MonoBehaviour
 
         yield return null;
 
-        if (!TryCalculateCompletePath(point, out _))
+        if (!TryCalculateCompletePath(point))
         {
             LOG.Debug($"PrecomputeForward: No complete path to {point}");
             _isPrecomputingForward = false;

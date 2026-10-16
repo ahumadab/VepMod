@@ -23,7 +23,7 @@ public sealed partial class Hallucination
             base.OnStateEnter(previous);
             _duration = Random.Range(MinIdleTime, MaxIdleTime);
             _precomputeTimer = 0f;
-            Machine.Owner.Movement.ResetPath();
+            Machine.Owner.Movement.Stop();
             Machine.Owner.BodyPose.Move(Gait.Still);
             Machine.Owner.Movement.StartPrecomputeDestination();
         }
@@ -186,7 +186,7 @@ public sealed partial class Hallucination
         {
             base.OnStateEnter(previous);
 
-            Machine.Owner.Movement.ResetPath();
+            Machine.Owner.Movement.Stop();
             Machine.Owner.BodyPose.CheckMap();
 
             _lookDuration = Random.Range(MinLookDuration, MaxLookDuration);
@@ -312,7 +312,7 @@ public sealed partial class Hallucination
         public override void OnStateExit(StateId next)
         {
             base.OnStateExit(next);
-            Machine.Owner.Movement.ResetPath();
+            Machine.Owner.Movement.Stop();
         }
     }
 
@@ -354,7 +354,7 @@ public sealed partial class Hallucination
                 LOG.Debug($"=== STALK: Gaze landed, fleeing in {StalkStareBeforeFlee}s ===");
 
                 Machine.Owner.BodyPose.Stare(Gait.Still);
-                Machine.Owner.Movement.ResetPath();
+                Machine.Owner.Movement.Stop();
             }
 
             if (_gazeLandedAt is { } landedAt)
@@ -381,7 +381,7 @@ public sealed partial class Hallucination
                 }
                 else
                 {
-                    Machine.Owner.Movement.ResetPath();
+                    Machine.Owner.Movement.Stop();
                 }
             }
 

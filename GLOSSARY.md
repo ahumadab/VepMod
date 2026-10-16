@@ -41,6 +41,9 @@ What Vanish and Hallucinations do to one Imitated Player together: hide the real
 A fake copy of an Imitated Player, seen only by the Victim, with the same look, colour and name.
 _Avoid_: Fake player, droid, clone, LostDroid
 
+**Trip**:
+A Hallucination walking or sprinting along a NavMesh path to a point, from its start to the stop it eases into at the end; a switch between walking and sprinting does not end it.
+
 **Stalking**:
 A Hallucination approaching the Victim, staring at them, then fleeing a moment after the Victim's Gaze lands on it, even if the Victim looks away.
 
