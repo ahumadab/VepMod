@@ -37,7 +37,9 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private const float StunDuration = 5f; // s
     private const int HealthStep = 10;
 
-    private const float DropHeight = 6f; // m, drop test lift
+    private const float DropHeight = 6f; // m, drop test lift under an open sky
+    private const float HallucinationHeight = 2f; // m, the CharacterController's height
+    private const float CeilingClearance = 0.2f; // m
     private const float AimMaxDistance = 100f; // m, aim raycast range
     private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
     private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
@@ -220,9 +222,15 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
-        var lifted = _nearest.ControllerTransform.position + Vector3.up * DropHeight;
+        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it.
+        var controller = _nearest.ControllerTransform.position;
+        var height = Physics.Raycast(controller + Vector3.up * HallucinationHeight, Vector3.up, out var ceiling,
+            DropHeight, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            ? Mathf.Max(0f, ceiling.distance - CeilingClearance)
+            : DropHeight;
+        var lifted = controller + Vector3.up * height;
         _nearest.DebugTeleport(lifted);
-        LOG.Info($"DevTools: drop test — lifted the Hallucination by {DropHeight}m to {lifted}.");
+        LOG.Info($"DevTools: drop test — lifted the Hallucination by {height:F1}m to {lifted}.");
     }
 
     private static bool ShiftHeld()
