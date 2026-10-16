@@ -24,6 +24,7 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     private const float SteeringLookahead = 1.25f; // m
     private const int MaxCorners = 64;
+    private const float MinEdgeSteering = 0.5f; // m
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationMovement>();
 
@@ -33,6 +34,7 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     private static readonly List<HallucinationMovement> All = new();
 
+    private readonly Vector3[] _navMeshCorners = new Vector3[MaxCorners];
     private readonly Vector3[] _corners = new Vector3[MaxCorners];
     private readonly MovementFriction _friction = new();
     private readonly SteeringPath _steering = new(MaxCorners);
@@ -44,7 +46,13 @@ public sealed class HallucinationMovement : MonoBehaviour
     private float _verticalVelocity;
     private Vector3 _destination;
     private bool _isOnTrip;
-    private bool _isSteppingAside;
+    private string? _stepAsideFor;
+    private float _stepAsideMaxAngle;
+    private float _stepAsideClosest;
+    private int _passingCorner = -1;
+    private float _passClosest;
+    private float _passSteeringPast;
+    private bool _passCutShort;
     private float _tripSpeed;
     private bool _isPrecomputingDestination;
     private bool _isPrecomputingForward;
@@ -303,8 +311,10 @@ public sealed class HallucinationMovement : MonoBehaviour
         _destination = destination;
         _navAgent.SetPath(_calculatedPath);
 
-        var count = _calculatedPath.GetCornersNonAlloc(_corners);
+        var count = _calculatedPath.GetCornersNonAlloc(_navMeshCorners);
+        Array.Copy(_navMeshCorners, _corners, count);
         MoveCornersOutsideTurns(count);
+        _passingCorner = -1;
         _steering.Clear();
         for (var i = 0; i < count; i++)
         {
@@ -384,17 +394,24 @@ public sealed class HallucinationMovement : MonoBehaviour
 
         var steeringPoint = new Vector3(x, position.y, z);
 
-        // Rounding a corner cuts inside it: where the NavMesh edge is in the way, the agent's next corner is not.
-        var keptToCorner = _navAgent.Raycast(steeringPoint, out _);
-        if (keptToCorner) steeringPoint = _navAgent.steeringTarget;
+        // Rounding a corner cuts inside it: where the NavMesh edge is in the way, the Hallucination steers to the
+        // edge, or close to it to the agent's next corner, which is always in the clear.
+        var cutShort = _navAgent.Raycast(steeringPoint, out var edge);
+        if (cutShort)
+        {
+            steeringPoint = HorizontalDistance(position, edge.position) >= MinEdgeSteering
+                ? edge.position
+                : _navAgent.steeringTarget;
+        }
 
         if (_steering.RoundedCorner is { } rounded)
         {
-            var corner = _corners[rounded];
-            LOG.Debug($"{name} rounds the corner at {corner}, {HorizontalDistance(position, corner):F1} m " +
-                      $"away: steering at {steeringPoint}, {HorizontalDistance(corner, steeringPoint):F1} m past it" +
-                      (keptToCorner ? ", kept to the corner by the NavMesh edge" : ""));
+            LogCornerPass();
+            _passingCorner = rounded;
+            _passClosest = float.MaxValue;
         }
+
+        TrackCornerPass(position, steeringPoint, cutShort);
 
         var toPoint = steeringPoint - position;
         toPoint.y = 0f;
@@ -423,16 +440,59 @@ public sealed class HallucinationMovement : MonoBehaviour
         }
 
         var deflected = (heading + push).normalized;
-        var isSteppingAside = steppingAsideFor != null && !_navAgent.Raycast(position + deflected * SteeringLookahead, out _);
-        if (isSteppingAside && !_isSteppingAside)
+        if (steppingAsideFor == null || _navAgent.Raycast(position + deflected * SteeringLookahead, out _))
         {
-            LOG.Debug($"{name} steps aside for {steppingAsideFor!.name}, " +
-                      $"{HorizontalDistance(position, steppingAsideFor._controllerTransform.position):F1} m away, " +
-                      $"{Vector3.Angle(heading, deflected):F0}° off its path");
+            if (_stepAsideFor != null)
+            {
+                LOG.Debug($"{name} stepped aside for {_stepAsideFor}: up to {_stepAsideMaxAngle:F0}° off its path, " +
+                          $"{_stepAsideClosest:F1} m from it at the closest");
+                _stepAsideFor = null;
+            }
+
+            return heading;
         }
 
-        _isSteppingAside = isSteppingAside;
-        return isSteppingAside ? deflected : heading;
+        if (_stepAsideFor == null)
+        {
+            _stepAsideFor = steppingAsideFor.name;
+            _stepAsideMaxAngle = 0f;
+            _stepAsideClosest = float.MaxValue;
+        }
+
+        _stepAsideMaxAngle = Mathf.Max(_stepAsideMaxAngle, Vector3.Angle(heading, deflected));
+        _stepAsideClosest = Mathf.Min(_stepAsideClosest,
+            HorizontalDistance(position, steppingAsideFor._controllerTransform.position));
+        return deflected;
+    }
+
+    // Logged at the closest approach: when the corner starts being rounded, the steering point is still on it.
+    private void TrackCornerPass(Vector3 position, Vector3 steeringPoint, bool cutShort)
+    {
+        if (_passingCorner < 0) return;
+
+        var corner = _navMeshCorners[_passingCorner];
+        var distance = HorizontalDistance(position, corner);
+        if (distance < _passClosest)
+        {
+            _passClosest = distance;
+            _passSteeringPast = HorizontalDistance(corner, steeringPoint);
+            _passCutShort = cutShort;
+        }
+        else if (distance > _passClosest + 0.1f)
+        {
+            LogCornerPass();
+        }
+    }
+
+    private void LogCornerPass()
+    {
+        if (_passingCorner < 0) return;
+
+        var corner = _navMeshCorners[_passingCorner];
+        LOG.Debug($"{name} passes the NavMesh corner at {corner} {_passClosest:F1} m from it, steering " +
+                  $"{_passSteeringPast:F1} m past it, the path {HorizontalDistance(corner, _corners[_passingCorner]):F1} m " +
+                  "outside it" + (_passCutShort ? ", cut short by the NavMesh edge" : ""));
+        _passingCorner = -1;
     }
 
     private static float HorizontalDistance(Vector3 a, Vector3 b)
