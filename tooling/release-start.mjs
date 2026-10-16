@@ -1,20 +1,20 @@
-// npm run release:start [version] [--dry-run]: opens the release PR against main (AGENTS.md, Git workflow).
+// npm run release:start [version] [--dry-run] (AGENTS.md, Git workflow).
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { aheadBehind, dryRun, fail, fetchOnCleanTree, git, succeeds, run } from "./release.mjs";
+import { aheadBehind, dryRun, fail, fetchOnCleanTree, git, gitSucceeds, run } from "./release.mjs";
 
 const requested = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
 
 // release-it's bin is a .cmd shim on Windows, which spawnSync cannot run without a shell. It runs in a dry run too, with
 // its own --dry-run.
-function releaseIt(args, stdout = "inherit") {
+function releaseIt(args, { capture = false } = {}) {
     const bin = fileURLToPath(new URL("../node_modules/release-it/bin/release-it.js", import.meta.url));
-    const { status, stdout: output } = spawnSync(process.execPath, [bin, ...args], {
+    const { status, stdout } = spawnSync(process.execPath, [bin, ...args], {
         encoding: "utf8",
-        stdio: ["inherit", stdout, "inherit"],
+        stdio: ["inherit", capture ? "pipe" : "inherit", "inherit"],
     });
     if (status !== 0) process.exit(status ?? 1);
-    return output;
+    return stdout;
 }
 
 const branch = git("branch", "--show-current");
@@ -28,7 +28,7 @@ if (branch !== "develop" && !hotfix) {
 fetchOnCleanTree();
 
 if (hotfix) {
-    if (!succeeds("merge-base", "--is-ancestor", "origin/main", "HEAD")) {
+    if (!gitSucceeds("merge-base", "--is-ancestor", "origin/main", "HEAD")) {
         fail(`${branch} lacks origin/main: cut the hotfix from main, or merge origin/main into it.`);
     }
     const remote = `origin/${branch}`;
@@ -44,7 +44,7 @@ if (hotfix) {
 }
 
 // The release branch is named before release-it runs on it, so release-it is asked for the version first.
-const version = releaseIt([...requested, "--release-version", "--ci", "--no-git.requireBranch"], "pipe")
+const version = releaseIt([...requested, "--release-version", "--ci", "--no-git.requireBranch"], { capture: true })
     .trim()
     .split("\n")
     .at(-1);

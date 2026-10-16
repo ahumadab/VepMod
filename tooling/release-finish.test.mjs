@@ -12,7 +12,6 @@ function git(cwd, ...args) {
     return execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" });
 }
 
-// A clone whose main equals origin/main.
 function cloneOnMain(t) {
     const directory = mkdtempSync(join(tmpdir(), "release-finish-"));
     t.after(() => rmSync(directory, { recursive: true, force: true }));

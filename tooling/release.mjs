@@ -13,7 +13,7 @@ export function git(...args) {
     return execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
-export function succeeds(...gitArgs) {
+export function gitSucceeds(...gitArgs) {
     return spawnSync("git", gitArgs).status === 0;
 }
 

@@ -1,5 +1,4 @@
-// npm run release:finish [--dry-run]: tags the release merged into main, builds its zip, merges main into develop
-// (AGENTS.md, Git workflow).
+// npm run release:finish [--dry-run] (AGENTS.md, Git workflow).
 import { readFileSync } from "node:fs";
 import { aheadBehind, fail, fetchOnCleanTree, git, run } from "./release.mjs";
 
@@ -33,4 +32,4 @@ run(
     "Merging main into develop conflicts: resolve the conflicts, run git commit, then git push origin develop.",
 );
 run("git", ["push", "origin", "develop"]);
-console.log(`${version} is tagged and back in develop: upload dist/VieuxPoulpe-VepMod-${version}.zip to Thunderstore.`);
+console.log(`${version} is tagged and back in develop: upload its zip from dist/ to Thunderstore.`);

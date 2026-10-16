@@ -1,5 +1,5 @@
-// release-it's after:bump hook (.release-it.yml): writes the version where BepInEx and Thunderstore read it. Node, not
-// PowerShell 5.1, whose Set-Content -Encoding UTF8 adds the BOM dotnet format refuses.
+// release-it's after:bump hook (.release-it.yml). Node, not PowerShell 5.1, whose Set-Content -Encoding UTF8 adds a BOM
+// that dotnet format refuses in VepMod.cs.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const [version] = process.argv.slice(2);
