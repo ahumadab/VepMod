@@ -1,4 +1,5 @@
-// Prints VepMod's lines from the BepInEx logs of the last in-game test, one section per instance and per level:
+// Prints VepMod's lines and the game's errors from the BepInEx logs of the last in-game test, one section per instance
+// and per level:
 //   node tooling/test-log.mjs [profile] [--grep <regex>] [--exclude <regex>]
 // Reads the profile's LogOutput.log* (VieuxPoulpe by default) written within half an hour of the newest: a two-instance
 // test writes two at once, and older files shift to .2, .3. The same message repeated in a row prints once, with ×count.
@@ -13,8 +14,8 @@ const levelStart = /Local player (.*), Master: (\w+)/;
 const gameError = /^\[(Error|Fatal)\s*:/;
 
 /**
- * VepMod's lines of one log, a header at each level start, consecutive repeats folded into ×count. A log that reached
- * no level gives the game's errors instead: a launch can fail before VepMod logs anything.
+ * VepMod's lines and the game's errors of one log, a header at each level start, consecutive repeats folded into
+ * ×count. A log that reached no level gives the game's errors alone: a launch can fail before VepMod logs anything.
  */
 export function summarizeLog(text, grep, exclude) {
     const lines = [];
@@ -27,20 +28,27 @@ export function summarizeLog(text, grep, exclude) {
         repeats = 0;
     };
     for (const line of text.split(/\r?\n/)) {
-        if (gameError.test(line)) errors.set(line, (errors.get(line) ?? 0) + 1);
-        const match = line.match(vepModLine);
-        if (!match) continue;
-        const [, level, source, time, message] = match;
-        const start = levelStart.exec(message);
-        if (start) {
-            flush();
-            previous = undefined;
-            levels++;
-            lines.push(`--- ${time} level start, local player ${start[1]}, Master: ${start[2]}`);
-            continue;
+        let key;
+        let printed;
+        if (gameError.test(line)) {
+            errors.set(line, (errors.get(line) ?? 0) + 1);
+            key = printed = line;
+        } else {
+            const match = line.match(vepModLine);
+            if (!match) continue;
+            const [, level, source, time, message] = match;
+            const start = levelStart.exec(message);
+            if (start) {
+                flush();
+                previous = undefined;
+                levels++;
+                lines.push(`--- ${time} level start, local player ${start[1]}, Master: ${start[2]}`);
+                continue;
+            }
+            key = `${level} ${source} ${message}`;
+            printed = `${time} ${level === "Info" ? "" : `${level} `}${source}: ${message}`;
         }
         if ((grep && !grep.test(line)) || exclude?.test(line)) continue;
-        const key = `${level} ${source} ${message}`;
         if (key === previous) {
             repeats++;
             continue;
@@ -48,7 +56,7 @@ export function summarizeLog(text, grep, exclude) {
         flush();
         previous = key;
         repeats = 1;
-        lines.push(`${time} ${level === "Info" ? "" : `${level} `}${source}: ${message}`);
+        lines.push(printed);
     }
     flush();
     if (levels === 0 && errors.size > 0) {

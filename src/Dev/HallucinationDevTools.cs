@@ -498,7 +498,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (!_hudVisible) return;
 
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
-                 $"F7 spawn | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
+                 $"F7 spawn yourself | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
