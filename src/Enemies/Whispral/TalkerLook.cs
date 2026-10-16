@@ -3,8 +3,9 @@ using System;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     Which Talker a Hallucination's head turns to, as the game's PlayerEyes picks one for a player: the nearest
-///     within 6 m, held 2 to 4 s after they stop talking.
+///     Which Talker a Hallucination's head turns to: the nearest within 6 m, held 2 to 4 s after they stop talking.
+///     The game's PlayerEyes has the same reach and hold, but keeps the one who started talking last rather than the
+///     nearest.
 /// </summary>
 internal sealed class TalkerLook<T> where T : class
 {

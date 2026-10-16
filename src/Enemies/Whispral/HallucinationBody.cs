@@ -316,12 +316,16 @@ internal sealed class HallucinationBody
             _lookedAtTalkerName = talker != null ? TalkerName(talker) : null;
             _talkerWidestLook = 0f;
             _talkerWidestOff = 0f;
-            if (talker != null) LOG.Debug($"Body of {Name}: looks at {_lookedAtTalkerName}");
+            // The head may still be turned to what it looked at before.
+            if (talker != null)
+            {
+                LOG.Debug($"Body of {Name}: looks at {_lookedAtTalkerName}, {OffCamera(talker.position):F0}° off " +
+                          $"the camera, head at {HeadOffCamera():F0}° off it");
+            }
         }
 
         if (talker == null) return;
-        _talkerWidestLook = Widest(_talkerWidestLook, _visuals.headLookAtTransform.eulerAngles.y,
-            _fake.localCamera.transform.eulerAngles.y);
+        _talkerWidestLook = Widest(_talkerWidestLook, HeadOffCamera(), 0f);
         _talkerWidestOff = Widest(_talkerWidestOff, OffCamera(talker.position), 0f);
     }
 
@@ -329,6 +333,11 @@ internal sealed class HallucinationBody
     {
         var victimCamera = Camera.main;
         return victimCamera != null && talker == victimCamera.transform ? "the Victim" : talker.root.name;
+    }
+
+    private float HeadOffCamera()
+    {
+        return Mathf.DeltaAngle(_fake.localCamera.transform.eulerAngles.y, _visuals.headLookAtTransform.eulerAngles.y);
     }
 
     private float OffCamera(Vector3 point)
@@ -361,10 +370,10 @@ internal sealed class HallucinationBody
             _glanceWidestHead = 0f;
         }
 
-        if (_glanceYaw == null) return;
+        // A Talker holds the head over a Glance.
+        if (_glanceYaw == null || _fakeEyes.lookAt != _glancePoint) return;
         // The game clamps the look around the camera, which leads the body's spring.
-        _glanceWidestLook = Widest(_glanceWidestLook, _visuals.headLookAtTransform.eulerAngles.y,
-            _fake.localCamera.transform.eulerAngles.y);
+        _glanceWidestLook = Widest(_glanceWidestLook, HeadOffCamera(), 0f);
         _glanceWidestHead = Widest(_glanceWidestHead, _visuals.headSideTransform.eulerAngles.y, bodyYaw);
     }
 

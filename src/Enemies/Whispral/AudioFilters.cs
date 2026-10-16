@@ -16,6 +16,8 @@ public static class AudioFilters
 
     private const float DefaultLowPassCutoff = 4500f;
 
+    public const float SilencePadding = 0.5f; // s, at each end
+
     /// <summary>
     /// Vibrato and ring modulation.
     /// </summary>
@@ -113,10 +115,9 @@ public static class AudioFilters
     /// </summary>
     public static float[] ApplyFadeAndPadding(float[] samples, int sampleRate)
     {
-        const float paddingDuration = 0.5f;
         const float fadeDuration = 0.02f;
 
-        var paddingSamples = (int)(sampleRate * paddingDuration);
+        var paddingSamples = (int)(sampleRate * SilencePadding);
         var fadeSamples = (int)(sampleRate * fadeDuration);
         var result = new float[samples.Length + 2 * paddingSamples];
 

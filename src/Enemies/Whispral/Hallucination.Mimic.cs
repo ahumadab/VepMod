@@ -17,9 +17,13 @@ public sealed partial class Hallucination
     private const float MimicMinDistance = 5f;
     private const float MimicMaxDistance = 25f;
 
-    private float _mimicEndsAt;
+    private float _mimicVoiceFrom;
+    private float _mimicVoiceUntil;
 
-    internal bool IsPlayingMimic => Time.time < _mimicEndsAt;
+    /// <summary>
+    ///     Whether a Mimic's voice plays, without the silence that pads its clip.
+    /// </summary>
+    internal bool IsPlayingMimic => Time.time >= _mimicVoiceFrom && Time.time < _mimicVoiceUntil;
 
     public void PlayMimic(bool voiceFilter)
     {
@@ -92,7 +96,9 @@ public sealed partial class Hallucination
         lowPassLogic.Setup();
 
         audioSource.Play();
-        _mimicEndsAt = Mathf.Max(_mimicEndsAt, Time.time + clip.length);
+        var now = Time.time;
+        if (now >= _mimicVoiceUntil) _mimicVoiceFrom = now + AudioFilters.SilencePadding;
+        _mimicVoiceUntil = Mathf.Max(_mimicVoiceUntil, now + clip.length - AudioFilters.SilencePadding);
         LOG.Debug($"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()} started ({clip.length:F2}s)");
 
         var lifetime = clip.length + 0.1f;
