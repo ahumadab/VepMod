@@ -80,6 +80,11 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public bool IsMoving => _friction.IsMoving;
 
+    /// <summary>
+    ///     True once a stop has eased out completely, after <see cref="IsMoving" /> turns false.
+    /// </summary>
+    public bool IsStill => _friction.Speed <= 0f;
+
     internal bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
 
     public event Action? OnNavMeshError;

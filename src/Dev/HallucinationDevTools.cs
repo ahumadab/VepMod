@@ -257,7 +257,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
 
         _nearest.DebugChangeMindNow();
-        LOG.Info($"DevTools: {_nearest.name} changes its mind now if on a Trip that has not yet, else on its next Trip.");
+        LOG.Info($"DevTools: {_nearest.name} ({_nearest.DebugStateName}) changes its mind now if on a Trip that has " +
+                 "not yet, else on its next Trip.");
     }
 
     private void GlanceToBoundWithNearest()

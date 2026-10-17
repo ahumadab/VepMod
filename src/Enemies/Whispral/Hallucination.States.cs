@@ -143,7 +143,7 @@ public sealed partial class Hallucination
                 ChangeOfMind.Start();
             }
 
-            StartLeg();
+            SetOff();
         }
 
         public override void OnStateExit(StateId next)
@@ -210,7 +210,7 @@ public sealed partial class Hallucination
             if (!chains) return false;
 
             ChangeOfMind.Start();
-            StartLeg();
+            SetOff();
             return true;
         }
 
@@ -238,7 +238,7 @@ public sealed partial class Hallucination
             var movement = Machine.Owner.Movement;
             switch (_mindChange)
             {
-                case MindChange.Stopping when !movement.IsMoving:
+                case MindChange.Stopping when movement.IsStill:
                     var facing = movement.TargetRotation.eulerAngles.y;
                     var glance = Wait.Toward(Random.Range(-Wait.MaxGlanceAngle, Wait.MaxGlanceAngle), 0f);
                     movement.Face(facing + glance.Body);
@@ -262,13 +262,12 @@ public sealed partial class Hallucination
                     LOG.Debug($"{GetType().Name}: {Machine.Owner.name} heads to another point " +
                               $"{Vector3.Distance(Machine.Owner.ControllerTransform.position, movement.Destination):F1} m " +
                               $"away, at a {Gait}");
-                    StartLeg();
+                    SetOff();
                     break;
             }
         }
 
-        // A Trip's start, a chained Trip's, and the one after a change of mind: each heads to a new point.
-        private void StartLeg()
+        private void SetOff()
         {
             _duration = TimeElapsed + Random.Range(MinDuration, MaxDuration);
             _nextSwitchCheck = TimeElapsed + SwitchCheckInterval;
