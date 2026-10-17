@@ -86,6 +86,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Input.GetKeyDown(HudKey))
         {
             if (ShiftHeld()) LogNearestRenderers();
+            else if (CtrlHeld()) ChangeMindWithNearest();
             else _hudVisible = !_hudVisible;
         }
         if (Input.GetKeyDown(DespawnKey)) DespawnAll();
@@ -244,6 +245,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         _nearest.DebugChainNextArrival();
         LOG.Info($"DevTools: {_nearest.name} chains a Trip at its next arrival, within two Trips in a row.");
+    }
+
+    private void ChangeMindWithNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to change its mind.");
+            return;
+        }
+
+        _nearest.DebugChangeMindNow();
+        LOG.Info($"DevTools: {_nearest.name} changes its mind now if on a Trip that has not yet, else on its next Trip.");
     }
 
     private void GlanceToBoundWithNearest()
@@ -615,6 +629,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Alt+F8 the two nearest Hallucinations walk to each other's place\n" +
                  "Ctrl+F8 the nearest Hallucination chains a Trip at its next arrival (press twice: cap)\n" +
+                 "Ctrl+F10 the nearest Hallucination changes its mind on its Trip (press twice: cap)\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Alt+F7 the nearest Hallucination turns round at the start of its next wait\n" +
                  "Alt+F9 the nearest Hallucination's next Glance goes to 120°\n" +

@@ -48,7 +48,10 @@ A Hallucination walking or sprinting along a NavMesh path to a point, from its s
 A Hallucination standing still for 2 to 4 s after a Trip, or two in a row, never during Stalking; one Wait in four starts with a turn round.
 
 **Glance**:
-A waiting Hallucination looking off in a random direction, up to 120° either side of where it faced as its Wait started; the head turns alone up to 40° off the body, and the body follows beyond.
+A waiting Hallucination looking off in a random direction, up to 120° either side of where it faced as its Wait started; the head turns alone up to 40° off the body, and the body follows beyond. A Hallucination changing its mind glances once the same way.
+
+**Change of mind**:
+A Hallucination on a Trip easing to a stop, glancing, then heading to another point 5 to 15 m away at the same gait, still on the same Trip; a 3 % chance each second of a Trip, at most once per Trip, never during Stalking.
 
 **Talker**:
 The Victim, or a Hallucination playing a Mimic, as a Hallucination hears them: its eyes and head turn to the nearest one within 6 m, up to 40° off the body, and hold them 2 to 4 s after they stop; a hidden teammate is never one, and a Stalking stare keeps the head.

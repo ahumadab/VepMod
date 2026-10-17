@@ -11,9 +11,9 @@ internal sealed class Wait
     private const float MinDuration = 2f; // s
     private const float MaxDuration = 4f; // s
     private const float TurnRoundChance = 0.25f;
-    private const float MinGlanceInterval = 1f; // s
-    private const float MaxGlanceInterval = 2f; // s
-    private const float MaxGlanceAngle = 120f; // °
+    internal const float MinGlanceInterval = 1f; // s
+    internal const float MaxGlanceInterval = 2f; // s
+    internal const float MaxGlanceAngle = 120f; // °
 
     // PlayerAvatarVisuals clamps the head's look to 40° around the body's forward.
     private const float HeadReach = 40f; // °
@@ -75,10 +75,20 @@ internal sealed class Wait
             _glanceToBoundNext = false;
         }
 
-        var offBody = head - _bodyAngle;
+        var glance = Toward(head, _bodyAngle);
+        _bodyAngle = glance.Body;
+        return glance;
+    }
+
+    /// <summary>
+    ///     The Glance at <paramref name="head" /> of a body facing <paramref name="body" />, both from the same facing.
+    /// </summary>
+    public static Glance Toward(float head, float body)
+    {
+        var offBody = head - body;
         var bodyFollows = Math.Abs(offBody) > HeadReach;
-        if (bodyFollows) _bodyAngle = head - Math.Sign(offBody) * HeadReach;
-        return new Glance(head, offBody, _bodyAngle, bodyFollows);
+        if (bodyFollows) body = head - Math.Sign(offBody) * HeadReach;
+        return new Glance(head, offBody, body, bodyFollows);
     }
 
     private float Between(float min, float max)

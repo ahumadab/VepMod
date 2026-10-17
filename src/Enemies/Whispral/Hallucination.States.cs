@@ -108,7 +108,11 @@ public sealed partial class Hallucination
         // Walking and sprinting switch to each other at most once between two Idles.
         private bool _enteredFromSwitch;
 
+        private MindChange _mindChange;
+        private float _glanceEnd;
+
         private TripChain TripChain => Machine.Owner._tripChain;
+        private ChangeOfMind ChangeOfMind => Machine.Owner._changeOfMind;
 
         protected abstract float MinDuration { get; }
         protected abstract float MaxDuration { get; }
@@ -119,9 +123,7 @@ public sealed partial class Hallucination
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
-            _duration = Random.Range(MinDuration, MaxDuration);
-            _nextSwitchCheck = SwitchCheckInterval;
-            _nextPrecomputeForward = PrecomputeForwardInterval;
+            _mindChange = MindChange.None;
 
             _enteredFromSwitch = previous is StateId.Wander or StateId.Sprint;
             if (_enteredFromSwitch)
@@ -138,17 +140,16 @@ public sealed partial class Hallucination
                 }
 
                 TripChain.Start();
+                ChangeOfMind.Start();
             }
 
-            Machine.Owner.Movement.SetSpeed(Speed);
-            Machine.Owner.BodyPose.Move(Gait);
-
-            Machine.Owner.Movement.StartPrecomputeForwardDestination();
+            StartLeg();
         }
 
         public override void OnStateExit(StateId next)
         {
             base.OnStateExit(next);
+            Machine.Owner.BodyPose.Glance(null);
 
             if (next is not (StateId.Wander or StateId.Sprint))
             {
@@ -159,6 +160,12 @@ public sealed partial class Hallucination
         public override void OnStateUpdate()
         {
             base.OnStateUpdate();
+
+            if (_mindChange != MindChange.None)
+            {
+                UpdateMindChange();
+                return;
+            }
 
             if (Machine.Owner.Movement.HasReachedDestination())
             {
@@ -171,6 +178,8 @@ public sealed partial class Hallucination
                 Machine.NextStateStateId = StateId.Idle;
                 return;
             }
+
+            if (ChangesMind()) return;
 
             _nextPrecomputeForward -= Time.deltaTime;
             if (_nextPrecomputeForward <= 0f)
@@ -200,10 +209,80 @@ public sealed partial class Hallucination
                           arrival.Chains ? "waits, no point to chain to" : "waits"));
             if (!chains) return false;
 
-            _duration = TimeElapsed + Random.Range(MinDuration, MaxDuration);
-            _nextPrecomputeForward = PrecomputeForwardInterval;
-            Machine.Owner.Movement.StartPrecomputeForwardDestination();
+            ChangeOfMind.Start();
+            StartLeg();
             return true;
+        }
+
+        private bool ChangesMind()
+        {
+            if (ChangeOfMind.Update(Time.deltaTime) is not { } change) return false;
+
+            if (change.Capped)
+            {
+                LOG.Debug($"{GetType().Name}: {Machine.Owner.name} was asked to change its mind, but already did on " +
+                          "this Trip: kept for its next Trip");
+                return false;
+            }
+
+            LOG.Debug($"{GetType().Name}: {Machine.Owner.name} changes its mind" +
+                      (change.Asked ? " (asked)" : $", roll={change.Roll:F3}") + ", easing to a stop");
+            _mindChange = MindChange.Stopping;
+            Machine.Owner.Movement.Stop();
+            Machine.Owner.BodyPose.Move(Gait.Still);
+            return true;
+        }
+
+        private void UpdateMindChange()
+        {
+            var movement = Machine.Owner.Movement;
+            switch (_mindChange)
+            {
+                case MindChange.Stopping when !movement.IsMoving:
+                    var facing = movement.TargetRotation.eulerAngles.y;
+                    var glance = Wait.Toward(Random.Range(-Wait.MaxGlanceAngle, Wait.MaxGlanceAngle), 0f);
+                    movement.Face(facing + glance.Body);
+                    Machine.Owner.BodyPose.Glance(facing + glance.Head);
+                    _glanceEnd = TimeElapsed + Random.Range(Wait.MinGlanceInterval, Wait.MaxGlanceInterval);
+                    _mindChange = MindChange.Glancing;
+                    LOG.Debug($"{GetType().Name}: {Machine.Owner.name} stopped, glances {glance.Head:F0}° from where " +
+                              "it faced, " + (glance.BodyFollows ? $"the body following to {glance.Body:F0}°" : "the head alone"));
+                    break;
+
+                case MindChange.Glancing when TimeElapsed >= _glanceEnd:
+                    _mindChange = MindChange.None;
+                    Machine.Owner.BodyPose.Glance(null);
+                    if (!movement.TrySetNearbyDestination())
+                    {
+                        LOG.Debug($"{GetType().Name}: {Machine.Owner.name} finds no other point to head to, waits");
+                        Machine.NextStateStateId = StateId.Idle;
+                        return;
+                    }
+
+                    LOG.Debug($"{GetType().Name}: {Machine.Owner.name} heads to another point " +
+                              $"{Vector3.Distance(Machine.Owner.ControllerTransform.position, movement.Destination):F1} m " +
+                              $"away, at a {Gait}");
+                    StartLeg();
+                    break;
+            }
+        }
+
+        // A Trip's start, a chained Trip's, and the one after a change of mind: each heads to a new point.
+        private void StartLeg()
+        {
+            _duration = TimeElapsed + Random.Range(MinDuration, MaxDuration);
+            _nextSwitchCheck = TimeElapsed + SwitchCheckInterval;
+            _nextPrecomputeForward = PrecomputeForwardInterval;
+            Machine.Owner.Movement.SetSpeed(Speed);
+            Machine.Owner.BodyPose.Move(Gait);
+            Machine.Owner.Movement.StartPrecomputeForwardDestination();
+        }
+
+        private enum MindChange
+        {
+            None,
+            Stopping,
+            Glancing
         }
     }
 

@@ -72,6 +72,8 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public Vector3 CurrentVelocity => _currentVelocity;
 
+    public Vector3 Destination => _destination;
+
     public float VerticalVelocity => _verticalVelocity;
 
     public bool IsGrounded => _charController != null && _charController.isGrounded;
