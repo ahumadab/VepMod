@@ -96,7 +96,7 @@ public class VepMod : BaseUnityPlugin
         if (ConfigEnableDevTools.Value)
         {
             gameObject.AddComponent<HallucinationDevTools>();
-            Logger.LogInfo("VepMod dev tools enabled (F7 spawn / F8 teleport / F9 drop / F10 HUD / F11 despawn).");
+            Logger.LogInfo("VepMod dev tools enabled (keypad: Num0 spawn, NumEnter HUD).");
         }
 #endif
 
@@ -178,7 +178,7 @@ public class VepMod : BaseUnityPlugin
         // Developer tools (dev build only, off by default)
         ConfigEnableDevTools = Config.Bind("Developer", "Enable Dev Tools", false,
             new ConfigDescription(
-                "Enables in-game developer tools for testing Hallucinations: spawn/teleport/drop-test keybinds (F7-F11) and a debug HUD. For development only."));
+                "Enables in-game developer tools for testing Hallucinations: spawn/teleport/drop-test keybinds on the numeric keypad and a debug HUD. For development only."));
 #endif
 
         // Audio validation (VAD)

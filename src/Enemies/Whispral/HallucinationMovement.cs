@@ -72,11 +72,18 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public Vector3 CurrentVelocity => _currentVelocity;
 
+    public Vector3 Destination => _destination;
+
     public float VerticalVelocity => _verticalVelocity;
 
     public bool IsGrounded => _charController != null && _charController.isGrounded;
 
     public bool IsMoving => _friction.IsMoving;
+
+    /// <summary>
+    ///     True once a stop has eased out completely, after <see cref="IsMoving" /> turns false.
+    /// </summary>
+    public bool IsStill => _friction.Speed <= 0f;
 
     internal bool IsOnNavMesh => _navAgent != null && _navAgent.isOnNavMesh;
 

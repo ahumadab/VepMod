@@ -85,7 +85,7 @@ The `VAD Sensitivity` presets are three of these points: `Permissive` 0.20, `Bal
 
 A Capture ends after half a second of silence, and that silence stays in the Voice Sample. The VAD analyses the Capture
 without it: it would dilute the speech ratio and penalise short words. The benchmark analysed whole files, so the
-dev tools' F6 replay (whole files too) matches the benchmark, not production.
+dev tools' Ctrl+Num6 replay (whole files too) matches the benchmark, not production.
 
 ### Fail-open, twice
 
