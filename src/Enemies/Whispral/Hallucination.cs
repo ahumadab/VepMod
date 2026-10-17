@@ -272,6 +272,15 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
                 return;
             }
 
+            // The game's PlayerExpression springs eyelids_scale to 1 while a player expresses, then leaves it around 0.8
+            // once the expression ends, and the clone copies that live scale: below 1 the lids sit inside the eyeball.
+            var leftScale = HallucinationVisualsClone.FindChildByName(eyelidsLeft, "eyelids_scale")!;
+            var rightScale = HallucinationVisualsClone.FindChildByName(eyelidsRight, "eyelids_scale")!;
+            LOG.Debug($"Eyelids scale reset to 1 from left {leftScale.localScale.x:F2}, right {rightScale.localScale.x:F2}: " +
+                      $"Hallucination of {ImitatedPlayer.playerName}");
+            leftScale.localScale = Vector3.one;
+            rightScale.localScale = Vector3.one;
+
             FindEyelidRotations(eyelidsLeft, out var leftUpperX, out var leftUpperZ, out var leftLowerX);
             FindEyelidRotations(eyelidsRight, out var rightUpperX, out var rightUpperZ, out var rightLowerX);
 
