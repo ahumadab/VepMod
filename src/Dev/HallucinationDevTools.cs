@@ -22,18 +22,6 @@ namespace VepMod.Dev;
 /// </summary>
 public sealed class HallucinationDevTools : MonoBehaviour
 {
-    private const KeyCode CaptureKey = KeyCode.F6;
-    private const KeyCode SpawnKey = KeyCode.F7;
-    private const KeyCode TeleportKey = KeyCode.F8;
-    private const KeyCode DropKey = KeyCode.F9;
-    private const KeyCode HudKey = KeyCode.F10;
-    private const KeyCode DespawnKey = KeyCode.F11;
-    private const KeyCode SpawnWhispralKey = KeyCode.F1;
-    private const KeyCode StunPreparingWhispralsKey = KeyCode.F2;
-    private const KeyCode StunWhispralsKey = KeyCode.F3;
-    private const KeyCode KillWhispralsKey = KeyCode.F4;
-    private const KeyCode KillLocalPlayerKey = KeyCode.F5;
-    private const KeyCode HurtLocalPlayerKey = KeyCode.F12;
     private const float StunDuration = 5f; // s
     private const int HealthStep = 10;
 
@@ -54,61 +42,38 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(CaptureKey))
-        {
-            if (ShiftHeld()) RequestCapture();
+        if (Pressed(KeyCode.Keypad0)) SpawnAtAim(PlayerAvatar.instance);
+        if (Pressed(KeyCode.Keypad0, true)) SpawnAtAim(NextOtherPlayer());
+        if (Pressed(KeyCode.Keypad1)) TeleportNearestToAim();
+        if (Pressed(KeyCode.Keypad1, true)) DropNearest();
+        if (Pressed(KeyCode.Keypad2)) StalkWithNearest();
+        if (Pressed(KeyCode.Keypad2, true)) MimicNextToStalker();
+        if (Pressed(KeyCode.Keypad3)) MimicNearest();
+        if (Pressed(KeyCode.Keypad3, true)) LogNearestRenderers();
+        if (Pressed(KeyCode.Keypad4)) CheckMapWithNearest();
+        if (Pressed(KeyCode.Keypad4, true)) TurnRoundWithNearest();
+        if (Pressed(KeyCode.Keypad5)) GlanceToBoundWithNearest();
+        if (Pressed(KeyCode.Keypad6)) CrossNearestTwo();
+        if (Pressed(KeyCode.Keypad7)) ChainWithNearest();
+        if (Pressed(KeyCode.Keypad8)) ChangeMindWithNearest();
+        if (Pressed(KeyCode.Keypad9)) DespawnAll();
+
+        if (Pressed(KeyCode.KeypadDivide)) SpawnWhispralAtAim();
+        if (Pressed(KeyCode.KeypadDivide, true)) SendMimicCommands();
+        if (Pressed(KeyCode.KeypadMultiply)) StunWhisprals(true);
+        if (Pressed(KeyCode.KeypadMultiply, true)) StunWhisprals(false);
+        if (Pressed(KeyCode.KeypadMinus)) KillWhisprals();
+
+        if (Pressed(KeyCode.KeypadPlus)) HurtLocalPlayer();
+        if (Pressed(KeyCode.KeypadPlus, true)) HealLocalPlayer();
+        if (Pressed(KeyCode.KeypadPeriod)) KillLocalPlayer();
+        if (Pressed(KeyCode.KeypadPeriod, true)) ReviveDeadPlayers();
+
+        if (Pressed(KeyCode.KeypadEnter)) _hudVisible = !_hudVisible;
+        if (Pressed(KeyCode.KeypadEnter, true)) RequestCapture();
 #if !VEPMOD_NO_VAD
-            else ReplayWavFolderThroughVad();
+        if (Pressed(KeyCode.Keypad6, true)) ReplayWavFolderThroughVad();
 #endif
-        }
-        if (Input.GetKeyDown(SpawnKey))
-        {
-            if (ShiftHeld()) CheckMapWithNearest();
-            else if (AltHeld()) TurnRoundWithNearest();
-            else if (CtrlHeld()) SpawnAtAim(NextOtherPlayer());
-            else SpawnAtAim(PlayerAvatar.instance);
-        }
-        if (Input.GetKeyDown(TeleportKey))
-        {
-            if (ShiftHeld()) StalkWithNearest();
-            else if (AltHeld()) CrossNearestTwo();
-            else if (CtrlHeld()) ChainWithNearest();
-            else TeleportNearestToAim();
-        }
-        if (Input.GetKeyDown(DropKey))
-        {
-            if (ShiftHeld()) MimicNearest();
-            else if (AltHeld()) GlanceToBoundWithNearest();
-            else if (CtrlHeld()) MimicNextToStalker();
-            else DropNearest();
-        }
-
-        if (Input.GetKeyDown(HudKey))
-        {
-            if (ShiftHeld()) LogNearestRenderers();
-            else if (CtrlHeld()) ChangeMindWithNearest();
-            else _hudVisible = !_hudVisible;
-        }
-        if (Input.GetKeyDown(DespawnKey)) DespawnAll();
-        if (Input.GetKeyDown(SpawnWhispralKey)) SpawnWhispralAtAim();
-        if (Input.GetKeyDown(StunPreparingWhispralsKey)) StunWhisprals(true);
-        if (Input.GetKeyDown(StunWhispralsKey)) StunWhisprals(false);
-        if (Input.GetKeyDown(KillWhispralsKey))
-        {
-            if (ShiftHeld()) SendMimicCommands();
-            else KillWhisprals();
-        }
-        if (Input.GetKeyDown(KillLocalPlayerKey))
-        {
-            if (ShiftHeld()) ReviveDeadPlayers();
-            else KillLocalPlayer();
-        }
-
-        if (Input.GetKeyDown(HurtLocalPlayerKey))
-        {
-            if (ShiftHeld()) HealLocalPlayer();
-            else HurtLocalPlayer();
-        }
 
         _nearestRefreshTimer -= Time.deltaTime;
         if (_nearestRefreshTimer <= 0f)
@@ -294,19 +259,13 @@ public sealed class HallucinationDevTools : MonoBehaviour
         LOG.Info($"DevTools: drop test — lifted the Hallucination by {height:F1}m to {lifted}.");
     }
 
-    private static bool ShiftHeld()
+    // The keypad keeps the dev keys clear of the F keys other debug mods (Imperium) take. Ctrl is the only modifier:
+    // on Windows, Shift turns a keypad digit into a navigation key while Num Lock is on, and Alt with keypad digits
+    // types a character code.
+    private static bool Pressed(KeyCode key, bool ctrl = false)
     {
-        return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-    }
-
-    private static bool CtrlHeld()
-    {
-        return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-    }
-
-    private static bool AltHeld()
-    {
-        return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+        return Input.GetKeyDown(key) &&
+               (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) == ctrl;
     }
 
     // Two Hallucinations crossing by chance is rare: each walks to the other's place, so they meet head-on.
@@ -345,7 +304,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         _nearest.PlayMimic(false);
     }
 
-    // Shift+F9 would pick the Hallucination Stalking the tester, the nearest one, rather than one beside it.
+    // Num3 would pick the Hallucination Stalking the tester, the nearest one, rather than one beside it.
     private static void MimicNextToStalker()
     {
         var hallucinations = FindObjectsOfType<Hallucination>()
@@ -626,24 +585,23 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (!_hudVisible) return;
 
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
-                 $"F7 spawn yourself | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
-                 "Shift+F8 the nearest Hallucination starts Stalking\n" +
-                 "Alt+F8 the two nearest Hallucinations walk to each other's place\n" +
-                 "Ctrl+F8 the nearest Hallucination chains a Trip at its next arrival (press twice: cap)\n" +
-                 "Ctrl+F10 the nearest Hallucination changes its mind on its Trip (press twice: cap)\n" +
-                 "Shift+F7 the nearest Hallucination checks its map\n" +
-                 "Alt+F7 the nearest Hallucination turns round at the start of its next wait\n" +
-                 "Alt+F9 the nearest Hallucination's next Glance goes to 120°\n" +
-                 "Ctrl+F9 the Hallucination nearest to the one Stalking performs a Mimic\n" +
-                 "Ctrl+F7 spawn a Hallucination of another player (the next one each press)\n" +
-                 "Whispral (Master): F1 spawn | F2 stun preparing | F3 stun all | F4 kill\n" +
-                 "Shift+F4 Mimic command to every attached Victim (Master)\n" +
-                 "F5 kill yourself | Shift+F5 revive the dead (Master)\n" +
-                 "F12 hurt yourself | Shift+F12 heal yourself\n" +
-                 "Shift+F6 capture your voice now\n" +
-                 "Shift+F10 log what the nearest Hallucination renders, eyes included\n";
+                 "Keypad, Num Lock on. Num0 spawn yourself | Ctrl+Num0 another player (the next one each press)\n" +
+                 "Num1 teleport to aim | Ctrl+Num1 drop | Num9 despawn all | NumEnter hud\n" +
+                 "Nearest Hallucination:\n" +
+                 "  Num2 starts Stalking | Ctrl+Num2 the one nearest to it performs a Mimic\n" +
+                 "  Num3 performs a Mimic | Ctrl+Num3 log what it renders, eyes included\n" +
+                 "  Num4 checks its map | Ctrl+Num4 turns round at the start of its next wait\n" +
+                 "  Num5 its next Glance goes to 120°\n" +
+                 "  Num6 the two nearest walk to each other's place\n" +
+                 "  Num7 chains a Trip at its next arrival (press twice: cap)\n" +
+                 "  Num8 changes its mind on its Trip (press twice: cap)\n" +
+                 "Whispral (Master): Num/ spawn | Num* stun preparing | Ctrl+Num* stun all | Num- kill\n" +
+                 "Ctrl+Num/ Mimic command to every attached Victim (Master)\n" +
+                 "Num. kill yourself | Ctrl+Num. revive the dead (Master)\n" +
+                 "Num+ hurt yourself | Ctrl+Num+ heal yourself\n" +
+                 "Ctrl+NumEnter capture your voice now\n";
 #if !VEPMOD_NO_VAD
-        sb += "F6 replay AudioFiles through VAD (see log)\n";
+        sb += "Ctrl+Num6 replay AudioFiles through VAD (see log)\n";
 #endif
 
         if (_nearest != null && _nearest.Movement != null)
