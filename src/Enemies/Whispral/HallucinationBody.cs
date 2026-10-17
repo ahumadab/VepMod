@@ -239,28 +239,31 @@ internal sealed class HallucinationBody
         _fake.localCamera.transform.rotation = controller.rotation;
         HearTalkers(controller.position);
 
-        // As PlayerEyes does for a player, the map holds the look over a Talker.
-        var victimCamera = pose.IsStaring ? Camera.main : null;
-        var talker = _talkerLook.Talker;
-        Transform? lookAt = null;
-        if (victimCamera != null)
+        var lookAt = LookPoint(pose);
+        // PlayerEyes.LookAtTransform points lookAt at the map but leaves lookAtActive off: the eyes read the map while
+        // the head stays at rest.
+        _fakeEyes.lookAtActive = lookAt != null && !pose.IsCheckingMap;
+        _fakeEyes.lookAt = lookAt;
+        pose.LookAt(lookAt);
+    }
+
+    // As PlayerEyes does for a player, the map holds the look over a Talker.
+    private Transform? LookPoint(HallucinationBodyPose pose)
+    {
+        if (pose.IsStaring)
         {
-            lookAt = victimCamera.transform;
-        }
-        else if (talker != null && !pose.IsCheckingMap)
-        {
-            lookAt = talker;
-        }
-        else if (pose.GlanceYaw is { } yaw)
-        {
-            _glancePoint.position = _visuals.headLookAtTransform.position +
-                                     Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlancePointDistance;
-            lookAt = _glancePoint;
+            var victimCamera = Camera.main;
+            return victimCamera != null ? victimCamera.transform : null;
         }
 
-        _fakeEyes.lookAtActive = lookAt != null;
-        _fakeEyes.lookAt = lookAt;
-        pose.LookAtTalker(lookAt != null && lookAt == talker ? talker : null);
+        if (pose.IsCheckingMap) return pose.MapLookPoint;
+        var talker = _talkerLook.Talker;
+        if (talker != null) return talker;
+        if (pose.GlanceYaw is not { } yaw) return null;
+
+        _glancePoint.position = _visuals.headLookAtTransform.position +
+                                Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlancePointDistance;
+        return _glancePoint;
     }
 
     // Vanish mutes every hidden teammate for the Victim: the only Talkers are the Victim and Hallucinations playing a
@@ -389,7 +392,7 @@ internal sealed class HallucinationBody
         var cameraForward = _fake.localCamera.transform.forward;
         var head = _visuals.headLookAtTransform;
         var headLook = Vector3.Angle(head.forward, cameraForward);
-        var lookPoint = _fakeEyes.lookAt != null
+        var lookPoint = _fakeEyes.lookAtActive
             ? $"{Vector3.Angle(_fakeEyes.lookAt.position - head.position, cameraForward):F0}°"
             : "none";
         LOG.Debug($"Body of {Name} [{_hallucination.DebugStateName}]: lean {Euler(_visuals.leanTransform)}, " +
