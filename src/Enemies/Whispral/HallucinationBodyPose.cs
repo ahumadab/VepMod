@@ -29,7 +29,6 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationBodyPose>();
 
     private GameObject? _mapTool;
-    private Transform? _mapLookTarget;
 
     private ArmPose? _rightArm;
     private Vector3 _basePose;
@@ -39,7 +38,7 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     private Eye? _eyeLeft;
     private Eye? _eyeRight;
-    private Transform? _talker;
+    private Transform? _lookPoint;
 
     private Situation _situation = Situation.Moving;
     private Gait _gait = Gait.Still;
@@ -49,6 +48,11 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     public bool IsCheckingMap => _situation == Situation.CheckingMap;
 
     public bool IsStaring => _situation == Situation.Staring;
+
+    /// <summary>
+    ///     The cloned map's Player Look Target; null without a cloned map.
+    /// </summary>
+    public Transform? MapLookPoint { get; private set; }
 
     /// <summary>
     ///     The world yaw, in degrees, the head turns to during a Glance.
@@ -70,10 +74,10 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     {
         if (_eyeLeft == null || _eyeRight == null) return;
 
-        if (LookTarget() is { } target)
+        if (_lookPoint != null)
         {
-            _eyeLeft.LookAt(target);
-            _eyeRight.LookAt(target);
+            _eyeLeft.LookAt(_lookPoint.position);
+            _eyeRight.LookAt(_lookPoint.position);
         }
         else
         {
@@ -89,7 +93,7 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     public void Initialize(PlayerAvatarVisuals? source, Transform cloneRig, GameObject? mapTool)
     {
         _mapTool = mapTool;
-        _mapLookTarget = mapTool != null
+        MapLookPoint = mapTool != null
             ? HallucinationVisualsClone.FindChildByName(mapTool.transform, "Player Look Target")
             : null;
 
@@ -133,27 +137,24 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     }
 
     /// <summary>
-    ///     Raises the map in the right hand, shows it and turns the eyes to it, until the next situation.
+    ///     Raises the map in the right hand and shows it, until the next situation.
     /// </summary>
     public void CheckMap()
     {
         Set(Situation.CheckingMap, Gait.Still);
     }
 
-    /// <summary>
-    ///     Turns the eyes to the Victim's camera, until the next situation.
-    /// </summary>
     public void Stare(Gait gait)
     {
         Set(Situation.Staring, gait);
     }
 
     /// <summary>
-    ///     Turns the eyes to the Talker the head looks at, as PlayerEyes does for a player; null returns them to rest.
+    ///     Turns the eyes to the point, within PlayerEyes' clamp, until the next call; null eases them back to rest.
     /// </summary>
-    public void LookAtTalker(Transform? talker)
+    public void LookAt(Transform? point)
     {
-        _talker = talker;
+        _lookPoint = point;
     }
 
     /// <param name="yaw">The world yaw in degrees, or null to end the Glance.</param>
@@ -170,20 +171,6 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
         _gait = gait;
         if (_mapTool != null) _mapTool.SetActive(situation == Situation.CheckingMap);
         LOG.Debug($"Body pose of {name}: {situation}, {gait}");
-    }
-
-    private Vector3? LookTarget()
-    {
-        switch (_situation)
-        {
-            case Situation.CheckingMap when _mapLookTarget != null:
-                return _mapLookTarget.position;
-            case Situation.Staring:
-                var camera = Camera.main;
-                return camera != null ? camera.transform.position : null;
-            default:
-                return _talker != null ? _talker.position : null;
-        }
     }
 
     private Transform? FindClonedBone(Transform cloneRig, Transform? sourceBone, string part)
