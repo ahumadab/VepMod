@@ -57,6 +57,8 @@ belongs to the tooling, not here.
 - Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
   action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- A periodic line that proves a criterion names the case it samples (the look point's source: stare, map, Talker,
+  Glance): a case read back from the values is a guess.
 - A criterion about what the Victim sees is proved by what Unity renders: the line measures the rendered bone (the
   head mesh's `headSideTransform`, an eye bone) or a dev tools dump, not the aim the code sets (`headLookAtTransform`,
   the fake `PlayerEyes.lookAt`): `PlayerAvatarVisuals` turns the head mesh by only half of it.
@@ -71,7 +73,8 @@ belongs to the tooling, not here.
 - A line that proves a magnitude (a clearance, an angle, a distance) logs its extreme over the episode, the closest
   approach or the widest deflection, on the episode's last edge: on its first edge the value has not moved yet. An
   episode that starts where the previous one ended also logs its settled value on that edge: the extreme alone carries
-  the previous episode's.
+  the previous episode's. A criterion that compares two parts (the eyes on the head's side) is a magnitude for each:
+  the line logs both extremes, signed alike.
 - The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
   (another player's Map Tool, not the local player's, who has none).
 

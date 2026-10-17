@@ -182,6 +182,13 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
+        if (_nearest.BodyPose.MapLookPoint == null)
+        {
+            LOG.Warning($"DevTools: {_nearest.name} has no map (the local player's Hallucination has none): " +
+                        "Ctrl+Num0 spawns another player's.");
+            return;
+        }
+
         _nearest.DebugCheckMap();
         LOG.Info("DevTools: the nearest Hallucination checks its map.");
     }

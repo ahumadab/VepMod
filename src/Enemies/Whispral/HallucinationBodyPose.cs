@@ -59,6 +59,11 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
     /// </summary>
     public float? GlanceYaw { get; private set; }
 
+    /// <summary>
+    ///     The eyes' mean yaw off the head, in degrees, signed like the head mesh's side-steer; 0 without eyes.
+    /// </summary>
+    public float EyeYaw => _eyeLeft == null || _eyeRight == null ? 0f : (_eyeLeft.Yaw + _eyeRight.Yaw) / 2f;
+
     public string DebugEyes => _eyeLeft == null || _eyeRight == null
         ? "no eyes"
         : $"{_situation}: left {_eyeLeft}, right {_eyeRight}";
@@ -263,6 +268,8 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
             else if (euler.y < 360f - EyeClampYaw && euler.y > 180f) euler.y = 360f - EyeClampYaw;
             _bone.localEulerAngles = euler;
         }
+
+        public float Yaw => Mathf.DeltaAngle(0f, _bone.localEulerAngles.y);
 
         public void EaseToRest()
         {
