@@ -78,10 +78,14 @@ public sealed class HallucinationMovement : MonoBehaviour
 
     public bool IsGrounded => _charController != null && _charController.isGrounded;
 
+    /// <summary>
+    ///     PlayerController's "moving" flag: false while a stop still slides along the path; waiting for the end of a
+    ///     stop reads <see cref="IsStill" />.
+    /// </summary>
     public bool IsMoving => _friction.IsMoving;
 
     /// <summary>
-    ///     True once a stop has eased out completely, after <see cref="IsMoving" /> turns false.
+    ///     True once a stop has eased out completely.
     /// </summary>
     public bool IsStill => _friction.Speed <= 0f;
 
