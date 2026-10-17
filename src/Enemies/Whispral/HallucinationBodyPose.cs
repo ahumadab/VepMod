@@ -39,6 +39,7 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
 
     private Eye? _eyeLeft;
     private Eye? _eyeRight;
+    private Transform? _talker;
 
     private Situation _situation = Situation.Moving;
     private Gait _gait = Gait.Still;
@@ -147,6 +148,14 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
         Set(Situation.Staring, gait);
     }
 
+    /// <summary>
+    ///     Turns the eyes to the Talker the head looks at, as PlayerEyes does for a player; null returns them to rest.
+    /// </summary>
+    public void LookAtTalker(Transform? talker)
+    {
+        _talker = talker;
+    }
+
     /// <param name="yaw">The world yaw in degrees, or null to end the Glance.</param>
     public void Glance(float? yaw)
     {
@@ -173,7 +182,7 @@ internal sealed class HallucinationBodyPose : MonoBehaviour
                 var camera = Camera.main;
                 return camera != null ? camera.transform.position : null;
             default:
-                return null;
+                return _talker != null ? _talker.position : null;
         }
     }
 

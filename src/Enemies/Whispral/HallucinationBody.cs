@@ -260,6 +260,7 @@ internal sealed class HallucinationBody
 
         _fakeEyes.lookAtActive = lookAt != null;
         _fakeEyes.lookAt = lookAt;
+        pose.LookAtTalker(lookAt != null && lookAt == talker ? talker : null);
     }
 
     // Vanish mutes every hidden teammate for the Victim: the only Talkers are the Victim and Hallucinations playing a
@@ -388,14 +389,14 @@ internal sealed class HallucinationBody
         var cameraForward = _fake.localCamera.transform.forward;
         var head = _visuals.headLookAtTransform;
         var headLook = Vector3.Angle(head.forward, cameraForward);
-        var victim = _fakeEyes.lookAt != null
+        var lookPoint = _fakeEyes.lookAt != null
             ? $"{Vector3.Angle(_fakeEyes.lookAt.position - head.position, cameraForward):F0}°"
             : "none";
         LOG.Debug($"Body of {Name} [{_hallucination.DebugStateName}]: lean {Euler(_visuals.leanTransform)}, " +
                   $"sprint tilt {Euler(_visuals.tiltTransform)}, leg twist {Euler(_visuals.legTwistTransform)}, " +
                   $"head side-steer {Euler(_visuals.headSideTransform)}, " +
                   $"body {Quaternion.Angle(_body.rotation, _fake.clientRotationCurrent):F1}° behind its spring " +
-                  $"target, head look {headLook:F0}° from the camera (Victim {victim}) | " +
+                  $"target, head look {headLook:F0}° from the camera (look point {lookPoint}), eyes {_hallucination.BodyPose.DebugEyes} | " +
                   $"Moving={_animator.GetBool(MovingKey)} Sprinting={_animator.GetBool(SprintingKey)} " +
                   $"Turning={_animator.GetBool(TurningKey)} Grabbing={_animator.GetBool(GrabbingKey)} " +
                   $"Falling={_animator.GetBool(FallingKey)} | footsteps blocked {_footstepsBlocked}");
