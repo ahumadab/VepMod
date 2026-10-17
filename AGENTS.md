@@ -13,8 +13,7 @@ Unity's modules as the game ships them (`UnityEngine.*Module.dll`): `../Repo_04/
 The tester confirms what the game shows; only the BepInEx logs show the state behind it (a Hallucination on the floor
 but off the NavMesh), and you read them after the test to confirm each acceptance criterion. So before asking for an
 in-game test, map every acceptance criterion to the action that triggers it and the `Debug` line that proves it, with
-the data behind it. A criterion about what the Victim sees is proved by what Unity renders, which the dev tools dump,
-not by the line of the code that asked for it. An action the tester cannot trigger at will (a command the Master
+the data behind it. An action the tester cannot trigger at will (a command the Master
 sends, a state reached only by chance, a bound) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
 (`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about. Work with
 criteria seen in game is handed back with that deploy and the test plan, in the same reply.
