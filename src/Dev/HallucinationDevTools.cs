@@ -72,6 +72,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         {
             if (ShiftHeld()) StalkWithNearest();
             else if (AltHeld()) CrossNearestTwo();
+            else if (CtrlHeld()) ChainWithNearest();
             else TeleportNearestToAim();
         }
         if (Input.GetKeyDown(DropKey))
@@ -230,6 +231,19 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         _nearest.DebugTurnRoundNextWait();
         LOG.Info($"DevTools: {_nearest.name} turns round at the start of its next wait.");
+    }
+
+    private void ChainWithNearest()
+    {
+        RefreshNearest();
+        if (_nearest == null)
+        {
+            LOG.Warning("DevTools: no Hallucination to chain a Trip.");
+            return;
+        }
+
+        _nearest.DebugChainNextArrival();
+        LOG.Info($"DevTools: {_nearest.name} chains a Trip at its next arrival, within two Trips in a row.");
     }
 
     private void GlanceToBoundWithNearest()
@@ -600,6 +614,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  $"F7 spawn yourself | F8 teleport | F9 drop | Shift+F9 Mimic | F10 hud | F11 despawn\n" +
                  "Shift+F8 the nearest Hallucination starts Stalking\n" +
                  "Alt+F8 the two nearest Hallucinations walk to each other's place\n" +
+                 "Ctrl+F8 the nearest Hallucination chains a Trip at its next arrival (press twice: cap)\n" +
                  "Shift+F7 the nearest Hallucination checks its map\n" +
                  "Alt+F7 the nearest Hallucination turns round at the start of its next wait\n" +
                  "Alt+F9 the nearest Hallucination's next Glance goes to 120°\n" +

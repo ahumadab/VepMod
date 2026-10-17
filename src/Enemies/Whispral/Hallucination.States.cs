@@ -108,6 +108,8 @@ public sealed partial class Hallucination
         // Walking and sprinting switch to each other at most once between two Idles.
         private bool _enteredFromSwitch;
 
+        private TripChain TripChain => Machine.Owner._tripChain;
+
         protected abstract float MinDuration { get; }
         protected abstract float MaxDuration { get; }
         protected abstract float Speed { get; }
@@ -134,6 +136,8 @@ public sealed partial class Hallucination
                     Machine.NextStateStateId = StateId.Idle;
                     return;
                 }
+
+                TripChain.Start();
             }
 
             Machine.Owner.Movement.SetSpeed(Speed);
@@ -156,7 +160,13 @@ public sealed partial class Hallucination
         {
             base.OnStateUpdate();
 
-            if (Machine.Owner.Movement.HasReachedDestination() || TimeElapsed >= _duration)
+            if (Machine.Owner.Movement.HasReachedDestination())
+            {
+                if (!ChainsTrip()) Machine.NextStateStateId = StateId.Idle;
+                return;
+            }
+
+            if (TimeElapsed >= _duration)
             {
                 Machine.NextStateStateId = StateId.Idle;
                 return;
@@ -177,6 +187,19 @@ public sealed partial class Hallucination
                     Machine.NextStateStateId = SwitchTargetState;
                 }
             }
+        }
+
+        private bool ChainsTrip()
+        {
+            var arrival = TripChain.Arrive();
+            var chains = arrival.Chains && Machine.Owner.Movement.TrySetDestinationSync();
+            LOG.Debug($"{GetType().Name}: {Machine.Owner.name} reached its point, roll={arrival.Roll:F2}" +
+                      (arrival.Asked ? " (chain asked)" : "") + ", " +
+                      (chains ? "chains a Trip" :
+                          arrival.Capped ? "waits after two Trips in a row" :
+                          arrival.Chains ? "waits, no point to chain to" : "waits"));
+            if (chains) _duration = TimeElapsed + Random.Range(MinDuration, MaxDuration);
+            return chains;
         }
     }
 

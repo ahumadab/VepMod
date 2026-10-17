@@ -577,7 +577,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         _isPrecomputingDestination = false;
     }
 
-    private bool TrySetDestinationSync()
+    public bool TrySetDestinationSync()
     {
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
 
