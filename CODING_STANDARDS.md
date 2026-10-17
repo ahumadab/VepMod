@@ -55,6 +55,9 @@ belongs to the tooling, not here.
 - Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
   action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- A criterion about what the Victim sees is proved by what Unity renders: the line measures the rendered bone (the
+  head mesh's `headSideTransform`, an eye bone) or a dev tools dump, not the aim the code sets (`headLookAtTransform`,
+  the fake `PlayerEyes.lookAt`): `PlayerAvatarVisuals` turns the head mesh by only half of it.
 - A criterion about a bound (an angle limit, a cap, a timeout) has an action that reaches the bound; a bound reached
   only by chance is a finding.
 - A state shorter than a periodic line's interval (a fall, an impulse) gets its own line on each edge: the periodic
