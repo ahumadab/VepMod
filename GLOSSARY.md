@@ -38,7 +38,8 @@ _Avoid_: Invisibility, invisible player
 What Vanish and Hallucinations do to one Imitated Player together: hide the real teammate and put their Hallucination in their place.
 
 **Hallucination**:
-A fake copy of an Imitated Player, seen only by the Victim, with the same look, colour and name.
+A fake copy of an Imitated Player, seen only by the Victim, with the same look, colour and name. It wears a clone of
+the Imitated Player's visuals (`HallucinationVisualsClone`): _clone_ names that Unity copy, never the Hallucination.
 _Avoid_: Fake player, droid, clone, LostDroid
 
 **Trip**:
