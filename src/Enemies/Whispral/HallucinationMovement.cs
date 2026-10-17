@@ -251,7 +251,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         }
 
         LOG.Warning("No precomputed destination, falling back to sync search");
-        return TrySetDestinationSync();
+        return TrySetNearbyDestination();
     }
 
     public bool TryExtendCurrentPath()
@@ -577,7 +577,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         _isPrecomputingDestination = false;
     }
 
-    public bool TrySetDestinationSync()
+    public bool TrySetNearbyDestination()
     {
         var controllerPos = _controllerTransform != null ? _controllerTransform.position : transform.position;
 

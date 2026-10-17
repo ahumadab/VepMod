@@ -83,7 +83,7 @@ public class TripChainTests
     }
 
     [Fact]
-    public void TwoChainsAskedForStillStopAtTwoTrips()
+    public void AChainAskedForAtTheCapWaitsForTheNextTrip()
     {
         var chain = new TripChain(() => 0.9f);
         chain.ChainNextArrival();
@@ -93,11 +93,12 @@ public class TripChainTests
         Assert.True(chain.Arrive().Chains);
         var second = chain.Arrive();
         chain.Start();
+        var next = chain.Arrive();
 
-        Assert.True(second.Asked);
         Assert.True(second.Capped);
         Assert.False(second.Chains);
-        Assert.False(chain.Arrive().Asked);
+        Assert.True(next.Asked);
+        Assert.True(next.Chains);
     }
 
     [Fact]

@@ -30,7 +30,7 @@ internal sealed class TripChain
     }
 
     /// <summary>
-    ///     The next arrival chains, within the cap; each call asks for one arrival.
+    ///     The next arrival below the cap chains; each call asks for one arrival.
     /// </summary>
     public void ChainNextArrival()
     {
@@ -39,11 +39,11 @@ internal sealed class TripChain
 
     public Arrival Arrive()
     {
-        var asked = _chainsAsked > 0;
-        if (asked) _chainsAsked--;
-
         var roll = _roll();
         var capped = _trips >= MaxTrips;
+        var asked = !capped && _chainsAsked > 0;
+        if (asked) _chainsAsked--;
+
         var chains = !capped && (asked || roll < ChainChance);
         if (chains) _trips++;
         return new Arrival(roll, asked, capped, chains);

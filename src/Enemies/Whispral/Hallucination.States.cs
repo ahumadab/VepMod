@@ -192,14 +192,18 @@ public sealed partial class Hallucination
         private bool ChainsTrip()
         {
             var arrival = TripChain.Arrive();
-            var chains = arrival.Chains && Machine.Owner.Movement.TrySetDestinationSync();
+            var chains = arrival.Chains && Machine.Owner.Movement.TrySetNearbyDestination();
             LOG.Debug($"{GetType().Name}: {Machine.Owner.name} reached its point, roll={arrival.Roll:F2}" +
                       (arrival.Asked ? " (chain asked)" : "") + ", " +
                       (chains ? "chains a Trip" :
                           arrival.Capped ? "waits after two Trips in a row" :
                           arrival.Chains ? "waits, no point to chain to" : "waits"));
-            if (chains) _duration = TimeElapsed + Random.Range(MinDuration, MaxDuration);
-            return chains;
+            if (!chains) return false;
+
+            _duration = TimeElapsed + Random.Range(MinDuration, MaxDuration);
+            _nextPrecomputeForward = PrecomputeForwardInterval;
+            Machine.Owner.Movement.StartPrecomputeForwardDestination();
+            return true;
         }
     }
 
