@@ -66,6 +66,8 @@ belongs to the tooling, not here.
   only by chance is a finding.
 - A key that asks for a chance event keeps its request until a case can honour it: a request spent on a case the bound
   refuses (a capped arrival) leaves the tester's presses short of the bound.
+- A fix that overrides a value left wrong (a scale the game leaves behind) logs the value it overrides: the fix's build
+  then proves the reproduction too, with no build of the bug alone to deploy and test.
 - A criterion about a rate (one in three) is proved by a unit test over thousands of rolls; in game, the line proves
   that each roll and its outcome agree. A few minutes of play gives a few dozen events, too few to tell 1/3 from 1/5.
 - A state shorter than a periodic line's interval (a fall, an impulse) gets its own line on each edge: the periodic
