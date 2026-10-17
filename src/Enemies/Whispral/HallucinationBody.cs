@@ -50,8 +50,10 @@ internal sealed class HallucinationBody
     private float _glanceBodyYawFrom;
     private float _glanceWidestLook;
     private float _glanceWidestHead;
+    private float _glanceWidestEyes;
     private Gait _lastGait = Gait.Still;
     private float _logTimer;
+    private string _lookSource = "none";
     private Transform? _lookedAtTalker;
     private string? _lookedAtTalkerName;
     private float _talkerWidestLook;
@@ -239,7 +241,7 @@ internal sealed class HallucinationBody
         _fake.localCamera.transform.rotation = controller.rotation;
         HearTalkers(controller.position);
 
-        var lookAt = LookPoint(pose);
+        (var lookAt, _lookSource) = LookPoint(pose);
         // PlayerEyes.LookAtTransform points lookAt at the map but leaves lookAtActive off: the eyes read the map while
         // the head stays at rest.
         _fakeEyes.lookAtActive = lookAt != null && !pose.IsCheckingMap;
@@ -248,22 +250,22 @@ internal sealed class HallucinationBody
     }
 
     // As PlayerEyes does for a player, the map holds the look over a Talker.
-    private Transform? LookPoint(HallucinationBodyPose pose)
+    private (Transform? Point, string Source) LookPoint(HallucinationBodyPose pose)
     {
         if (pose.IsStaring)
         {
             var victimCamera = Camera.main;
-            return victimCamera != null ? victimCamera.transform : null;
+            return (victimCamera != null ? victimCamera.transform : null, "stare");
         }
 
-        if (pose.IsCheckingMap) return pose.MapLookPoint;
+        if (pose.IsCheckingMap) return (pose.MapLookPoint, "map");
         var talker = _talkerLook.Talker;
-        if (talker != null) return talker;
-        if (pose.GlanceYaw is not { } yaw) return null;
+        if (talker != null) return (talker, "Talker");
+        if (pose.GlanceYaw is not { } yaw) return (null, "none");
 
         _glancePoint.position = _visuals.headLookAtTransform.position +
                                 Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * GlancePointDistance;
-        return _glancePoint;
+        return (_glancePoint, "Glance");
     }
 
     // Vanish mutes every hidden teammate for the Victim: the only Talkers are the Victim and Hallucinations playing a
@@ -364,7 +366,8 @@ internal sealed class HallucinationBody
             {
                 LOG.Debug($"Body of {Name}: Glance at {Mathf.Repeat(ended, 360f):F0}° held {Time.time - _glanceStart:F1}s, body turned " +
                           $"{Mathf.DeltaAngle(_glanceBodyYawFrom, bodyYaw):F0}°, head looked up to " +
-                          $"{_glanceWidestLook:F0}° off the camera, head mesh up to {_glanceWidestHead:F0}° off the body");
+                          $"{_glanceWidestLook:F0}° off the camera, head mesh up to {_glanceWidestHead:F0}° off the body, " +
+                          $"eyes up to {_glanceWidestEyes:F0}° off the head");
             }
 
             _glanceYaw = yaw;
@@ -372,6 +375,7 @@ internal sealed class HallucinationBody
             _glanceBodyYawFrom = bodyYaw;
             _glanceWidestLook = 0f;
             _glanceWidestHead = 0f;
+            _glanceWidestEyes = 0f;
         }
 
         // A Talker holds the head over a Glance.
@@ -379,6 +383,7 @@ internal sealed class HallucinationBody
         // The game clamps the look around the camera, which leads the body's spring.
         _glanceWidestLook = Widest(_glanceWidestLook, HeadOffCamera(), 0f);
         _glanceWidestHead = Widest(_glanceWidestHead, _visuals.headSideTransform.eulerAngles.y, bodyYaw);
+        _glanceWidestEyes = Widest(_glanceWidestEyes, _hallucination.BodyPose.EyeYaw, 0f);
     }
 
     private static float Widest(float widest, float yaw, float fromYaw)
@@ -392,8 +397,8 @@ internal sealed class HallucinationBody
         var cameraForward = _fake.localCamera.transform.forward;
         var head = _visuals.headLookAtTransform;
         var headLook = Vector3.Angle(head.forward, cameraForward);
-        var lookPoint = _fakeEyes.lookAtActive
-            ? $"{Vector3.Angle(_fakeEyes.lookAt.position - head.position, cameraForward):F0}°"
+        var lookPoint = _fakeEyes.lookAt != null
+            ? $"{_lookSource} {Vector3.Angle(_fakeEyes.lookAt.position - head.position, cameraForward):F0}°"
             : "none";
         LOG.Debug($"Body of {Name} [{_hallucination.DebugStateName}]: lean {Euler(_visuals.leanTransform)}, " +
                   $"sprint tilt {Euler(_visuals.tiltTransform)}, leg twist {Euler(_visuals.legTwistTransform)}, " +

@@ -1,6 +1,6 @@
 // Prints VepMod's lines and the game's errors from the BepInEx logs of the last in-game test, one section per instance
 // and per level:
-//   node tooling/test-log.mjs [profile] [--grep <regex>] [--exclude <regex>]
+//   node tooling/test-log.mjs [profile] [--grep <regex>] [--exclude <regex>]   (regexes ignore case)
 // Reads the profile's LogOutput.log* (VieuxPoulpe by default) written within half an hour of the newest: a two-instance
 // test writes two at once, and older files shift to .2, .3. The same message repeated in a row prints once, with ×count.
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -71,9 +71,9 @@ export function summarizeLog(text, grep, exclude) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const args = process.argv.slice(2);
     const grepIndex = args.indexOf("--grep");
-    const grep = grepIndex < 0 ? undefined : new RegExp(args.splice(grepIndex, 2)[1]);
+    const grep = grepIndex < 0 ? undefined : new RegExp(args.splice(grepIndex, 2)[1], "i");
     const excludeIndex = args.indexOf("--exclude");
-    const exclude = excludeIndex < 0 ? undefined : new RegExp(args.splice(excludeIndex, 2)[1]);
+    const exclude = excludeIndex < 0 ? undefined : new RegExp(args.splice(excludeIndex, 2)[1], "i");
     const profile = args[0] ?? "VieuxPoulpe";
     const folder = join(
         process.env.APPDATA,
