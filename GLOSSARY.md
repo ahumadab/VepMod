@@ -50,6 +50,9 @@ A Hallucination standing still for 2 to 4 s between two Trips, never during Stal
 **Glance**:
 A waiting Hallucination looking off in a random direction, up to 120° either side of where it faced as its Wait started; the head turns alone up to 40° off the body, and the body follows beyond.
 
+**Talker**:
+The Victim, or a Hallucination playing a Mimic, as a Hallucination hears them: its eyes and head turn to the nearest one within 6 m, up to 40° off the body, and hold them 2 to 4 s after they stop; a hidden teammate is never one, and a Stalking stare keeps the head.
+
 **Stalking**:
 A Hallucination approaching the Victim, staring at them, then fleeing a moment after the Victim's Gaze lands on it, even if the Victim looks away.
 
