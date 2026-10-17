@@ -27,6 +27,8 @@ belongs to the tooling, not here.
   overwrites it. Then every state sets it, and a state that does not is a finding.
 - A call that deactivates or destroys the object running a state machine (`EnemyParent.Despawn`, `SetActive(false)`,
   `Destroy`) skips its state exits: the state machine leaves its state before that call.
+- A state that restarts its work in place (the state machine never re-enters its current state: a chained Trip stays
+  in `MovementState`) runs the same setup as its entry, through one method both call.
 - A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.
 - A component that moves to another object (a child, a sibling) moves for its readers too: every `GetComponent`,
   `Find` or serialized reference that reached it at its old place.
@@ -60,6 +62,10 @@ belongs to the tooling, not here.
   the fake `PlayerEyes.lookAt`): `PlayerAvatarVisuals` turns the head mesh by only half of it.
 - A criterion about a bound (an angle limit, a cap, a timeout) has an action that reaches the bound; a bound reached
   only by chance is a finding.
+- A key that asks for a chance event keeps its request until a case can honour it: a request spent on a case the bound
+  refuses (a capped arrival) leaves the tester's presses short of the bound.
+- A criterion about a rate (one in three) is proved by a unit test over thousands of rolls; in game, the line proves
+  that each roll and its outcome agree. A few minutes of play gives a few dozen events, too few to tell 1/3 from 1/5.
 - A state shorter than a periodic line's interval (a fall, an impulse) gets its own line on each edge: the periodic
   line samples past it.
 - A line that proves a magnitude (a clearance, an angle, a distance) logs its extreme over the episode, the closest
