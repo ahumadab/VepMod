@@ -57,6 +57,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private readonly Wait _wait = new(() => UnityEngine.Random.value);
+    private readonly TripChain _tripChain = new(() => UnityEngine.Random.value);
     private HallucinationFace _face;
     private CharacterController _charController;
     private HallucinationNameplate _nameplateController;
@@ -125,6 +126,14 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public void DebugGlanceToBoundNext()
     {
         _wait.GlanceToBoundNext();
+    }
+
+    /// <summary>
+    ///     Dev tools only.
+    /// </summary>
+    public void DebugChainNextArrival()
+    {
+        _tripChain.ChainNextArrival();
     }
 
     /// <summary>

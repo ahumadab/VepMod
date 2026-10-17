@@ -42,10 +42,10 @@ A fake copy of an Imitated Player, seen only by the Victim, with the same look, 
 _Avoid_: Fake player, droid, clone, LostDroid
 
 **Trip**:
-A Hallucination walking or sprinting along a NavMesh path to a point, from its start to the stop it eases into at the end; a switch between walking and sprinting does not end it.
+A Hallucination walking or sprinting along a NavMesh path to a point, from its start to the stop it eases into at the end; a switch between walking and sprinting does not end it. One time in three it reaches its point and goes straight on to another Trip at the same gait, never more than two Trips without a Wait.
 
 **Wait**:
-A Hallucination standing still for 2 to 4 s between two Trips, never during Stalking; one Wait in four starts with a turn round.
+A Hallucination standing still for 2 to 4 s after a Trip, or two in a row, never during Stalking; one Wait in four starts with a turn round.
 
 **Glance**:
 A waiting Hallucination looking off in a random direction, up to 120° either side of where it faced as its Wait started; the head turns alone up to 40° off the body, and the body follows beyond.
