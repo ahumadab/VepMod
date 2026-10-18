@@ -70,6 +70,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private Transform? _rigidbodyTransform;
     private Animator? _animator;
     private HallucinationBody? _body;
+    private Transform? _head;
 
     // NavMesh settings (saved for initialization)
     private int _savedAgentTypeID;
@@ -81,7 +82,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public Transform ControllerTransform { get; private set; }
     internal HallucinationMovement Movement { get; private set; }
     internal HallucinationGaze Gaze { get; private set; }
-    internal Transform? Head { get; private set; }
+    internal Vector3 Face => _head != null ? _head.position : ControllerTransform.position + Vector3.up;
     internal HallucinationBodyPose BodyPose { get; private set; }
     internal LungeCountdown LungeCountdown { get; } = new();
 
@@ -273,11 +274,11 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private void SetupGaze()
     {
-        Head = HallucinationVisualsClone.FindChildByName(transform, "code_head_top");
+        _head = HallucinationVisualsClone.FindChildByName(transform, "code_head_top");
         Gaze = new HallucinationGaze(
             transform,
             ControllerTransform,
-            Head,
+            _head,
             HallucinationVisualsClone.FindChildByName(transform, "code_body_top_up"),
             ImitatedPlayer.playerName);
     }

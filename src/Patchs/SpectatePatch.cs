@@ -8,7 +8,7 @@ internal static class SpectatePatch
 {
     private static readonly VepLogger LOG = VepLogger.Create(nameof(SpectatePatch));
 
-    // A camera override the death left running would carry over into the spectate camera.
+    // Proves that the camera overrides a death sets (a Lunge's aim and zoom) are over once the spectate camera starts.
     private static void Postfix()
     {
         LOG.Debug($"Spectate starts: camera aim override {(CameraAim.Instance.AimTargetActive ? "on" : "off")}, " +
