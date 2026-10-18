@@ -83,6 +83,11 @@ public sealed partial class Hallucination
                         LOG.Debug($"IdleState: {Machine.Owner.name} refused the Stalking it {how}: " +
                                   $"{stalker.name} is Stalking");
                     }
+                    else if (Machine.Owner.IsPlayingMimic)
+                    {
+                        // A Stalking Hallucination approaches without a word.
+                        LOG.Debug($"IdleState: {Machine.Owner.name} refused the Stalking it {how}: it speaks a Mimic");
+                    }
                     else
                     {
                         Machine.NextStateStateId = StateId.StalkApproach;

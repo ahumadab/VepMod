@@ -411,7 +411,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         {
             if (hallucination != null)
             {
-                Destroy(hallucination.gameObject);
+                hallucination.Remove();
                 count++;
             }
         }

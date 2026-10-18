@@ -30,8 +30,11 @@ public sealed partial class Hallucination
     /// </summary>
     internal bool IsPlayingMimic => Time.time >= _mimicVoiceFrom && Time.time < _mimicVoiceUntil;
 
+    private string MimicLabel =>
+        $"Mimic of {(ImitatedPlayer != null ? ImitatedPlayer.playerName : "?")} on Hallucination {GetInstanceID()}";
+
     /// <summary>
-    ///     Whether a Mimic is voice-filtered, by the local voice filter option.
+    ///     By the local voice filter option.
     /// </summary>
     internal static bool RollVoiceFilter()
     {
@@ -49,24 +52,19 @@ public sealed partial class Hallucination
     // The Victim's client picks the Voice Sample itself, without a command from the Master (ADR-0007).
     private void PlayLungeMimic()
     {
-        LOG.Debug($"STALK: {name} speaks a Mimic as it lunges");
-        if (_nextLungeFindsNoVoiceSample)
-        {
-            _nextLungeFindsNoVoiceSample = false;
-            _lungeMimic = null;
-            LOG.Debug($"No Voice Sample in the Voice Bank of {ImitatedPlayer.VoiceBankKey()}: the dev tools withheld " +
-                      "them for this Lunge");
-        }
-        else
-        {
-            _lungeMimic = PlayMimic(RollVoiceFilter());
-        }
+        var withheld = _nextLungeFindsNoVoiceSample;
+        _nextLungeFindsNoVoiceSample = false;
+        if (withheld) LOG.Debug($"STALK: the dev tools withhold {name}'s Voice Samples for this Lunge");
 
-        if (_lungeMimic == null) LOG.Debug($"STALK: {name} lunges without a voice");
+        _lungeMimic = PlayMimic(RollVoiceFilter(), withheld);
+        LOG.Debug(_lungeMimic == null
+            ? $"STALK: {name} lunges without a voice"
+            : $"STALK: {name} speaks a Mimic as it lunges");
     }
 
+    /// <param name="withholdVoiceSamples">Dev tools only: the Voice Bank reads as empty.</param>
     /// <returns>The Mimic's emitter, or null when nothing plays.</returns>
-    public AudioSource? PlayMimic(bool voiceFilter)
+    public AudioSource? PlayMimic(bool voiceFilter, bool withholdVoiceSamples = false)
     {
         if (ImitatedPlayer == null || ControllerTransform == null) return null;
 
@@ -74,7 +72,7 @@ public sealed partial class Hallucination
         VoiceSample? sample;
         try
         {
-            sample = VepMod.VoiceBanks.PickRandom(player);
+            sample = withholdVoiceSamples ? null : VepMod.VoiceBanks.PickRandom(player);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -140,7 +138,7 @@ public sealed partial class Hallucination
         var now = Time.time;
         if (now >= _mimicVoiceUntil) _mimicVoiceFrom = now + AudioFilters.SilencePadding;
         _mimicVoiceUntil = Mathf.Max(_mimicVoiceUntil, now + clip.length - AudioFilters.SilencePadding);
-        var mimic = $"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()}";
+        var mimic = MimicLabel;
         LOG.Debug($"{mimic} started ({clip.length:F2}s)");
 
         var lifetime = clip.length + 0.1f;
@@ -193,8 +191,7 @@ public sealed partial class Hallucination
 
         var emitter = _lungeMimic.transform;
         emitter.SetParent(null, true);
-        LOG.Debug($"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()} left in the world at " +
-                  $"{emitter.position} as the Hallucination is removed, " +
+        LOG.Debug($"{MimicLabel} left in the world at {emitter.position} as the Hallucination is removed, " +
                   $"{_lungeMimic.clip.length - _lungeMimic.time:F2}s still to play");
     }
 
@@ -208,9 +205,7 @@ public sealed partial class Hallucination
             var source = child.GetComponent<AudioSource>();
             if (child.name != MimicEmitterName || source == null || !source.isPlaying) continue;
 
-            var imitatedPlayer = ImitatedPlayer != null ? ImitatedPlayer.playerName : "?";
-            LOG.Debug($"Mimic of {imitatedPlayer} on Hallucination {GetInstanceID()} cut short: the Hallucination " +
-                      "was destroyed");
+            LOG.Debug($"{MimicLabel} cut short: the Hallucination was destroyed");
         }
     }
 }

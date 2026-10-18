@@ -151,7 +151,8 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
         {
             LOG.Debug(spawned == 0
                 ? $"Mimic for {_victim.playerName}: no spawned Hallucination, nothing plays."
-                : $"Mimic for {_victim.playerName}: none of the {spawned} Hallucinations has a Voice Sample, nothing plays.");
+                : $"Mimic for {_victim.playerName}: none of the {spawned} Hallucinations both has a Voice Sample and " +
+                  "is not Stalking, nothing plays.");
             return null;
         }
 
