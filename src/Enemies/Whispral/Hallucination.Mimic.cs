@@ -17,6 +17,11 @@ public sealed partial class Hallucination
     private const float MimicMinDistance = 5f;
     private const float MimicMaxDistance = 25f;
 
+    private const float VoiceFilterProbability = 0.5f;
+
+    private static bool _nextLungeFindsNoVoiceSample;
+
+    private AudioSource? _lungeMimic;
     private float _mimicVoiceFrom;
     private float _mimicVoiceUntil;
 
@@ -25,9 +30,45 @@ public sealed partial class Hallucination
     /// </summary>
     internal bool IsPlayingMimic => Time.time >= _mimicVoiceFrom && Time.time < _mimicVoiceUntil;
 
-    public void PlayMimic(bool voiceFilter)
+    /// <summary>
+    ///     Whether a Mimic is voice-filtered, by the local voice filter option.
+    /// </summary>
+    internal static bool RollVoiceFilter()
     {
-        if (ImitatedPlayer == null || ControllerTransform == null) return;
+        return VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
+    }
+
+    /// <summary>
+    ///     Dev tools only: the next Lunge, of any Hallucination, finds no Voice Sample.
+    /// </summary>
+    public static void DebugNextLungeFindsNoVoiceSample()
+    {
+        _nextLungeFindsNoVoiceSample = true;
+    }
+
+    // The Victim's client picks the Voice Sample itself, without a command from the Master (ADR-0007).
+    private void PlayLungeMimic()
+    {
+        LOG.Debug($"STALK: {name} speaks a Mimic as it lunges");
+        if (_nextLungeFindsNoVoiceSample)
+        {
+            _nextLungeFindsNoVoiceSample = false;
+            _lungeMimic = null;
+            LOG.Debug($"No Voice Sample in the Voice Bank of {ImitatedPlayer.VoiceBankKey()}: the dev tools withheld " +
+                      "them for this Lunge");
+        }
+        else
+        {
+            _lungeMimic = PlayMimic(RollVoiceFilter());
+        }
+
+        if (_lungeMimic == null) LOG.Debug($"STALK: {name} lunges without a voice");
+    }
+
+    /// <returns>The Mimic's emitter, or null when nothing plays.</returns>
+    public AudioSource? PlayMimic(bool voiceFilter)
+    {
+        if (ImitatedPlayer == null || ControllerTransform == null) return null;
 
         var player = ImitatedPlayer.VoiceBankKey();
         VoiceSample? sample;
@@ -38,13 +79,13 @@ public sealed partial class Hallucination
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             LOG.Warning($"Unreadable Voice Sample in the Voice Bank of {player}: {ex.Message}");
-            return;
+            return null;
         }
 
         if (sample == null)
         {
             LOG.Debug($"No Voice Sample in the Voice Bank of {player}");
-            return;
+            return null;
         }
 
         var samples = AudioFilters.ApplyLowPassFilter(sample.Samples, sample.SampleRate);
@@ -60,7 +101,7 @@ public sealed partial class Hallucination
 
         var clip = AudioClip.Create("Mimic", samples.Length, 1, sample.SampleRate, false);
         clip.SetData(samples, 0);
-        PlayOnNewEmitter(clip);
+        return PlayOnNewEmitter(clip);
     }
 
     private static float[] ApplyRandomVoiceFilter(float[] samples, int sampleRate, out string filter)
@@ -80,7 +121,7 @@ public sealed partial class Hallucination
     }
 
     // Each Mimic gets its own emitter, so Mimics overlapping on one Hallucination never share an AudioSource.
-    private void PlayOnNewEmitter(AudioClip clip)
+    private AudioSource PlayOnNewEmitter(AudioClip clip)
     {
         var emitter = new GameObject(MimicEmitterName);
         emitter.transform.SetParent(ControllerTransform, false);
@@ -99,13 +140,16 @@ public sealed partial class Hallucination
         var now = Time.time;
         if (now >= _mimicVoiceUntil) _mimicVoiceFrom = now + AudioFilters.SilencePadding;
         _mimicVoiceUntil = Mathf.Max(_mimicVoiceUntil, now + clip.length - AudioFilters.SilencePadding);
-        LOG.Debug($"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()} started ({clip.length:F2}s)");
+        var mimic = $"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()}";
+        LOG.Debug($"{mimic} started ({clip.length:F2}s)");
 
         var lifetime = clip.length + 0.1f;
         // Destroying the whole GameObject sidesteps Unity's refusal to remove a component another one requires.
         Destroy(emitter, lifetime);
         Destroy(clip, lifetime);
-        StartCoroutine(LogMimicEnd(clip.length));
+        // Run by the emitter, so a Mimic left in the world logs its end too.
+        lowPassLogic.StartCoroutine(LogMimicEnd(mimic, clip.length));
+        return audioSource;
     }
 
     private void ConfigureMimicSource(AudioSource source, AudioClip clip)
@@ -135,11 +179,23 @@ public sealed partial class Hallucination
         }
     }
 
-    // Stops with the Hallucination: LogMimicsCutShort reports the Mimics it cuts.
-    private IEnumerator LogMimicEnd(float length)
+    // Stops with the emitter: LogMimicsCutShort reports the Mimics a Hallucination cuts.
+    private static IEnumerator LogMimicEnd(string mimic, float length)
     {
         yield return new WaitForSeconds(length);
-        LOG.Debug($"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()} ended ({length:F2}s)");
+        LOG.Debug($"{mimic} ended ({length:F2}s)");
+    }
+
+    // Unity refuses to reparent the child of a GameObject being destroyed: the emitter leaves before the Destroy call.
+    private void LeaveLungeMimicInWorld()
+    {
+        if (_lungeMimic == null || !_lungeMimic.isPlaying) return;
+
+        var emitter = _lungeMimic.transform;
+        emitter.SetParent(null, true);
+        LOG.Debug($"Mimic of {ImitatedPlayer.playerName} on Hallucination {GetInstanceID()} left in the world at " +
+                  $"{emitter.position} as the Hallucination is removed, " +
+                  $"{_lungeMimic.clip.length - _lungeMimic.time:F2}s still to play");
     }
 
     private void LogMimicsCutShort()

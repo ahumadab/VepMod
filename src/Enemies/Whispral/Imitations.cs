@@ -133,6 +133,14 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
             if (!imitatedPlayer || !imitation.Hallucination) continue;
 
             spawned++;
+            // A Stalking Hallucination approaches and stares without a word: its only Mimic is its Lunge's.
+            if (imitation.Hallucination!.IsStalkingBeforeFlee)
+            {
+                LOG.Debug($"Mimic for {_victim.playerName}: Hallucination {imitation.Hallucination.GetInstanceID()} " +
+                          "is Stalking, left out.");
+                continue;
+            }
+
             if (VepMod.VoiceBanks.HasVoiceSample(imitatedPlayer.VoiceBankKey()))
             {
                 SpeakerBuffer.Add(imitation.Hallucination!);
@@ -191,7 +199,7 @@ public sealed class Imitations : MonoBehaviourPunCallbacks
     {
         if (imitation.Hallucination)
         {
-            Destroy(imitation.Hallucination!.gameObject);
+            imitation.Hallucination!.Remove();
         }
 
         if (imitatedPlayer)
