@@ -380,10 +380,21 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         _face.UpdateAnimations();
     }
 
+    /// <summary>
+    ///     Destroys the Hallucination. A Mimic it spoke as it lunged stays in the world where it stands and plays to its
+    ///     end; other Mimics are cut.
+    /// </summary>
+    public void Remove()
+    {
+        LeaveLungeMimicInWorld();
+        // In OnDestroy, the emitters no longer play: the line was never written from there.
+        LogMimicsCutShort();
+        Destroy(gameObject);
+    }
+
     private void OnDestroy()
     {
         All.Remove(this);
-        LogMimicsCutShort();
         _body?.Release();
         if (Movement != null)
         {

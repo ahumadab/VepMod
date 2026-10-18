@@ -58,6 +58,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Pressed(KeyCode.Keypad7)) ChainWithNearest();
         if (Pressed(KeyCode.Keypad8)) ChangeMindWithNearest();
         if (Pressed(KeyCode.Keypad9)) DespawnAll();
+        if (Pressed(KeyCode.Keypad9, true)) WithholdNextLungeVoiceSample();
 
         if (Pressed(KeyCode.KeypadDivide)) SpawnWhispralAtAim();
         if (Pressed(KeyCode.KeypadDivide, true)) SendMimicCommands();
@@ -396,6 +397,13 @@ public sealed class HallucinationDevTools : MonoBehaviour
         return transform.name;
     }
 
+    // Both instances on one PC share their Voice Banks on disk: neither can empty its own.
+    private static void WithholdNextLungeVoiceSample()
+    {
+        Hallucination.DebugNextLungeFindsNoVoiceSample();
+        LOG.Info("DevTools: the next Lunge finds no Voice Sample.");
+    }
+
     private void DespawnAll()
     {
         var count = 0;
@@ -403,7 +411,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         {
             if (hallucination != null)
             {
-                Destroy(hallucination.gameObject);
+                hallucination.Remove();
                 count++;
             }
         }
@@ -610,6 +618,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "Keypad, Num Lock on. Num0 spawn yourself | Ctrl+Num0 another player (the next one each press)\n" +
                  "  outside any Haunting: a death leaves them, Num9 removes them\n" +
                  "Num1 teleport to aim | Ctrl+Num1 drop | Num9 despawn all | NumEnter hud\n" +
+                 "Ctrl+Num9 the next Lunge finds no Voice Sample\n" +
                  "Nearest Hallucination:\n" +
                  "  Num2 starts Stalking | Ctrl+Num2 the one nearest to it performs a Mimic\n" +
                  "  Num3 performs a Mimic | Ctrl+Num3 log what it renders, eyes included\n" +

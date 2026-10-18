@@ -691,7 +691,6 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     private sealed class AttachedState : WhispralStateBase
     {
-        private const float VoiceFilterProbability = 0.5f;
         private int? _victimViewID;
         private float _voiceTimer;
 
@@ -755,8 +754,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 return;
             }
 
-            var voiceFilter = VepMod.ConfigVoiceFilterEnabled.Value && Random.value < VoiceFilterProbability;
-            Whispral.SendMimicCommand(victim, voiceFilter);
+            Whispral.SendMimicCommand(victim, Hallucination.RollVoiceFilter());
         }
 
         private void CheckDetachState()

@@ -83,6 +83,11 @@ public sealed partial class Hallucination
                         LOG.Debug($"IdleState: {Machine.Owner.name} refused the Stalking it {how}: " +
                                   $"{stalker.name} is Stalking");
                     }
+                    else if (Machine.Owner.IsPlayingMimic)
+                    {
+                        // A Stalking Hallucination approaches without a word.
+                        LOG.Debug($"IdleState: {Machine.Owner.name} refused the Stalking it {how}: it speaks a Mimic");
+                    }
                     else
                     {
                         Machine.NextStateStateId = StateId.StalkApproach;
@@ -646,6 +651,7 @@ public sealed partial class Hallucination
             CameraZoom.Instance.OverrideZoomSet(30f, 0.75f, 3f, 1f, owner.gameObject, 50);
             LOG.Debug($"STALK: the Victim's camera turns onto {owner.name}'s face " +
                       $"{owner.Movement.GetDistanceToPlayer():F1} m away, zoom 30, the Victim's screen glitches");
+            owner.PlayLungeMimic();
         }
 
         public override void OnStateUpdate()
