@@ -32,13 +32,12 @@ internal sealed class LungeCountdown
     /// </summary>
     public void Start()
     {
-        Current = Phase.Starting;
+        Current = Phase.AwaitingSight;
         Elapsed = 0f;
     }
 
     /// <param name="distance">To the Victim, in m.</param>
     /// <param name="isHidden">Whether something stands between the Hallucination and the Victim.</param>
-    /// <returns>The event of this update, if any.</returns>
     public Event? Update(float deltaTime, float distance, bool isHidden, bool isGazeOn)
     {
         switch (Current)
@@ -67,7 +66,7 @@ internal sealed class LungeCountdown
 
         switch (Current)
         {
-            case Phase.Starting:
+            case Phase.AwaitingSight:
                 Current = Phase.Running;
                 return Event.Started;
             case Phase.Paused:
@@ -86,13 +85,29 @@ internal sealed class LungeCountdown
             return Event.Lunge;
         }
 
-        return wasOver ? null : Event.Over;
+        return wasOver ? null : Event.OverOutOfReach;
+    }
+
+    public override string ToString()
+    {
+        return Current switch
+        {
+            Phase.NotStarted => "not started",
+            Phase.AwaitingSight => "not started, waiting for sight",
+            Phase.Running when IsOver => "over, the Victim out of reach",
+            Phase.Running => $"running {Elapsed:F1}s",
+            Phase.Paused => $"paused {Elapsed:F1}s" + (IsOver ? ", over" : ""),
+            Phase.Gazed => $"ended by the Gaze at {Elapsed:F1}s",
+            Phase.Lunging => "Lunge",
+            Phase.Killed => "kill",
+            _ => Current.ToString()
+        };
     }
 
     public enum Phase
     {
         NotStarted,
-        Starting,
+        AwaitingSight,
         Running,
         Paused,
         Gazed,
@@ -105,9 +120,7 @@ internal sealed class LungeCountdown
         Started,
         Paused,
         Resumed,
-
-        // The count reached its end with the Victim out of reach: the Lunge waits for them.
-        Over,
+        OverOutOfReach,
         Gazed,
         Lunge,
         Kill

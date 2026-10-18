@@ -84,7 +84,7 @@ public class LungeCountdownTests
         var back = countdown.Update(FrameTime, 4.9f, false, false);
 
         var (time, e) = Assert.Single(away);
-        Assert.Equal(Event.Over, e);
+        Assert.Equal(Event.OverOutOfReach, e);
         AssertAbout(5f, time);
         Assert.Equal(Event.Lunge, back);
     }
