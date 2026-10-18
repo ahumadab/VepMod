@@ -602,6 +602,21 @@ public sealed class HallucinationDevTools : MonoBehaviour
         return true;
     }
 
+    private static string DescribeCount(LungeCountdown countdown)
+    {
+        return countdown.Current switch
+        {
+            LungeCountdown.Phase.NotStarted => "not started",
+            LungeCountdown.Phase.Starting => "not started, waiting for sight",
+            LungeCountdown.Phase.Running when countdown.IsOver => "over, the Victim out of reach",
+            LungeCountdown.Phase.Running => $"running {countdown.Elapsed:F1}s",
+            LungeCountdown.Phase.Paused => $"paused {countdown.Elapsed:F1}s" + (countdown.IsOver ? ", over" : ""),
+            LungeCountdown.Phase.Gazed => $"ended by the Gaze at {countdown.Elapsed:F1}s",
+            LungeCountdown.Phase.Lunging => "Lunge",
+            _ => "kill"
+        };
+    }
+
     private void OnGUI()
     {
         if (!_hudVisible) return;
@@ -632,6 +647,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             sb += $"\nNearest Hallucination:\n" +
                   $"  State      : {_nearest.DebugStateName}\n" +
                   $"  Gaze       : {(_nearest.Gaze.IsOn ? "on" : "off")}\n" +
+                  $"  Lunge count: {DescribeCount(_nearest.LungeCountdown)}\n" +
                   $"  Grounded   : {m.IsGrounded}\n" +
                   $"  VertVel    : {m.VerticalVelocity:F2} m/s\n" +
                   $"  Gravity    : {Physics.gravity.y:F2} m/s²";

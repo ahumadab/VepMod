@@ -501,6 +501,7 @@ public sealed partial class Hallucination
 
             _gazeLandedAt = null;
             _nextDestinationUpdate = 0f;
+            Machine.Owner.LungeCountdown.Reset();
 
             Machine.Owner.BodyPose.Stare(Gait.Walk);
             Machine.Owner.Movement.SetSpeed(WalkSpeed);
@@ -549,13 +550,108 @@ public sealed partial class Hallucination
                 {
                     Machine.Owner.Movement.Stop();
                 }
+
+                if (Machine.Owner.LungeCountdown.Current == LungeCountdown.Phase.NotStarted &&
+                    Machine.Owner.Movement.HasReachedDestination())
+                {
+                    LOG.Debug($"STALK: {Machine.Owner.name} stopped {distance:F1} m from the Victim, " +
+                              "its count starts once nothing stands between them");
+                    Machine.Owner.LungeCountdown.Start();
+                }
             }
+
+            if (Lunges(distance)) return;
 
             if (TimeElapsed >= MaxStareTime)
             {
                 LOG.Debug("STALK: Stare timeout, fleeing");
                 Machine.NextStateStateId = StateId.StalkFlee;
             }
+        }
+
+        private bool Lunges(float distance)
+        {
+            var owner = Machine.Owner;
+            var countdown = owner.LungeCountdown;
+            var e = countdown.Update(Time.deltaTime, distance, owner.Gaze.VisiblePart == null, owner.Gaze.IsOn);
+            switch (e)
+            {
+                case LungeCountdown.Event.Started or LungeCountdown.Event.Resumed:
+                    CameraGlitch.Instance.PlayShort();
+                    LOG.Debug($"STALK: {owner.name}'s count {(e == LungeCountdown.Event.Started ? "starts" : "resumes")} " +
+                              $"at {countdown.Elapsed:F1}s, {distance:F1} m from the Victim, the Victim's screen glitches");
+                    break;
+                case LungeCountdown.Event.Paused:
+                    LOG.Debug($"STALK: {owner.name}'s count pauses at {countdown.Elapsed:F1}s, {distance:F1} m from " +
+                              "the Victim: something stands between them");
+                    break;
+                case LungeCountdown.Event.Over:
+                    LOG.Debug($"STALK: {owner.name}'s count is over, the Victim {distance:F1} m away is out of " +
+                              "reach: the Lunge waits for them");
+                    break;
+                case LungeCountdown.Event.Gazed:
+                    LOG.Debug($"STALK: {owner.name}'s count ends at {countdown.Elapsed:F1}s: the Gaze landed");
+                    break;
+                case LungeCountdown.Event.Lunge:
+                    LOG.Debug($"=== STALK: {owner.name} lunges at the Victim {distance:F1} m away ===");
+                    Machine.NextStateStateId = StateId.StalkLunge;
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     The Hallucination sprints at the Victim with the stare's face, and kills them when its count says so,
+    ///     whether it reached them or not.
+    /// </summary>
+    private sealed class StalkLungeState : StalkingState
+    {
+        private const float DestinationUpdateInterval = 0.5f;
+
+        private float _closest;
+        private float _nextDestinationUpdate;
+
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+            _closest = float.MaxValue;
+            _nextDestinationUpdate = 0f;
+            Machine.Owner.BodyPose.Stare(Gait.Sprint);
+            Machine.Owner.Movement.SetSpeed(SprintSpeed);
+        }
+
+        public override void OnStateUpdate()
+        {
+            base.OnStateUpdate();
+
+            var owner = Machine.Owner;
+            owner.Movement.LookAtPlayer();
+            var distance = owner.Movement.GetDistanceToPlayer();
+            _closest = Mathf.Min(_closest, distance);
+
+            _nextDestinationUpdate -= Time.deltaTime;
+            if (_nextDestinationUpdate <= 0f)
+            {
+                owner.Movement.TrySetDestinationToPlayer();
+                _nextDestinationUpdate = DestinationUpdateInterval;
+            }
+
+            if (owner.LungeCountdown.Update(Time.deltaTime, distance, owner.Gaze.VisiblePart == null,
+                    owner.Gaze.IsOn) != LungeCountdown.Event.Kill)
+            {
+                return;
+            }
+
+            var health = PlayerAvatar.instance.playerHealth;
+            health.Hurt(int.MaxValue / 2, false);
+            LOG.Debug($"=== STALK: {owner.name} kills the Victim {distance:F1} m away, {_closest:F1} m at the " +
+                      $"closest, the Victim's health now {health.health} ===");
+
+            // The death ends the Haunting, which removes the Hallucination; a Victim the game keeps alive
+            // (invincible a moment, god mode) is left alone.
+            Machine.NextStateStateId = StateId.StalkFlee;
         }
     }
 
