@@ -55,6 +55,9 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private static readonly VepLogger LOG = VepLogger.Create<Hallucination>();
 
+    // Static: every Hallucination on a client is the local player's, the Victim's (ADR-0007).
+    private static Hallucination? _stalker;
+
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private readonly Wait _wait = new(() => UnityEngine.Random.value);
     private readonly TripChain _tripChain = new(() => UnityEngine.Random.value);
@@ -79,6 +82,11 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     public bool IsStalkingBeforeFlee => Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare;
 
+    private bool IsStalking => IsStalkingBeforeFlee || Fsm.CurrentStateStateId is StateId.StalkFlee;
+
+    // A destroyed Stalker compares equal to null: no exit has to free the slot.
+    private static Hallucination? Stalker => _stalker && _stalker!.IsStalking ? _stalker : null;
+
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
     protected override StateId DefaultState => StateId.Idle;
@@ -98,11 +106,12 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     }
 
     /// <summary>
-    ///     Dev tools only.
+    ///     Dev tools only: starts Stalking even while another Hallucination is Stalking, the one it returns.
     /// </summary>
-    public void DebugStartStalking()
+    public Hallucination? DebugStartStalking()
     {
         Fsm.NextStateStateId = StateId.StalkApproach;
+        return Stalker != this ? Stalker : null;
     }
 
     /// <summary>

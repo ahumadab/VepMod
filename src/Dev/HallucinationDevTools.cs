@@ -169,8 +169,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
-        _nearest.DebugStartStalking();
-        LOG.Info("DevTools: the nearest Hallucination starts Stalking.");
+        var bypassed = _nearest.DebugStartStalking();
+        LOG.Info(bypassed
+            ? $"DevTools: {_nearest.name} starts Stalking, bypassing the rule of one Stalking at a time: " +
+              $"{bypassed!.name} is Stalking."
+            : $"DevTools: {_nearest.name} starts Stalking.");
     }
 
     private void CheckMapWithNearest()

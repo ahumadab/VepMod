@@ -22,6 +22,11 @@ public sealed partial class Hallucination
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
+            if (previous is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee)
+            {
+                LOG.Debug($"IdleState: {Machine.Owner.name} ends its Stalking");
+            }
+
             _precomputeTimer = 0f;
             _glances = 0;
             Machine.Owner.Movement.Stop();
@@ -75,9 +80,16 @@ public sealed partial class Hallucination
                 var distanceToPlayer = Machine.Owner.Movement.GetDistanceToPlayer();
                 if (distanceToPlayer > StalkMinDistance && Random.value < StalkChance)
                 {
-                    Machine.NextStateStateId = StateId.StalkApproach;
-                    LOG.Debug($"IdleState: -> StalkApproach (dist={distanceToPlayer:F1})");
-                    return;
+                    if (Stalker is { } stalker)
+                    {
+                        LOG.Debug($"IdleState: {Machine.Owner.name} refused Stalking: {stalker.name} is Stalking");
+                    }
+                    else
+                    {
+                        Machine.NextStateStateId = StateId.StalkApproach;
+                        LOG.Debug($"IdleState: {Machine.Owner.name} -> StalkApproach (dist={distanceToPlayer:F1})");
+                        return;
+                    }
                 }
 
                 var roll = Random.value;
@@ -393,7 +405,8 @@ public sealed partial class Hallucination
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
-            LOG.Debug("=== STALK: Approach started - running towards player ===");
+            LOG.Debug($"=== STALK: {Machine.Owner.name} starts its approach, running towards player ===");
+            if (Stalker == null) _stalker = Machine.Owner;
 
             Machine.Owner.BodyPose.Move(Gait.Sprint);
             Machine.Owner.Movement.SetSpeed(SprintSpeed);
