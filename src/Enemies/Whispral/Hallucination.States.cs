@@ -22,11 +22,6 @@ public sealed partial class Hallucination
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
-            if (previous is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee)
-            {
-                LOG.Debug($"IdleState: {Machine.Owner.name} ends its Stalking");
-            }
-
             _precomputeTimer = 0f;
             _glances = 0;
             Machine.Owner.Movement.Stop();
@@ -78,16 +73,21 @@ public sealed partial class Hallucination
             if (Wait.IsOver)
             {
                 var distanceToPlayer = Machine.Owner.Movement.GetDistanceToPlayer();
-                if (distanceToPlayer > StalkMinDistance && Random.value < StalkChance)
+                var forced = Machine.Owner._stalkingRollForced;
+                if (distanceToPlayer > StalkMinDistance && (forced || Random.value < StalkChance))
                 {
-                    if (Stalker is { } stalker)
+                    Machine.Owner._stalkingRollForced = false;
+                    var how = forced ? "forced" : "rolled";
+                    if (Machine.Owner.OtherStalker() is { } stalker)
                     {
-                        LOG.Debug($"IdleState: {Machine.Owner.name} refused Stalking: {stalker.name} is Stalking");
+                        LOG.Debug($"IdleState: {Machine.Owner.name} refused the Stalking it {how}: " +
+                                  $"{stalker.name} is Stalking");
                     }
                     else
                     {
                         Machine.NextStateStateId = StateId.StalkApproach;
-                        LOG.Debug($"IdleState: {Machine.Owner.name} -> StalkApproach (dist={distanceToPlayer:F1})");
+                        LOG.Debug($"IdleState: {Machine.Owner.name} -> StalkApproach, {how} " +
+                                  $"(dist={distanceToPlayer:F1})");
                         return;
                     }
                 }
@@ -96,12 +96,12 @@ public sealed partial class Hallucination
                 if (roll < CheckMapChance)
                 {
                     Machine.NextStateStateId = StateId.CheckMap;
-                    LOG.Debug($"IdleState: -> CheckMap (roll={roll:F2} < {CheckMapChance})");
+                    LOG.Debug($"IdleState: {Machine.Owner.name} -> CheckMap (roll={roll:F2} < {CheckMapChance})");
                 }
                 else
                 {
                     Machine.NextStateStateId = Random.value < SprintChance ? StateId.Sprint : StateId.Wander;
-                    LOG.Debug($"IdleState: -> {Machine.NextStateStateId}");
+                    LOG.Debug($"IdleState: {Machine.Owner.name} -> {Machine.NextStateStateId}");
                 }
             }
         }
@@ -396,7 +396,28 @@ public sealed partial class Hallucination
         }
     }
 
-    private sealed class StalkApproachState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private abstract class StalkingState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    {
+        public override void OnStateEnter(StateId previous)
+        {
+            base.OnStateEnter(previous);
+            if (!IsStalkingState(previous))
+            {
+                LOG.Debug($"=== STALK: {Machine.Owner.name} starts Stalking ===");
+            }
+        }
+
+        public override void OnStateExit(StateId next)
+        {
+            base.OnStateExit(next);
+            if (!IsStalkingState(next))
+            {
+                LOG.Debug($"=== STALK: {Machine.Owner.name} ends its Stalking, -> {next} ===");
+            }
+        }
+    }
+
+    private sealed class StalkApproachState : StalkingState
     {
         private const float MaxApproachTime = 30f;
         private const float DestinationUpdateInterval = 1f;
@@ -405,8 +426,7 @@ public sealed partial class Hallucination
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
-            LOG.Debug($"=== STALK: {Machine.Owner.name} starts its approach, running towards player ===");
-            if (Stalker == null) _stalker = Machine.Owner;
+            LOG.Debug("=== STALK: Approach started - running towards player ===");
 
             Machine.Owner.BodyPose.Move(Gait.Sprint);
             Machine.Owner.Movement.SetSpeed(SprintSpeed);
@@ -466,7 +486,7 @@ public sealed partial class Hallucination
     ///     The Hallucination stares at the Victim while closing in; once the Victim's Gaze lands on it, it holds the
     ///     stare for a while, then flees.
     /// </summary>
-    private sealed class StalkStareState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private sealed class StalkStareState : StalkingState
     {
         private const float MaxStareTime = 30f;
         private const float DestinationUpdateInterval = 0.5f;
@@ -539,7 +559,7 @@ public sealed partial class Hallucination
         }
     }
 
-    private sealed class StalkFleeState : StateMachineBase<StateMachine, StateId>.StateBaseTimed
+    private sealed class StalkFleeState : StalkingState
     {
         private const float MaxFleeTime = 10f;
 
