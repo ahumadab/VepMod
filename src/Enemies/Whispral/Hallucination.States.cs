@@ -626,13 +626,26 @@ public sealed partial class Hallucination
         private const int DamageAboveAnyHealth = int.MaxValue / 2;
 
         private float _closest;
+        private float _narrowestView;
+        private float _nearestToFace;
 
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
+            var owner = Machine.Owner;
             _closest = float.MaxValue;
-            Machine.Owner.BodyPose.Stare(Gait.Sprint);
-            Machine.Owner.Movement.SetSpeed(SprintSpeed);
+            _narrowestView = float.MaxValue;
+            _nearestToFace = float.MaxValue;
+            owner.BodyPose.Stare(Gait.Sprint);
+            owner.Movement.SetSpeed(SprintSpeed);
+
+            // The Shadow Child's values (EnemyThinManAnim.NoticeSet). Its 20 zoom beyond 5 m is left out: a Lunge
+            // only starts within its 5 m reach.
+            CameraGlitch.Instance.PlayShort();
+            CameraAim.Instance.AimTargetSet(owner.Face, 0.75f, 2f, owner.gameObject, 90);
+            CameraZoom.Instance.OverrideZoomSet(30f, 0.75f, 3f, 1f, owner.gameObject, 50);
+            LOG.Debug($"STALK: the Victim's camera turns onto {owner.name}'s face " +
+                      $"{owner.Movement.GetDistanceToPlayer():F1} m away, zoom 30, the Victim's screen glitches");
         }
 
         public override void OnStateUpdate()
@@ -643,6 +656,13 @@ public sealed partial class Hallucination
             owner.Movement.LookAtPlayer();
             var distance = owner.Movement.GetDistanceToPlayer();
             _closest = Mathf.Min(_closest, distance);
+            _narrowestView = Mathf.Min(_narrowestView, CameraZoom.Instance.zoomFinal);
+            var camera = Camera.main;
+            if (camera != null)
+            {
+                var toFace = owner.Face - camera.transform.position;
+                _nearestToFace = Mathf.Min(_nearestToFace, Vector3.Angle(camera.transform.forward, toFace));
+            }
 
             FollowVictim(StalkStareState.DestinationUpdateInterval);
             if (UpdateLungeCount(distance) != LungeCountdown.Event.Kill) return;
@@ -650,7 +670,9 @@ public sealed partial class Hallucination
             var health = PlayerAvatar.instance.playerHealth;
             health.Hurt(DamageAboveAnyHealth, false);
             LOG.Debug($"=== STALK: {owner.name} kills the Victim {distance:F1} m away, {_closest:F1} m at the " +
-                      $"closest, the Victim's health now {health.health} ===");
+                      $"closest; over the Lunge the Victim's camera came {_nearestToFace:F0}° from its face at the " +
+                      $"nearest, with a field of view of {_narrowestView:F0}° at the narrowest; the Victim's health " +
+                      $"now {health.health} ===");
 
             // The death ends the Haunting, which removes the Hallucination; a Victim the game keeps alive
             // (invincible a moment, god mode) is left alone.
