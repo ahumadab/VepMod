@@ -21,6 +21,8 @@ internal sealed class LungeCountdown
 
     public bool IsOver => Elapsed >= Count;
 
+    public bool IsCounting => Current is Phase.AwaitingSight or Phase.Running or Phase.Paused;
+
     public void Reset()
     {
         Current = Phase.NotStarted;

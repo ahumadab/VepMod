@@ -143,6 +143,29 @@ public class LungeCountdownTests
         Assert.Equal(Event.Kill, Assert.Single(events).Event);
     }
 
+    [Fact]
+    public void TheCountIsCountingFromItsStartUntilTheGazeOrTheLunge()
+    {
+        var countdown = new LungeCountdown();
+        Assert.False(countdown.IsCounting);
+
+        countdown.Start();
+        Assert.True(countdown.IsCounting);
+        Run(countdown, 1f, isHidden: true);
+        Assert.True(countdown.IsCounting);
+        Run(countdown, 1f);
+        Assert.True(countdown.IsCounting);
+        Run(countdown, 1f, isHidden: true);
+        Assert.True(countdown.IsCounting);
+
+        Run(countdown, FrameTime, isGazeOn: true);
+        Assert.False(countdown.IsCounting);
+
+        var lunging = Started();
+        RunToTheLunge(lunging);
+        Assert.False(lunging.IsCounting);
+    }
+
     [Theory]
     [InlineData(Near, false)]
     [InlineData(Far, false)]

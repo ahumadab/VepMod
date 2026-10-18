@@ -664,7 +664,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
 
         sb += $"\n\nLethal Hallucinations: {LethalHallucinations.Summary}" +
-              $"\nLast Capture:{VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
+              $"\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
 
         var style = new GUIStyle(GUI.skin.box)
         {

@@ -601,9 +601,7 @@ public sealed partial class Hallucination
         private void StopCountIfNotLethal()
         {
             var countdown = Machine.Owner.LungeCountdown;
-            var isCounting = countdown.Current is LungeCountdown.Phase.AwaitingSight or LungeCountdown.Phase.Running
-                or LungeCountdown.Phase.Paused;
-            if (!isCounting || LethalHallucinations.IsOn) return;
+            if (!countdown.IsCounting || LethalHallucinations.IsOn) return;
 
             LOG.Debug($"STALK: {Machine.Owner.name}'s count stops at {countdown.Elapsed:F1}s: Lethal Hallucinations " +
                       $"switched {LethalHallucinations.Summary}");
@@ -707,7 +705,7 @@ public sealed partial class Hallucination
             LOG.Debug($"=== STALK: {owner.name} kills the Victim {distance:F1} m away, {_closest:F1} m at the " +
                       $"closest; over the Lunge the Victim's camera came {_nearestToFace:F0}° from its face at the " +
                       $"nearest, with a field of view of {_narrowestView:F0}° at the narrowest; the Victim's health " +
-                      $"now {health.health} ===");
+                      $"now {health.health}; Lethal Hallucinations {LethalHallucinations.Summary} ===");
 
             // The death ends the Haunting, which removes the Hallucination; a Victim the game keeps alive
             // (invincible a moment, god mode) is left alone.
