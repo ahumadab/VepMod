@@ -55,6 +55,9 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private static readonly VepLogger LOG = VepLogger.Create<Hallucination>();
 
+    // Static: Hallucinations exist only on the Victim's client, so every one on a client is the local player's (ADR-0002).
+    private static readonly List<Hallucination> All = new();
+
     private readonly Materials.MaterialTrigger _materialTrigger = new();
     private readonly Wait _wait = new(() => UnityEngine.Random.value);
     private readonly TripChain _tripChain = new(() => UnityEngine.Random.value);
@@ -71,6 +74,8 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     private int _savedAgentTypeID;
     private int _savedAreaMask = NavMesh.AllAreas;
 
+    private bool _stalkingRollForced;
+
     public PlayerAvatar ImitatedPlayer { get; private set; }
     public Transform ControllerTransform { get; private set; }
     internal HallucinationMovement Movement { get; private set; }
@@ -82,6 +87,27 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
     protected override StateId DefaultState => StateId.Idle;
+
+    private static bool IsStalkingState(StateId state)
+    {
+        return state is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
+    }
+
+    private Hallucination? OtherStalker()
+    {
+        foreach (var hallucination in All)
+        {
+            if (hallucination != this && IsStalkingState(hallucination.Fsm.CurrentStateStateId)) return hallucination;
+        }
+
+        return null;
+    }
+
+    protected override void Awake()
+    {
+        base.Awake();
+        All.Add(this);
+    }
 
     protected override void Update()
     {
@@ -98,11 +124,20 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     }
 
     /// <summary>
-    ///     Dev tools only.
+    ///     Dev tools only: starts Stalking even while another Hallucination is Stalking, the one it returns.
     /// </summary>
-    public void DebugStartStalking()
+    public Hallucination? DebugStartStalking()
     {
         Fsm.NextStateStateId = StateId.StalkApproach;
+        return OtherStalker();
+    }
+
+    /// <summary>
+    ///     Dev tools only: the next Stalking roll from beyond the Stalking distance succeeds, refused or not.
+    /// </summary>
+    public void DebugForceNextStalkingRoll()
+    {
+        _stalkingRollForced = true;
     }
 
     /// <summary>
@@ -341,6 +376,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private void OnDestroy()
     {
+        All.Remove(this);
         LogMimicsCutShort();
         _body?.Release();
         if (Movement != null)

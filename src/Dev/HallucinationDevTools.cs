@@ -53,6 +53,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Pressed(KeyCode.Keypad4)) CheckMapWithNearest();
         if (Pressed(KeyCode.Keypad4, true)) TurnRoundWithNearest();
         if (Pressed(KeyCode.Keypad5)) GlanceToBoundWithNearest();
+        if (Pressed(KeyCode.Keypad5, true)) ForceEveryNextStalkingRoll();
         if (Pressed(KeyCode.Keypad6)) CrossNearestTwo();
         if (Pressed(KeyCode.Keypad7)) ChainWithNearest();
         if (Pressed(KeyCode.Keypad8)) ChangeMindWithNearest();
@@ -169,8 +170,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
-        _nearest.DebugStartStalking();
-        LOG.Info("DevTools: the nearest Hallucination starts Stalking.");
+        var bypassed = _nearest.DebugStartStalking();
+        LOG.Info(bypassed
+            ? $"DevTools: {_nearest.name} starts Stalking, bypassing the rule of one Stalking at a time: " +
+              $"{bypassed!.name} is Stalking."
+            : $"DevTools: {_nearest.name} starts Stalking.");
     }
 
     private void CheckMapWithNearest()
@@ -231,6 +235,17 @@ public sealed class HallucinationDevTools : MonoBehaviour
         _nearest.DebugChangeMindNow();
         LOG.Info($"DevTools: {_nearest.name} ({_nearest.DebugStateName}) changes its mind now if on a Trip that has " +
                  "not yet, else on its next Trip.");
+    }
+
+    private static void ForceEveryNextStalkingRoll()
+    {
+        var hallucinations = FindObjectsOfType<Hallucination>();
+        foreach (var hallucination in hallucinations)
+        {
+            hallucination.DebugForceNextStalkingRoll();
+        }
+
+        LOG.Info($"DevTools: the next Stalking roll of {hallucinations.Length} Hallucinations succeeds.");
     }
 
     private void GlanceToBoundWithNearest()
@@ -598,7 +613,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "  Num2 starts Stalking | Ctrl+Num2 the one nearest to it performs a Mimic\n" +
                  "  Num3 performs a Mimic | Ctrl+Num3 log what it renders, eyes included\n" +
                  "  Num4 checks its map | Ctrl+Num4 turns round at the start of its next wait\n" +
-                 "  Num5 its next Glance goes to 120°\n" +
+                 "  Num5 its next Glance goes to 120° | Ctrl+Num5 every Hallucination's next Stalking roll succeeds\n" +
                  "  Num6 the two nearest walk to each other's place\n" +
                  "  Num7 chains a Trip at its next arrival (press twice: cap)\n" +
                  "  Num8 changes its mind on its Trip (press twice: cap)\n" +
