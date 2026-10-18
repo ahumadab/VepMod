@@ -627,12 +627,26 @@ public sealed partial class Hallucination
 
         private float _closest;
 
+        private Vector3 Face => Machine.Owner.Head != null
+            ? Machine.Owner.Head.position
+            : Machine.Owner.ControllerTransform.position + Vector3.up;
+
         public override void OnStateEnter(StateId previous)
         {
             base.OnStateEnter(previous);
+            var owner = Machine.Owner;
             _closest = float.MaxValue;
-            Machine.Owner.BodyPose.Stare(Gait.Sprint);
-            Machine.Owner.Movement.SetSpeed(SprintSpeed);
+            owner.BodyPose.Stare(Gait.Sprint);
+            owner.Movement.SetSpeed(SprintSpeed);
+
+            // The Shadow Child's values (EnemyThinManAnim.NoticeSet).
+            var distance = owner.Movement.GetDistanceToPlayer();
+            var zoom = distance > 5f ? 20f : 30f;
+            CameraGlitch.Instance.PlayShort();
+            CameraAim.Instance.AimTargetSet(Face, 0.75f, 2f, owner.gameObject, 90);
+            CameraZoom.Instance.OverrideZoomSet(zoom, 0.75f, 3f, 1f, owner.gameObject, 50);
+            LOG.Debug($"STALK: the Victim's camera turns onto {owner.name}'s face {distance:F1} m away, zoom {zoom:F0}, " +
+                      "the Victim's screen glitches");
         }
 
         public override void OnStateUpdate()
@@ -647,10 +661,15 @@ public sealed partial class Hallucination
             FollowVictim(StalkStareState.DestinationUpdateInterval);
             if (UpdateLungeCount(distance) != LungeCountdown.Event.Kill) return;
 
+            var camera = Camera.main;
+            var offFace = camera != null
+                ? Vector3.Angle(camera.transform.forward, Face - camera.transform.position)
+                : float.NaN;
             var health = PlayerAvatar.instance.playerHealth;
             health.Hurt(DamageAboveAnyHealth, false);
             LOG.Debug($"=== STALK: {owner.name} kills the Victim {distance:F1} m away, {_closest:F1} m at the " +
-                      $"closest, the Victim's health now {health.health} ===");
+                      $"closest, the Victim's camera {offFace:F0}° off its face with a field of view of " +
+                      $"{CameraZoom.Instance.zoomFinal:F0}°, the Victim's health now {health.health} ===");
 
             // The death ends the Haunting, which removes the Hallucination; a Victim the game keeps alive
             // (invincible a moment, god mode) is left alone.

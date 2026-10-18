@@ -81,6 +81,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public Transform ControllerTransform { get; private set; }
     internal HallucinationMovement Movement { get; private set; }
     internal HallucinationGaze Gaze { get; private set; }
+    internal Transform? Head { get; private set; }
     internal HallucinationBodyPose BodyPose { get; private set; }
     internal LungeCountdown LungeCountdown { get; } = new();
 
@@ -272,10 +273,11 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private void SetupGaze()
     {
+        Head = HallucinationVisualsClone.FindChildByName(transform, "code_head_top");
         Gaze = new HallucinationGaze(
             transform,
             ControllerTransform,
-            HallucinationVisualsClone.FindChildByName(transform, "code_head_top"),
+            Head,
             HallucinationVisualsClone.FindChildByName(transform, "code_body_top_up"),
             ImitatedPlayer.playerName);
     }
