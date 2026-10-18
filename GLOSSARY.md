@@ -73,7 +73,7 @@ The only Effect visible to the Victim's teammates rather than to the Victim.
 ### Network
 
 **Master**:
-The client that runs the Whispral and decides when a Hallucination performs a Mimic, except during a Lunge.
+The client that runs the Whispral and decides when a Hallucination performs a Mimic, except during a Lunge, and whether a Stalking can end in a Lunge, through its Lethal Hallucinations option.
 _Avoid_: Host
 
 ### Voice

@@ -43,6 +43,9 @@ public class VepMod : BaseUnityPlugin
 {
     public static ConfigEntry<float> ConfigVoiceVolume;
 
+    /// <summary>Only the Master's value counts, which <see cref="LethalHallucinations.IsOn" /> reads.</summary>
+    public static ConfigEntry<bool> ConfigLethalHallucinations;
+
     // Voice Sample sharing between clients
     public static BoundMinMaxRange<float> ShareDelay;
     public static ConfigEntry<int> ConfigSamplesPerPlayer;
@@ -80,6 +83,7 @@ public class VepMod : BaseUnityPlugin
         PreventDelete();
 
         InitConfig();
+        LethalHallucinations.Init();
 
         VoiceBanks = new VoiceBanks(Path.Combine(Application.dataPath, "AudioFiles"),
             () => ConfigSamplesPerPlayer.Value);
@@ -156,6 +160,8 @@ public class VepMod : BaseUnityPlugin
 
         // General settings
         ConfigVoiceVolume = Config.BindRange("General", "Volume", ConfigRanges.Volume, "Volume of the mimic voices.");
+        ConfigLethalHallucinations = Config.Bind("General", "Lethal Hallucinations", true,
+            "Whether a Hallucination stalking a player who never looks at it kills them. Only the host's value counts.");
 
         // Voice Sample sharing between clients
         ShareDelay = Config.BindMinMax("Audio Sharing",
