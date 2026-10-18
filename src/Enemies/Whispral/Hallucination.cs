@@ -387,13 +387,14 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     public void Remove()
     {
         LeaveLungeMimicInWorld();
+        // In OnDestroy, the emitters no longer play: the line was never written from there.
+        LogMimicsCutShort();
         Destroy(gameObject);
     }
 
     private void OnDestroy()
     {
         All.Remove(this);
-        LogMimicsCutShort();
         _body?.Release();
         if (Movement != null)
         {

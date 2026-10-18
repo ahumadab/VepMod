@@ -205,7 +205,7 @@ public sealed partial class Hallucination
             var source = child.GetComponent<AudioSource>();
             if (child.name != MimicEmitterName || source == null || !source.isPlaying) continue;
 
-            LOG.Debug($"{MimicLabel} cut short: the Hallucination was destroyed");
+            LOG.Debug($"{MimicLabel} cut short: the Hallucination is removed");
         }
     }
 }
