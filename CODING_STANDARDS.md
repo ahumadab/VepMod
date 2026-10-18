@@ -42,7 +42,8 @@ belongs to the tooling, not here.
   so, and the commit carries a `BREAKING CHANGE:` footer, the one thing that puts the break in the CHANGELOG (and
   bumps the major version); the commit-msg hook asks for it.
 - Classes and serialized fields referenced by an asset bundle keep their names (`EnemyWhispral`, `EnemyWhispralAnim`).
-- The Master decides, every client applies, and handlers that run on every client are idempotent.
+- The Master decides, every client applies, and handlers that run on every client are idempotent. A Hallucination is
+  the exception: the Victim's client decides what it does, death included (ADR-0007).
 - Hallucinations never go on the network (ADR-0002).
 
 ## Threads
