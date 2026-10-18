@@ -514,7 +514,7 @@ public sealed class HallucinationMovement : MonoBehaviour
         var corner = _navMeshCorners[_passingCorner];
         LOG.Debug($"{name} passes the NavMesh corner at {corner} {_passClosest:F1} m from it, steering " +
                   $"{_passSteeringPast:F1} m past it, the path {HorizontalDistance(corner, _corners[_passingCorner]):F1} m " +
-                  "outside it" + (_passCutShort ? ", cut short by the NavMesh edge" : ""));
+                  "outside it" + (_passCutShort ? ", clipped by the NavMesh edge" : ""));
         _passingCorner = -1;
     }
 
