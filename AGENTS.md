@@ -14,7 +14,10 @@ The tester confirms what the game shows; only the BepInEx logs show the state be
 but off the NavMesh), and you read them after the test to confirm each acceptance criterion. So before asking for an
 in-game test, map every acceptance criterion to the action that triggers it and the `Debug` line that proves it, with
 the data behind it. An action the tester cannot trigger at will (a command the Master
-sends, a state reached only by chance, a bound) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys. Then deploy the build
+sends, a state reached only by chance, a bound) gets a key in `src/Dev/HallucinationDevTools.cs`, whose HUD (`OnGUI`) lists the keys.
+A criterion that depends on a mod option: read its value in the profile's `BepInEx/config/com.vep.vepMod.cfg` (the
+plugin's GUID; other VepMod `.cfg` files there are stale), and the plan names the value each test needs, which the
+tester switches in game through REPOConfig. Then deploy the build
 (`./build-dev.ps1 -DeployTo <profile>`) and name the commit that went, so the tester runs what you ask about. Work with
 criteria seen in game is handed back with that deploy and the test plan, in the same reply.
 After the test, `node tooling/test-log.mjs [--grep <regex>] [--exclude <regex>]` prints VepMod's lines and the game's errors from every
