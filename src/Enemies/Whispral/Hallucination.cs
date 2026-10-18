@@ -33,6 +33,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         CheckMap,
         StalkApproach,
         StalkStare,
+        StalkLunge,
         StalkFlee
     }
 
@@ -81,8 +82,10 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     internal HallucinationMovement Movement { get; private set; }
     internal HallucinationGaze Gaze { get; private set; }
     internal HallucinationBodyPose BodyPose { get; private set; }
+    internal LungeCountdown LungeCountdown { get; } = new();
 
-    public bool IsStalkingBeforeFlee => Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare;
+    public bool IsStalkingBeforeFlee =>
+        Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkLunge;
 
     public string DebugStateName => Fsm.CurrentStateStateId.ToString();
 
@@ -90,7 +93,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
 
     private static bool IsStalkingState(StateId state)
     {
-        return state is StateId.StalkApproach or StateId.StalkStare or StateId.StalkFlee;
+        return state is StateId.StalkApproach or StateId.StalkStare or StateId.StalkLunge or StateId.StalkFlee;
     }
 
     private Hallucination? OtherStalker()
@@ -423,6 +426,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         Fsm.AddState(StateId.CheckMap, new CheckMapState());
         Fsm.AddState(StateId.StalkApproach, new StalkApproachState());
         Fsm.AddState(StateId.StalkStare, new StalkStareState());
+        Fsm.AddState(StateId.StalkLunge, new StalkLungeState());
         Fsm.AddState(StateId.StalkFlee, new StalkFleeState());
     }
 
