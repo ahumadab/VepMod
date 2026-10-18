@@ -608,6 +608,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  "Keypad, Num Lock on. Num0 spawn yourself | Ctrl+Num0 another player (the next one each press)\n" +
+                 "  outside any Haunting: a death leaves them, Num9 removes them\n" +
                  "Num1 teleport to aim | Ctrl+Num1 drop | Num9 despawn all | NumEnter hud\n" +
                  "Nearest Hallucination:\n" +
                  "  Num2 starts Stalking | Ctrl+Num2 the one nearest to it performs a Mimic\n" +
