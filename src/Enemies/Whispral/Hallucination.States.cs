@@ -639,14 +639,13 @@ public sealed partial class Hallucination
             owner.BodyPose.Stare(Gait.Sprint);
             owner.Movement.SetSpeed(SprintSpeed);
 
-            // The Shadow Child's values (EnemyThinManAnim.NoticeSet).
-            var distance = owner.Movement.GetDistanceToPlayer();
-            var zoom = distance > 5f ? 20f : 30f;
+            // The Shadow Child's values (EnemyThinManAnim.NoticeSet). Its 20 zoom beyond 5 m is left out: a Lunge
+            // only starts within its 5 m reach.
             CameraGlitch.Instance.PlayShort();
             CameraAim.Instance.AimTargetSet(owner.Face, 0.75f, 2f, owner.gameObject, 90);
-            CameraZoom.Instance.OverrideZoomSet(zoom, 0.75f, 3f, 1f, owner.gameObject, 50);
-            LOG.Debug($"STALK: the Victim's camera turns onto {owner.name}'s face {distance:F1} m away, zoom {zoom:F0}, " +
-                      "the Victim's screen glitches");
+            CameraZoom.Instance.OverrideZoomSet(30f, 0.75f, 3f, 1f, owner.gameObject, 50);
+            LOG.Debug($"STALK: the Victim's camera turns onto {owner.name}'s face " +
+                      $"{owner.Movement.GetDistanceToPlayer():F1} m away, zoom 30, the Victim's screen glitches");
         }
 
         public override void OnStateUpdate()
