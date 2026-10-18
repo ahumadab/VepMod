@@ -35,6 +35,8 @@ belongs to the tooling, not here.
 - Undoing a change to a game object gives back the value the game would hold now: recorded before the change, or
   read from its owner's state (`FlashlightController.currentState`), not a hard-coded one.
 - Per-frame and timer-driven code does not allocate, and does not log or retry the same failure every tick.
+- An effect or a state change fired on the edge of a per-frame physics test (a line of sight, a contact) waits for the
+  new result to hold a moment: a linecast at an obstacle's edge flips every few frames.
 
 ## Network contract
 
