@@ -622,9 +622,10 @@ public sealed partial class Hallucination
             switch (e)
             {
                 case LungeCountdown.Event.Started or LungeCountdown.Event.Resumed:
-                    CameraGlitch.Instance.PlayShort();
+                    owner.DeadTeammateEffect.Play();
                     LOG.Debug($"STALK: {owner.name}'s count {(e == LungeCountdown.Event.Started ? "starts" : "resumes")} " +
-                              $"at {countdown.Elapsed:F1}s, {distance:F1} m from the Victim, the Victim's screen glitches");
+                              $"at {countdown.Elapsed:F1}s, {distance:F1} m from the Victim, the Victim sees the " +
+                              "dead-teammate effect");
                     break;
                 case LungeCountdown.Event.Paused:
                     LOG.Debug($"STALK: {owner.name}'s count pauses at {countdown.Elapsed:F1}s, {distance:F1} m from " +

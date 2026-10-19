@@ -90,17 +90,73 @@ public class LungeCountdownTests
     }
 
     [Fact]
-    public void TheCountPausesWithoutProgressWhileSomethingStandsBetweenThem()
+    public void TheCountPausesWithoutProgressOnceSomethingStoodBetweenThemForAMoment()
     {
         var countdown = Started();
         Run(countdown, 2f);
 
         var hidden = Run(countdown, 30f, isHidden: true);
-        var resumed = Run(countdown, 4f);
+        var resumed = Run(countdown, 3f);
 
-        Assert.Equal(Event.Paused, Assert.Single(hidden).Event);
+        var (pausedAt, paused) = Assert.Single(hidden);
+        Assert.Equal(Event.Paused, paused);
+        AssertAbout(0.3f, pausedAt);
         Assert.Equal(new[] { Event.Resumed, Event.Lunge }, resumed.ConvertAll(r => r.Event));
-        AssertAbout(3f, resumed[1].Time);
+        AssertAbout(2.7f, resumed[1].Time);
+    }
+
+    [Fact]
+    public void ASightReturningWithinTheMomentCancelsThePause()
+    {
+        var countdown = Started();
+
+        var events = Run(countdown, 0.25f, isHidden: true);
+        events.AddRange(Run(countdown, FrameTime));
+        events.AddRange(Run(countdown, 0.25f, isHidden: true));
+        var hidden = Run(countdown, 1f, isHidden: true);
+
+        Assert.Empty(events);
+        Assert.Equal(Event.Paused, Assert.Single(hidden).Event);
+    }
+
+    [Fact]
+    public void TheCountGoesOnDuringTheMomentHidden()
+    {
+        var countdown = Started();
+        Run(countdown, 1f);
+
+        Run(countdown, 0.25f, isHidden: true);
+
+        AssertAbout(1.25f, countdown.Elapsed);
+    }
+
+    [Fact]
+    public void TheLungeNeverComesOnAHiddenFrame()
+    {
+        var countdown = Started();
+        Run(countdown, 4.9f);
+
+        var withinTheMoment = Run(countdown, 0.25f, isHidden: true);
+        var over = countdown.IsOver;
+        var paused = Run(countdown, 10f, isHidden: true);
+        var back = Run(countdown, 2 * FrameTime);
+
+        Assert.Empty(withinTheMoment);
+        Assert.True(over);
+        Assert.Equal(Event.Paused, Assert.Single(paused).Event);
+        Assert.Equal(new[] { Event.Resumed, Event.Lunge }, back.ConvertAll(r => r.Event));
+    }
+
+    [Fact]
+    public void ACountOverWhileHiddenSaysSoOnceBackInSightOutOfReach()
+    {
+        var countdown = Started();
+        Run(countdown, 4.9f);
+        Run(countdown, 0.25f, isHidden: true);
+
+        var events = Run(countdown, 2f, Far);
+
+        Assert.Equal(Event.OverOutOfReach, Assert.Single(events).Event);
     }
 
     [Fact]
