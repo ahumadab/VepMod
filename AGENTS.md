@@ -25,8 +25,8 @@ instance's log of that test, one section per level, with its local player and Ma
 
 ## Coding standards
 
-Before writing, changing or reviewing code, read `CODING_STANDARDS.md` (module shape, lifecycle, network contract,
-comments).
+Before writing, changing or reviewing code, or a ticket's desired behaviour, read `CODING_STANDARDS.md` (module shape,
+lifecycle, network contract, comments).
 
 Run `npm run check` before handing work back: it runs what the git hooks and CI run, and `npm run format` fixes the
 formatting it reports. The hooks are installed by

@@ -39,7 +39,8 @@ belongs to the tooling, not here.
   read from its owner's state (`FlashlightController.currentState`), not a hard-coded one.
 - Per-frame and timer-driven code does not allocate, and does not log or retry the same failure every tick.
 - An effect or a state change fired on the edge of a per-frame physics test (a line of sight, a contact) waits for the
-  new result to hold a moment: a linecast at an obstacle's edge flips every few frames.
+  new result to hold a moment, on both edges, the loss and the return: a linecast at an obstacle's edge flips every few
+  frames.
 
 ## Network contract
 
