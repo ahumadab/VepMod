@@ -33,7 +33,7 @@ One period during which a Victim is Haunted, from the first Attachment to the en
 _French_: la période de hantise
 
 **Effect**:
-One of the consequences a Victim suffers while Haunted: Vanish, Hallucinations, or Dilated Pupils.
+One of the consequences a Victim suffers while Haunted: Vanish, Hallucinations, or Dilated Pupils. The game's own screen effects (the dead-teammate effect a Lunge count plays) are not Effects.
 _Avoid_: Debuff
 _French_: l'effet
 

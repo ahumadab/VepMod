@@ -12,9 +12,10 @@ const log = [
     "[Info   :VepMod.HallucinationDevTools] 23:12:23.730 DevTools: 50 renderers of Hallucination_VieuxPoulpe",
     "[Error  : Unity Log] Can't remove AudioSource because AudioLowPassFilter depends on it",
     "[Error  : Unity Log] Can't remove AudioSource because AudioLowPassFilter depends on it",
+    "[Error  :Imperium Repo] [NET] Trying to dispatch to clients from non-host. Blocked by Imperium policy.",
 ].join("\r\n");
 
-test("keeps VepMod's lines and the game's errors, heads each level, folds repeats", () => {
+test("keeps VepMod's lines and the game's errors, not another mod's, heads each level, folds repeats", () => {
     assert.deepEqual(summarizeLog(log), [
         "--- 23:01:02.788 level start, local player VieuxPoulpe, Master: True",
         "23:01:54.147 Debug HallucinationBodyPose: Body pose of Hallucination_VieuxPoulpe: CheckingMap, Still",

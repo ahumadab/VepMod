@@ -12,7 +12,8 @@ const RecentWindow = 30 * 60 * 1000; // ms before the newest file
 
 const vepModLine = /^\[(\w+)\s*:VepMod\.(\w+)\] (\S+) (.*)$/;
 const levelStart = /Local player (.*), Master: (\w+)/;
-const gameError = /^\[(Error|Fatal)\s*:/;
+// The game's errors reach BepInEx through Unity's log; another mod's carry its own source.
+const gameError = /^\[(Error|Fatal)\s*: Unity Log\]/;
 
 /**
  * VepMod's lines and the game's errors of one log, a header at each level start, consecutive repeats folded into
