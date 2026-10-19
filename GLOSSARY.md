@@ -77,7 +77,7 @@ A Hallucination approaching the Victim, staring at them without a word, then fle
 _French_: la traque
 
 **Lunge**:
-A Stalking Hallucination within 5 m of the Victim throwing itself at them once it has stared at them unseen for 5 s, counted from when it first stopped close to them and only while nothing stands between them, the Victim's screen glitching each time the count starts or resumes; it is too late to stop, and it kills the Victim outright a second later, their camera forced onto its face as it speaks a Mimic, whether it reached them or not.
+A Stalking Hallucination within 5 m of the Victim throwing itself at them once it has stared at them unseen for 5 s, counted from when it first stopped close to them and only while nothing stands between them, the Victim seeing the game's effect of a dead teammate's head each time the count starts or resumes; it is too late to stop, and it kills the Victim outright a second later, their screen glitching and their camera forced onto its face as it speaks a Mimic, whether it reached them or not.
 _Avoid_: Attack, jump scare, pounce
 _French_: la ruée
 

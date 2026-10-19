@@ -85,6 +85,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
     internal Vector3 Face => _head != null ? _head.position : ControllerTransform.position + Vector3.up;
     internal HallucinationBodyPose BodyPose { get; private set; }
     internal LungeCountdown LungeCountdown { get; } = new();
+    internal DeadTeammateEffect DeadTeammateEffect { get; private set; }
 
     public bool IsStalkingBeforeFlee =>
         Fsm.CurrentStateStateId is StateId.StalkApproach or StateId.StalkStare or StateId.StalkLunge;
@@ -249,6 +250,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         SetupNavigation();
         SetupMovementController();
         BodyPose = gameObject.AddComponent<HallucinationBodyPose>();
+        DeadTeammateEffect = gameObject.AddComponent<DeadTeammateEffect>();
         SetupClonedVisuals();
         SetupGaze();
         SetupAnimationController();
