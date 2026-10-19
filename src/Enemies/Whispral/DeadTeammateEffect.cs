@@ -4,9 +4,9 @@ namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     The visual part of the game's effect when the local player sees a dead teammate's head
-///     (PlayerDeathHead, its localSeenEffect), played for a Hallucination on its own object so that it runs to its end
-///     whatever state the Hallucination goes to.
+///     (PlayerDeathHead, its localSeenEffect).
 /// </summary>
+// A component of its own: the effect runs to its end whatever state the Hallucination goes to.
 internal sealed class DeadTeammateEffect : MonoBehaviour
 {
     private const float Duration = 2f; // s
@@ -14,7 +14,7 @@ internal sealed class DeadTeammateEffect : MonoBehaviour
     private float _left;
 
     /// <summary>
-    ///     Restarts the effect's 2 s when it is already playing.
+    ///     Restarts the effect from its beginning when it is already playing.
     /// </summary>
     // Without the game's seenSound and AudioScare.PlayCustom, which also cuts the level music for 60 s: the Lunge
     // count stays silent. PlayerController.deathSeenTimer is left alone so that a real dead teammate's head still

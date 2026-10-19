@@ -2,7 +2,7 @@ namespace VepMod.Enemies.Whispral;
 
 /// <summary>
 ///     The count of a Stalking stare towards its Lunge: 5 s while nothing stands between the Hallucination and the
-///     Victim, or has for less than 0.3 s, then the Lunge once the Victim is within reach, then the kill a second later.
+///     Victim, or has only for a moment, then the Lunge once the Victim is within reach, then the kill a second later.
 /// </summary>
 internal sealed class LungeCountdown
 {
