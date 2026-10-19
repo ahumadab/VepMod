@@ -10,10 +10,12 @@ internal sealed class LungeCountdown
     private const float Reach = 5f; // m
     private const float KillDelay = 1f; // s
 
-    // A line of sight at an obstacle's edge flips every few frames: the count pauses once it has been lost this long.
-    private const float HiddenGrace = 0.3f; // s
+    // A line of sight at an obstacle's edge flips every few frames: the count pauses once it has been lost this long,
+    // and resumes once it has been back this long.
+    private const float SightHold = 0.3f; // s
 
     private float _hiddenFor;
+    private float _inSightFor;
     private bool _overOutOfReachSaid;
     private float _sinceLunge;
 
@@ -67,10 +69,11 @@ internal sealed class LungeCountdown
 
         if (isHidden)
         {
+            _inSightFor = 0f;
             if (Current != Phase.Running) return null;
             Elapsed += deltaTime;
             _hiddenFor += deltaTime;
-            if (_hiddenFor < HiddenGrace) return null;
+            if (_hiddenFor < SightHold) return null;
             Current = Phase.Paused;
             return Event.Paused;
         }
@@ -82,6 +85,9 @@ internal sealed class LungeCountdown
                 Current = Phase.Running;
                 return Event.Started;
             case Phase.Paused:
+                Elapsed += deltaTime;
+                _inSightFor += deltaTime;
+                if (_inSightFor < SightHold) return null;
                 Current = Phase.Running;
                 return Event.Resumed;
         }
