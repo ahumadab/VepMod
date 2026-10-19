@@ -13,7 +13,7 @@ _French_: le Whispral
 **Victim**:
 The player a Whispral is attached to.
 _Avoid_: Affected player, target, attached player, host
-_French_: la Victime
+_French_: le joueur hanté, or la victime
 
 **Imitated Player**:
 A teammate, alive or dead, who is hidden from the Victim and replaced, for the Victim only, by a Hallucination of themselves; a dead teammate's Hallucination keeps walking and keeps its name.
@@ -113,4 +113,4 @@ _French_: la banque de voix
 
 **Mimic**:
 A Hallucination speaking with a Voice Sample of its Imitated Player.
-_French_: la réplique
+_French_: l'imitation vocale
