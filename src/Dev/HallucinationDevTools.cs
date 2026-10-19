@@ -65,6 +65,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Pressed(KeyCode.KeypadMultiply)) StunWhisprals(true);
         if (Pressed(KeyCode.KeypadMultiply, true)) StunWhisprals(false);
         if (Pressed(KeyCode.KeypadMinus)) KillWhisprals();
+        if (Pressed(KeyCode.KeypadMinus, true)) SwitchLethalHallucinations();
 
         if (Pressed(KeyCode.KeypadPlus)) HurtLocalPlayer();
         if (Pressed(KeyCode.KeypadPlus, true)) HealLocalPlayer();
@@ -594,6 +595,15 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
     }
 
+    private static void SwitchLethalHallucinations()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        var option = VepMod.ConfigLethalHallucinations;
+        option.Value = !option.Value;
+        LOG.Info($"DevTools: Lethal Hallucinations switched {(option.Value ? "on" : "off")}.");
+    }
+
     private static bool TryGetAimPoint(out Vector3 point)
     {
         var cam = Camera.main;
@@ -629,6 +639,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "  Num8 changes its mind on its Trip (press twice: cap)\n" +
                  "Whispral (Master): Num/ spawn | Num* stun preparing | Ctrl+Num* stun all | Num- kill\n" +
                  "Ctrl+Num/ Mimic command to every attached Victim (Master)\n" +
+                 "Ctrl+Num- switch Lethal Hallucinations (Master)\n" +
                  "Num. kill yourself | Ctrl+Num. revive the dead (Master)\n" +
                  "Num+ hurt yourself | Ctrl+Num+ heal yourself\n" +
                  "Ctrl+NumEnter capture your voice now\n";
@@ -652,7 +663,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
             sb += "\nNo Hallucination in scene.";
         }
 
-        sb += $"\n\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
+        sb += $"\n\nLethal Hallucinations: {LethalHallucinations.Summary}" +
+              $"\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
 
         var style = new GUIStyle(GUI.skin.box)
         {

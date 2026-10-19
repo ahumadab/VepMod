@@ -58,7 +58,7 @@ A Hallucination on a Trip easing to a stop, glancing, then heading to another po
 The Victim, or a Hallucination playing a Mimic, as a Hallucination hears them: its eyes and head turn to the nearest one within 6 m, up to 40° off the body, and hold them 2 to 4 s after they stop; a hidden teammate is never one, and a Stalking stare keeps the head.
 
 **Stalking**:
-A Hallucination approaching the Victim, staring at them without a word, then fleeing a moment after the Victim's Gaze lands on it, even if the Victim looks away; one the Gaze never lands on ends in a Lunge. A Victim is stalked by one Hallucination at a time.
+A Hallucination approaching the Victim, staring at them without a word, then fleeing a moment after the Victim's Gaze lands on it, even if the Victim looks away; one the Gaze never lands on ends in a Lunge, unless the Master's Lethal Hallucinations option is off. A Victim is stalked by one Hallucination at a time.
 
 **Lunge**:
 A Stalking Hallucination within 5 m of the Victim throwing itself at them once it has stared at them unseen for 5 s, counted from when it first stopped close to them and only while nothing stands between them, the Victim's screen glitching each time the count starts or resumes; it is too late to stop, and it kills the Victim outright a second later, their camera forced onto its face as it speaks a Mimic, whether it reached them or not.
@@ -73,7 +73,7 @@ The only Effect visible to the Victim's teammates rather than to the Victim.
 ### Network
 
 **Master**:
-The client that runs the Whispral and decides when a Hallucination performs a Mimic, except during a Lunge.
+The client that runs the Whispral and decides when a Hallucination performs a Mimic, except during a Lunge, and whether a Stalking can end in a Lunge, through its Lethal Hallucinations option.
 _Avoid_: Host
 
 ### Voice

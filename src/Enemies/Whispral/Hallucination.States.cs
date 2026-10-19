@@ -510,6 +510,7 @@ public sealed partial class Hallucination
         private const float MaxStareTime = 30f;
         internal const float DestinationUpdateInterval = 0.5f;
 
+        private bool _countRefused;
         private float _farthest;
         private float? _gazeLandedAt;
 
@@ -518,6 +519,7 @@ public sealed partial class Hallucination
             base.OnStateEnter(previous);
             LOG.Debug("=== STALK: Staring at player ===");
 
+            _countRefused = false;
             _gazeLandedAt = null;
             Machine.Owner.LungeCountdown.Reset();
 
@@ -564,15 +566,14 @@ public sealed partial class Hallucination
                     Machine.Owner.Movement.Stop();
                 }
 
-                if (Machine.Owner.LungeCountdown.Current == LungeCountdown.Phase.NotStarted &&
+                if (!_countRefused && Machine.Owner.LungeCountdown.Current == LungeCountdown.Phase.NotStarted &&
                     Machine.Owner.Movement.HasReachedDestination())
                 {
-                    LOG.Debug($"STALK: {Machine.Owner.name} stopped {distance:F1} m from the Victim, " +
-                              "its count starts once nothing stands between them");
-                    Machine.Owner.LungeCountdown.Start();
+                    StartCount(distance);
                 }
             }
 
+            StopCountIfNotLethal();
             if (CountEndsInLunge(distance)) return;
 
             if (TimeElapsed >= MaxStareTime)
@@ -580,6 +581,32 @@ public sealed partial class Hallucination
                 LOG.Debug("STALK: Stare timeout, fleeing");
                 Machine.NextStateStateId = StateId.StalkFlee;
             }
+        }
+
+        private void StartCount(float distance)
+        {
+            if (!LethalHallucinations.IsOn)
+            {
+                _countRefused = true;
+                LOG.Debug($"STALK: {Machine.Owner.name} stopped {distance:F1} m from the Victim, no count: " +
+                          $"Lethal Hallucinations {LethalHallucinations.Summary}");
+                return;
+            }
+
+            LOG.Debug($"STALK: {Machine.Owner.name} stopped {distance:F1} m from the Victim, its count starts " +
+                      $"once nothing stands between them: Lethal Hallucinations {LethalHallucinations.Summary}");
+            Machine.Owner.LungeCountdown.Start();
+        }
+
+        private void StopCountIfNotLethal()
+        {
+            var countdown = Machine.Owner.LungeCountdown;
+            if (!countdown.IsCounting || LethalHallucinations.IsOn) return;
+
+            LOG.Debug($"STALK: {Machine.Owner.name}'s count stops at {countdown.Elapsed:F1}s: Lethal Hallucinations " +
+                      $"switched {LethalHallucinations.Summary}");
+            countdown.Reset();
+            _countRefused = true;
         }
 
         private bool CountEndsInLunge(float distance)
@@ -678,7 +705,7 @@ public sealed partial class Hallucination
             LOG.Debug($"=== STALK: {owner.name} kills the Victim {distance:F1} m away, {_closest:F1} m at the " +
                       $"closest; over the Lunge the Victim's camera came {_nearestToFace:F0}° from its face at the " +
                       $"nearest, with a field of view of {_narrowestView:F0}° at the narrowest; the Victim's health " +
-                      $"now {health.health} ===");
+                      $"now {health.health}; Lethal Hallucinations {LethalHallucinations.Summary} ===");
 
             // The death ends the Haunting, which removes the Hallucination; a Victim the game keeps alive
             // (invincible a moment, god mode) is left alone.
