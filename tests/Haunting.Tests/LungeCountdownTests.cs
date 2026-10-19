@@ -102,7 +102,62 @@ public class LungeCountdownTests
         Assert.Equal(Event.Paused, paused);
         AssertAbout(0.3f, pausedAt);
         Assert.Equal(new[] { Event.Resumed, Event.Lunge }, resumed.ConvertAll(r => r.Event));
+        AssertAbout(0.3f, resumed[0].Time);
         AssertAbout(2.7f, resumed[1].Time);
+    }
+
+    [Fact]
+    public void APausedCountResumesOnceTheVictimHasBeenInSightForAMoment()
+    {
+        var countdown = Started();
+        Run(countdown, 1f, isHidden: true);
+
+        var beforeTheMoment = Run(countdown, 0.25f);
+        var resumed = Run(countdown, 0.1f);
+
+        Assert.Empty(beforeTheMoment);
+        Assert.Equal(Event.Resumed, Assert.Single(resumed).Event);
+    }
+
+    [Fact]
+    public void AHiddenFrameWithinTheMomentCancelsTheResume()
+    {
+        var countdown = Started();
+        Run(countdown, 1f, isHidden: true);
+
+        var events = Run(countdown, 0.25f);
+        events.AddRange(Run(countdown, FrameTime, isHidden: true));
+        events.AddRange(Run(countdown, 0.25f));
+        var resumed = Run(countdown, 0.1f);
+
+        Assert.Empty(events);
+        Assert.Equal(Event.Resumed, Assert.Single(resumed).Event);
+    }
+
+    [Fact]
+    public void TheCountGoesOnDuringTheMomentBackInSight()
+    {
+        var countdown = Started();
+        Run(countdown, 1f);
+        Run(countdown, 1f, isHidden: true);
+        var paused = countdown.Elapsed;
+
+        Run(countdown, 0.25f);
+
+        AssertAbout(paused + 0.25f, countdown.Elapsed);
+    }
+
+    [Fact]
+    public void ACountOverDuringTheMomentBackInSightLungesOnTheFrameAfterTheResume()
+    {
+        var countdown = Started();
+        Run(countdown, 4.6f);
+        Run(countdown, 1f, isHidden: true);
+
+        var back = Run(countdown, 0.4f);
+
+        Assert.Equal(new[] { Event.Resumed, Event.Lunge }, back.ConvertAll(r => r.Event));
+        Assert.Equal(back[0].Time + FrameTime, back[1].Time, 4);
     }
 
     [Fact]
@@ -139,7 +194,7 @@ public class LungeCountdownTests
         var withinTheMoment = Run(countdown, 0.25f, isHidden: true);
         var over = countdown.IsOver;
         var paused = Run(countdown, 10f, isHidden: true);
-        var back = Run(countdown, 2 * FrameTime);
+        var back = Run(countdown, 0.3f + 2 * FrameTime);
 
         Assert.Empty(withinTheMoment);
         Assert.True(over);
