@@ -33,7 +33,7 @@ One period during which a Victim is Haunted, from the first Attachment to the en
 _French_: la période de hantise
 
 **Effect**:
-One of the consequences a Victim suffers while Haunted: Vanish, Hallucinations, or Dilated Pupils. The game's own screen effects (the dead-teammate effect a Lunge count plays) are not Effects.
+One of the consequences a Victim suffers while Haunted: Vanish, Hallucinations, Whispers, or Dilated Pupils. The game's own screen effects (the dead-teammate effect a Lunge count plays) are not Effects.
 _Avoid_: Debuff
 _French_: l'effet
 
@@ -84,6 +84,11 @@ _French_: la ruée
 **Gaze**:
 The Victim looking at a Hallucination they can see; a Hallucination behind a wall is never under the Gaze.
 _French_: le regard
+
+**Whispers**:
+The Effect that whispers to the Victim from around their head, each Whisper from another side than the last, heard by them alone; one Whisper plays at a time however many Whisprals hold them.
+_Avoid_: Breathing
+_French_: les chuchotements
 
 **Dilated Pupils**:
 The only Effect visible to the Victim's teammates rather than to the Victim.
