@@ -31,10 +31,13 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private const float AimMaxDistance = 100f; // m, aim raycast range
     private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
     private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
+    private const float SpawnTimerRunOut = 0.01f; // s
+    private const float EndOfLevelReplayDuration = 1f; // s
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDevTools>();
 
     private readonly List<Hallucination> _spawned = new();
+    private float _endOfLevelReplayTimer;
     private Hallucination? _nearest;
     private float _nearestRefreshTimer;
     private bool _hudVisible = true;
@@ -56,7 +59,10 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Pressed(KeyCode.Keypad5, true)) ForceEveryNextStalkingRoll();
         if (Pressed(KeyCode.Keypad6)) CrossNearestTwo();
         if (Pressed(KeyCode.Keypad7)) ChainWithNearest();
+        if (Pressed(KeyCode.Keypad7, true)) RunOutSpawnTimers();
         if (Pressed(KeyCode.Keypad8)) ChangeMindWithNearest();
+        if (Pressed(KeyCode.Keypad8, true)) StartEndOfLevelReplay();
+        ReplayEndOfLevelReturns();
         if (Pressed(KeyCode.Keypad9)) DespawnAll();
         if (Pressed(KeyCode.Keypad9, true)) WithholdNextLungeVoiceSample();
 
@@ -540,6 +546,88 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
     }
 
+    // Dead Whisprals included: EnemyParent stays active while its Whispral is despawned.
+    private static IEnumerable<(EnemyParent Parent, EnemyWhispral Whispral, int ViewID)> AllWhisprals()
+    {
+        if (!EnemyDirector.instance) yield break;
+
+        foreach (var parent in EnemyDirector.instance.enemiesSpawned)
+        {
+            if (!parent) continue;
+            var whispral = parent.GetComponentInChildren<EnemyWhispral>(true);
+            if (whispral) yield return (parent, whispral, whispral.GetComponent<Photon.Pun.PhotonView>().ViewID);
+        }
+    }
+
+    private static void RunOutSpawnTimers()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        foreach (var (parent, _, viewID) in AllWhisprals())
+        {
+            if (!parent.Spawned) continue;
+
+            LOG.Info($"DevTools: running out the spawn timer of Whispral {viewID} " +
+                     $"(was {parent.SpawnedTimer:F1} s).");
+            parent.SpawnedTimerPause(0f);
+            // Above zero: a timer at exactly zero is the game's despawn order, not one that ran out.
+            parent.SpawnedTimer = SpawnTimerRunOut;
+        }
+    }
+
+    // EnemyDirector.Update's rule once every extraction point is done: a present enemy with no player close despawns
+    // once, and every frame after, a dead one with more than 30 s left comes back at once.
+    private void StartEndOfLevelReplay()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        _endOfLevelReplayTimer = EndOfLevelReplayDuration;
+        foreach (var (parent, _, viewID) in AllWhisprals())
+        {
+            if (!parent.Spawned) continue;
+
+            if (parent.playerClose)
+            {
+                LOG.Info($"DevTools: end of level, Whispral {viewID} stays: a player is close.");
+                continue;
+            }
+
+            LOG.Info($"DevTools: end of level, SpawnedTimerSet(0f) on Whispral {viewID}.");
+            parent.SpawnedTimerPause(0f);
+            parent.SpawnedTimerSet(0f);
+        }
+    }
+
+    private void ReplayEndOfLevelReturns()
+    {
+        if (_endOfLevelReplayTimer <= 0f) return;
+
+        _endOfLevelReplayTimer -= Time.deltaTime;
+        foreach (var (parent, _, viewID) in AllWhisprals())
+        {
+            if (parent.Spawned || parent.DespawnedTimer <= 30f) continue;
+
+            LOG.Info($"DevTools: end of level, DespawnedTimerSet(0f) on Whispral {viewID} " +
+                     $"({parent.DespawnedTimer:F0} s left).");
+            parent.DespawnedTimerSet(0f);
+        }
+    }
+
+    private static string WhispralsSummary()
+    {
+        var summary = "";
+        foreach (var (parent, whispral, viewID) in AllWhisprals())
+        {
+            summary += $"\n  {viewID}: ";
+            summary += parent.Spawned
+                ? $"{whispral.CurrentState}, spawn timer {parent.SpawnedTimer:F0} s, " +
+                  $"nearest player {EnemyWhispral.NearestPlayerDistance(whispral.transform.position):F0} m"
+                : $"despawned, back in {parent.DespawnedTimer:F0} s";
+        }
+
+        return summary.Length > 0 ? summary : " none";
+    }
+
     private static void SendMimicCommands()
     {
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
@@ -639,6 +727,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "  Num8 changes its mind on its Trip (press twice: cap)\n" +
                  "Whispral (Master): Num/ spawn | Num* stun preparing | Ctrl+Num* stun all | Num- kill\n" +
                  "Ctrl+Num/ Mimic command to every attached Victim (Master)\n" +
+                 "Ctrl+Num7 run out every Whispral's spawn timer (Master)\n" +
+                 "Ctrl+Num8 replay the end-of-level rule on every Whispral (Master)\n" +
                  "Ctrl+Num- switch Lethal Hallucinations (Master)\n" +
                  "Num. kill yourself | Ctrl+Num. revive the dead (Master)\n" +
                  "Num+ hurt yourself | Ctrl+Num+ heal yourself\n" +
@@ -663,6 +753,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
             sb += "\nNo Hallucination in scene.";
         }
 
+        sb += $"\n\nWhisprals (timers on the Master):{WhispralsSummary()}";
         sb += $"\n\nLethal Hallucinations: {LethalHallucinations.Summary}" +
               $"\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
 
