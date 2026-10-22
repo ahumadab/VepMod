@@ -26,6 +26,7 @@
     <Compile Include="..\..\src\Enemies\Whispral\TripChain.cs" Link="TripChain.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\ChangeOfMind.cs" Link="ChangeOfMind.cs" />
     <Compile Include="..\..\src\Enemies\Whispral\LungeCountdown.cs" Link="LungeCountdown.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\Presence.cs" Link="Presence.cs" />
   </ItemGroup>
 
 </Project>

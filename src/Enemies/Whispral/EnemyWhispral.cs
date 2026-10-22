@@ -52,7 +52,9 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     [HideInInspector] public float attachedTimer;
 
     private State _currentState;
+    private float? _diedAt;
     private float _grabAggroTimer;
+    private float _returnDelay;
 
     private PhotonView _photonView;
     private Quaternion _rotationTarget;
@@ -111,6 +113,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
 
         UpdateGrabAggroTimer();
+        RefillSpawnTimer();
 
         // Transitions forced by the game's Enemy system
         CheckForStunState();
@@ -127,6 +130,29 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         }
 
         AttachFollowLogic();
+    }
+
+    // Runs before EnemyParent's Logic coroutine, which despawns an enemy whose spawn timer has run out (ADR-0008).
+    private void RefillSpawnTimer()
+    {
+        var parent = enemy.EnemyParent;
+        if (Presence.RefilledSpawnTimer(parent.SpawnedTimer) is not { } refilled) return;
+
+        LOG.Debug($"Whispral {_photonView.ViewID} spawn timer refilled: {parent.SpawnedTimer:F2} s -> {refilled:F0} s.");
+        parent.SpawnedTimer = refilled;
+    }
+
+    /// <returns>The straight-line distance to the nearest alive player, in metres; infinity when none is alive.</returns>
+    internal static float NearestPlayerDistance(Vector3 position)
+    {
+        var nearest = float.PositiveInfinity;
+        foreach (var player in SemiFunc.PlayerGetList())
+        {
+            if (player.isDisabled) continue;
+            nearest = Mathf.Min(nearest, Vector3.Distance(position, player.transform.position));
+        }
+
+        return nearest;
     }
 
     private void CheckForDespawnState()
@@ -315,6 +341,11 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         if (SemiFunc.IsMasterClientOrSingleplayer() && SemiFunc.EnemySpawn(enemy))
         {
+            var sinceDeath = _diedAt is { } diedAt
+                ? $", {Time.time - diedAt:F0} s after its death (return delay {_returnDelay:F0} s)"
+                : "";
+            LOG.Debug($"Whispral {_photonView.ViewID} spawns{sinceDeath}.");
+            _diedAt = null;
             Fsm.NextStateStateId = State.Spawn;
         }
     }
@@ -334,6 +365,15 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             LOG.Debug($"Whispral {_photonView.ViewID} killed in state {CurrentState}.");
             Fsm.NextStateStateId = State.Despawn;
             Fsm.Update();
+
+            // Replaces the game's 480 to 500 s, its director multipliers and its x3 after a valuable drop (ADR-0008).
+            var parent = enemy.EnemyParent;
+            var gameDelay = parent.DespawnedTimer;
+            _returnDelay = Presence.ReturnDelay(Random.value);
+            parent.DespawnedTimerSet(_returnDelay);
+            _diedAt = Time.time;
+            LOG.Debug($"Whispral {_photonView.ViewID} returns in {parent.DespawnedTimer:F0} s " +
+                      $"(drawn {_returnDelay:F0} s), not the game's {gameDelay:F0} s.");
         }
     }
 
@@ -437,6 +477,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
     private sealed class IdleState : WhispralStateBase
     {
+        private bool _startPauseSkipReported;
         private float _timer;
 
         public override void OnStateEnter(State previous)
@@ -445,15 +486,17 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _timer = Random.Range(1f, 3f);
             Enemy.NavMeshAgent.Warp(Enemy.Rigidbody.transform.position);
             Enemy.NavMeshAgent.ResetPath();
+
+            // The game's enemies stand still through the director's start pause (SemiFunc.EnemySpawnIdlePause); the
+            // Whispral goes looking for the team at once (ADR-0008).
+            if (_startPauseSkipReported || !SemiFunc.EnemySpawnIdlePause()) return;
+            _startPauseSkipReported = true;
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} skips the director's start pause " +
+                      $"({EnemyDirector.instance.spawnIdlePauseTimer:F0} s left).");
         }
 
         public override void OnStateUpdate()
         {
-            if (SemiFunc.EnemySpawnIdlePause())
-            {
-                return;
-            }
-
             _timer -= Time.deltaTime;
             if (_timer <= 0f)
             {
@@ -480,10 +523,22 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             _timer = TimeToRoam;
             _hasDestination = false;
 
-            var levelPoint = SemiFunc.LevelPointGet(Whispral.transform.position, 10f, 25f);
-            if (levelPoint == null) levelPoint = SemiFunc.LevelPointGet(Whispral.transform.position, 0f, 999f);
+            var position = Whispral.transform.position;
+            var roamPoint = Presence.RoamPoint(
+                SemiFunc.LevelPointGetPlayerDistance(position, 18f, 35f),
+                SemiFunc.LevelPointGet(position, 10f, 25f),
+                SemiFunc.LevelPointGet(position, 0f, 999f));
+            if (roamPoint is not { } picked)
+            {
+                LOG.Debug($"Whispral {Whispral._photonView.ViewID} finds no roam point.");
+                return;
+            }
 
-            if (levelPoint && SamplePosition(levelPoint, out var hit) && Raycast(hit)) // if valid position found
+            var (levelPoint, source) = picked;
+            var pointPosition = levelPoint.transform.position;
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} roams to {pointPosition} ({source}), " +
+                      $"{NearestPlayerDistance(pointPosition):F1} m from the nearest alive player.");
+            if (SamplePosition(levelPoint, out var hit) && Raycast(hit))
             {
                 Enemy.NavMeshAgent.SetDestination(hit.position);
                 Enemy.Rigidbody.notMovingTimer = 0f;
@@ -848,12 +903,17 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 _hasDestination = true;
             }
 
+            // No SpawnedTimerSet: a flee no longer despawns the Whispral (ADR-0008).
             SemiFunc.EnemyLeaveStart(Enemy);
+        }
 
-            if (_hasDestination)
-            {
-                Enemy.EnemyParent.SpawnedTimerSet(1f);
-            }
+        public override void OnStateExit(State next)
+        {
+            base.OnStateExit(next);
+            if (next == State.Despawn) return;
+
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} ends its flee (-> {next}) still present, " +
+                      $"spawn timer {Enemy.EnemyParent.SpawnedTimer:F1} s.");
         }
 
         public override void OnStateUpdate()
@@ -925,6 +985,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
         {
             base.OnStateEnter(previous);
             Enemy.EnemyParent.Despawn();
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} despawns from state {previous} " +
+                      $"(game's despawned timer {Enemy.EnemyParent.DespawnedTimer:F0} s).");
             Fsm.NextStateStateId = State.Spawn;
         }
     }
