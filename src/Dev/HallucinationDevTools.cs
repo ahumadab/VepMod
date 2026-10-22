@@ -547,13 +547,15 @@ public sealed class HallucinationDevTools : MonoBehaviour
     }
 
     // Dead Whisprals included: EnemyParent stays active while its Whispral is despawned.
-    private static IEnumerable<(EnemyParent Parent, EnemyWhispral Whispral)> AllWhisprals()
+    private static IEnumerable<(EnemyParent Parent, EnemyWhispral Whispral, int ViewID)> AllWhisprals()
     {
+        if (!EnemyDirector.instance) yield break;
+
         foreach (var parent in EnemyDirector.instance.enemiesSpawned)
         {
             if (!parent) continue;
             var whispral = parent.GetComponentInChildren<EnemyWhispral>(true);
-            if (whispral) yield return (parent, whispral);
+            if (whispral) yield return (parent, whispral, whispral.GetComponent<Photon.Pun.PhotonView>().ViewID);
         }
     }
 
@@ -561,11 +563,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
     {
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
 
-        foreach (var (parent, whispral) in AllWhisprals())
+        foreach (var (parent, _, viewID) in AllWhisprals())
         {
             if (!parent.Spawned) continue;
 
-            LOG.Info($"DevTools: running out the spawn timer of Whispral {whispral.GetComponent<Photon.Pun.PhotonView>().ViewID} " +
+            LOG.Info($"DevTools: running out the spawn timer of Whispral {viewID} " +
                      $"(was {parent.SpawnedTimer:F1} s).");
             parent.SpawnedTimerPause(0f);
             // Above zero: a timer at exactly zero is the game's despawn order, not one that ran out.
@@ -580,11 +582,10 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
 
         _endOfLevelReplayTimer = EndOfLevelReplayDuration;
-        foreach (var (parent, whispral) in AllWhisprals())
+        foreach (var (parent, _, viewID) in AllWhisprals())
         {
             if (!parent.Spawned) continue;
 
-            var viewID = whispral.GetComponent<Photon.Pun.PhotonView>().ViewID;
             if (parent.playerClose)
             {
                 LOG.Info($"DevTools: end of level, Whispral {viewID} stays: a player is close.");
@@ -602,11 +603,11 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (_endOfLevelReplayTimer <= 0f) return;
 
         _endOfLevelReplayTimer -= Time.deltaTime;
-        foreach (var (parent, whispral) in AllWhisprals())
+        foreach (var (parent, _, viewID) in AllWhisprals())
         {
             if (parent.Spawned || parent.DespawnedTimer <= 30f) continue;
 
-            LOG.Info($"DevTools: end of level, DespawnedTimerSet(0f) on Whispral {whispral.GetComponent<Photon.Pun.PhotonView>().ViewID} " +
+            LOG.Info($"DevTools: end of level, DespawnedTimerSet(0f) on Whispral {viewID} " +
                      $"({parent.DespawnedTimer:F0} s left).");
             parent.DespawnedTimerSet(0f);
         }
@@ -615,9 +616,9 @@ public sealed class HallucinationDevTools : MonoBehaviour
     private static string WhispralsSummary()
     {
         var summary = "";
-        foreach (var (parent, whispral) in AllWhisprals())
+        foreach (var (parent, whispral, viewID) in AllWhisprals())
         {
-            summary += $"\n  {whispral.GetComponent<Photon.Pun.PhotonView>().ViewID}: ";
+            summary += $"\n  {viewID}: ";
             summary += parent.Spawned
                 ? $"{whispral.CurrentState}, spawn timer {parent.SpawnedTimer:F0} s, " +
                   $"nearest player {EnemyWhispral.NearestPlayerDistance(whispral.transform.position):F0} m"

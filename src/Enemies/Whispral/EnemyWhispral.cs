@@ -536,14 +536,19 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
 
             var (levelPoint, source) = picked;
             var pointPosition = levelPoint.transform.position;
-            LOG.Debug($"Whispral {Whispral._photonView.ViewID} roams to {pointPosition} ({source}), " +
-                      $"{NearestPlayerDistance(pointPosition):F1} m from the nearest alive player.");
-            if (SamplePosition(levelPoint, out var hit) && Raycast(hit))
+            var pointDistance = NearestPlayerDistance(pointPosition);
+            if (!SamplePosition(levelPoint, out var hit) || !Raycast(hit))
             {
-                Enemy.NavMeshAgent.SetDestination(hit.position);
-                Enemy.Rigidbody.notMovingTimer = 0f;
-                _hasDestination = true;
+                LOG.Debug($"Whispral {Whispral._photonView.ViewID} finds no NavMesh near {pointPosition} ({source}, " +
+                          $"{pointDistance:F1} m from the nearest alive player).");
+                return;
             }
+
+            LOG.Debug($"Whispral {Whispral._photonView.ViewID} roams to {pointPosition} ({source}), " +
+                      $"{pointDistance:F1} m from the nearest alive player.");
+            Enemy.NavMeshAgent.SetDestination(hit.position);
+            Enemy.Rigidbody.notMovingTimer = 0f;
+            _hasDestination = true;
         }
 
 
@@ -903,7 +908,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
                 _hasDestination = true;
             }
 
-            // No SpawnedTimerSet: a flee no longer despawns the Whispral (ADR-0008).
+            // No SpawnedTimerSet: a flee does not despawn the Whispral (ADR-0008).
             SemiFunc.EnemyLeaveStart(Enemy);
         }
 
