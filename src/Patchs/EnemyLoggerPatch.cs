@@ -26,6 +26,6 @@ public class ExtractionsCompletedLoggerPatch
     private static void Postfix(RoundDirector __instance)
     {
         if (__instance.allExtractionPointsCompleted)
-            LOG.Info("RoundDirector: every extraction point is completed, the end-of-level rule now moves every enemy.");
+            LOG.Debug("RoundDirector: every extraction point is completed, the end-of-level rule now moves every enemy.");
     }
 }
