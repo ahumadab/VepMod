@@ -1,0 +1,17 @@
+#!/bin/sh
+# Runs what CI runs: CI on GitHub cannot block a merge without branch protection.
+# A push of tags or branch deletions alone updates no branch CI would check.
+refs=$(cat)
+echo "$refs" | grep -qvE '^(refs/tags/|\(delete\) )' || exit 0
+
+# A squash-merged PR ignores later pushes to its branch, so they would never reach develop.
+# Without gh, or offline, the lookup comes back empty and the push goes through.
+for branch in $(echo "$refs" | awk '$1 != "(delete)" && $3 ~ /^refs\/heads\// { sub("refs/heads/", "", $3); print $3 }'); do
+    merged=$(gh pr list --head "$branch" --state merged --json number --jq '.[0].number' 2>/dev/null)
+    if [ -n "$merged" ]; then
+        echo "PR #$merged from $branch is already merged: push to a new branch from develop." >&2
+        exit 1
+    fi
+done
+
+exec npm run --silent check

@@ -6,8 +6,7 @@ using AudioBenchmark.Models;
 namespace AudioBenchmark.Reports;
 
 /// <summary>
-///     Génère un rapport HTML interactif avec lecteur audio et boutons de labellisation.
-///     L'utilisateur peut labelliser directement dans le navigateur puis exporter le JSON.
+///     An HTML report with an audio player per file, to label files in the browser and export the labels as JSON.
 /// </summary>
 public static class HtmlReportGenerator
 {
@@ -17,7 +16,6 @@ public static class HtmlReportGenerator
         var autoSpeech = labels.Labels.Where(l => l.Label == AudioLabel.Speech && l.Source == LabelSource.Auto).ToList();
         var autoNoise = labels.Labels.Where(l => l.Label == AudioLabel.Noise && l.Source == LabelSource.Auto).ToList();
 
-        // Sérialiser les labels comme JSON embarqué dans le HTML
         var jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = false,
@@ -32,10 +30,8 @@ public static class HtmlReportGenerator
         WriteStyles(sb);
         sb.AppendLine("</head><body>");
 
-        // Header
         sb.AppendLine("<h1>VepMod - Labellisation Audio Interactive</h1>");
 
-        // Barre de progression sticky en haut
         sb.AppendLine("<div id='progress-bar'>");
         sb.AppendLine("  <div class='progress-inner'>");
         sb.AppendLine("    <span id='progress-text'>Chargement...</span>");
@@ -52,7 +48,6 @@ public static class HtmlReportGenerator
         sb.AppendLine("  </div>");
         sb.AppendLine("</div>");
 
-        // Instructions
         sb.AppendLine("<div class='instructions'>");
         sb.AppendLine("<h3>Mode d'emploi</h3>");
         sb.AppendLine("<ul>");
@@ -63,22 +58,18 @@ public static class HtmlReportGenerator
         sb.AppendLine("<li>Relance le benchmark : <code>dotnet run -- [dataset] labels.json</code></li>");
         sb.AppendLine("</ul></div>");
 
-        // Section 1: Fichiers A VERIFIER
         sb.AppendLine("<h2 id='section-unknown'>A verifier manuellement</h2>");
         sb.AppendLine($"<p>{unknowns.Count} fichiers ambigus. Tries par speech ratio croissant.</p>");
         WriteInteractiveTable(sb, unknowns, datasetBasePath, "unknown");
 
-        // Section 2: Auto BRUIT
         sb.AppendLine("<h2 id='section-noise'>Auto-classifie : BRUIT</h2>");
         sb.AppendLine($"<p>{autoNoise.Count} fichiers. Tu peux corriger si l'auto-classification s'est trompee.</p>");
         WriteInteractiveTable(sb, autoNoise, datasetBasePath, "noise");
 
-        // Section 3: Auto PAROLE
         sb.AppendLine("<h2 id='section-speech'>Auto-classifie : PAROLE</h2>");
         sb.AppendLine($"<p>{autoSpeech.Count} fichiers. Tu peux corriger si l'auto-classification s'est trompee.</p>");
         WriteInteractiveTable(sb, autoSpeech, datasetBasePath, "speech");
 
-        // Embed les données JSON + le script interactif
         sb.AppendLine($"<script>const labelsData = {labelsJson};</script>");
         WriteScript(sb);
 
@@ -134,7 +125,7 @@ tr.active { background: #1a3a6e !important; outline: 2px solid #4fc3f7; }
 tr.labeled-speech { border-left: 4px solid #4caf50; }
 tr.labeled-noise { border-left: 4px solid #f44336; }
 
-/* Labels dans les cellules */
+/* Labels in cells */
 .label-display { font-weight: bold; min-width: 60px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 3px; }
 .label-speech { color: #4caf50; background: #4caf5020; }
 .label-noise { color: #f44336; background: #f4433620; }
@@ -186,7 +177,7 @@ code { background: #0f3460; padding: 2px 6px; border-radius: 3px; }
                 _ => ""
             };
 
-            // data-filename est l'identifiant unique pour retrouver le label dans labelsData
+            // data-filename is the key of the row's label in labelsData.
             sb.AppendLine($"<tr class='{rowClass}' data-filename='{EscapeHtml(l.FileName)}' onclick='selectRow(this)'>");
             sb.AppendLine($"<td>{i + 1}</td>");
             sb.AppendLine($"<td>{EscapeHtml(l.PlayerName)}</td>");
@@ -214,27 +205,25 @@ code { background: #0f3460; padding: 2px 6px; border-radius: 3px; }
 let activeRow = null;
 let autoScroll = true;
 
-// --- Initialisation ---
+// --- Startup ---
 window.addEventListener('DOMContentLoaded', () => {
     updateProgress();
-    // Sélectionner la première ligne Unknown
     const firstUnknown = document.querySelector('tr[data-filename] .label-unknown');
     if (firstUnknown) selectRow(firstUnknown.closest('tr'));
 });
 
-// --- Sélection de ligne ---
+// --- Row selection ---
 function selectRow(tr) {
     if (activeRow) activeRow.classList.remove('active');
     activeRow = tr;
     tr.classList.add('active');
 }
 
-// --- Labellisation ---
+// --- Labelling ---
 function setLabel(btn, label) {
     const tr = btn.closest('tr');
     const filename = tr.dataset.filename;
 
-    // Mettre à jour labelsData
     const entry = labelsData.Labels.find(l => l.FileName === filename);
     if (entry) {
         entry.Label = label;
@@ -242,7 +231,6 @@ function setLabel(btn, label) {
         entry.Reason = 'Labellise manuellement via HTML';
     }
 
-    // Mettre à jour l'affichage
     const display = tr.querySelector('[data-label-display]');
     display.textContent = label;
     display.className = 'label-display label-' + label.toLowerCase();
@@ -253,7 +241,6 @@ function setLabel(btn, label) {
 
     updateProgress();
 
-    // Auto-avancer vers la prochaine ligne non labellisée
     if (autoScroll && label !== 'Unknown') {
         advanceToNext(tr);
     }
@@ -266,14 +253,12 @@ function advanceToNext(currentTr) {
         if (display && display.textContent === 'Unknown') {
             selectRow(next);
             next.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Lancer l'audio automatiquement
             const audio = next.querySelector('audio');
             if (audio) { audio.load(); audio.play().catch(() => {}); }
             return;
         }
         next = next.nextElementSibling;
     }
-    // Si plus rien dans cette table, chercher dans les tables suivantes
     const tables = document.querySelectorAll('table');
     let foundCurrent = false;
     for (const table of tables) {
@@ -293,7 +278,7 @@ function advanceToNext(currentTr) {
     }
 }
 
-// --- Progression ---
+// --- Progress ---
 function updateProgress() {
     const total = labelsData.Labels.length;
     const speech = labelsData.Labels.filter(l => l.Label === 'Speech').length;
@@ -309,9 +294,8 @@ function updateProgress() {
     document.getElementById('count-unknown').textContent = unknown;
 }
 
-// --- Raccourcis clavier ---
+// --- Keyboard shortcuts ---
 document.addEventListener('keydown', (e) => {
-    // Ignorer si on tape dans un input
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
     if (!activeRow) return;
@@ -357,7 +341,6 @@ function toggleAutoScroll() {
 
 // --- Export JSON ---
 function exportLabels() {
-    // Mettre à jour les compteurs dans le JSON
     labelsData.AutoLabeled = labelsData.Labels.filter(l => l.Source === 'Auto' && l.Label !== 'Unknown').length;
     labelsData.ManualRequired = labelsData.Labels.filter(l => l.Label === 'Unknown').length;
 

@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 using HarmonyLib;
 using Photon.Pun;
 using VepMod.Enemies.Whispral;
@@ -18,25 +18,13 @@ internal class PlayerAvatarPatch
             return;
         }
 
-        var mimics = __instance.GetComponent<WhispralMimics>();
-        if (!mimics)
+        // Two game instances on one PC write two logs: this line tells them apart.
+        if (__instance.photonView.IsMine)
         {
-            mimics = __instance.gameObject.AddComponent<WhispralMimics>();
-            LOG.Debug($"Added Mimics component to PlayerAvatar: {__instance.name}");
-        }
-        else
-        {
-            LOG.Warning($"PlayerAvatar: {__instance.name} already has a WhispralMimics component.");
+            LOG.Info($"Local player {PhotonNetwork.LocalPlayer.NickName}, Master: {PhotonNetwork.IsMasterClient}");
         }
 
-        var photonView = __instance.GetComponent<PhotonView>();
-        if (!photonView || !photonView.IsMine)
-        {
-            LOG.Warning("PhotonView is null or not owned by local player.");
-            return;
-        }
-
-        VepFinder.LocalMimics = mimics;
-        LOG.Info($"Set LocalMimics for local PlayerAvatar: {__instance.name}");
+        __instance.gameObject.AddComponent<VoiceSampleSharing>();
+        LOG.Debug($"Voice Sample sharing added to PlayerAvatar: {__instance.name}");
     }
 }

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <!-- The Haunting core, the angry eyes and the strip order are plain C#: compiled from source, without referencing the plugin or Unity. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Enemies\Whispral\Attachments.cs" Link="Attachments.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\AngryEyes.cs" Link="AngryEyes.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\Visuals\StripOrder.cs" Link="StripOrder.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\MovementFriction.cs" Link="MovementFriction.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\SteeringPath.cs" Link="SteeringPath.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\Avoidance.cs" Link="Avoidance.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\Wait.cs" Link="Wait.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\TalkerLook.cs" Link="TalkerLook.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\TripChain.cs" Link="TripChain.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\ChangeOfMind.cs" Link="ChangeOfMind.cs" />
+    <Compile Include="..\..\src\Enemies\Whispral\LungeCountdown.cs" Link="LungeCountdown.cs" />
+  </ItemGroup>
+
+</Project>

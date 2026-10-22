@@ -5,9 +5,8 @@ using WebRtcVadSharp;
 namespace VepMod.VepFramework.Audio;
 
 /// <summary>
-///     Valide les enregistrements audio en utilisant WebRTC VAD (Voice Activity Detection).
-///     Utilise un modèle GMM (Gaussian Mixture Model) pour détecter la parole,
-///     plus précis que les simples seuils d'énergie (RMS/Peak).
+///     Keeps a recording only if WebRTC VAD finds speech in it. Its Gaussian mixture model tells speech apart
+///     better than plain RMS or peak thresholds.
 /// </summary>
 public sealed class VadAudioValidator : IDisposable
 {
@@ -37,12 +36,8 @@ public sealed class VadAudioValidator : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Valide un enregistrement audio en comptant les frames contenant de la parole.
-    /// </summary>
-    /// <param name="samples">Buffer audio normalisé [-1, 1]</param>
-    /// <param name="sampleRate">Taux d'échantillonnage en Hz</param>
-    /// <returns>Résultat de validation avec statistiques VAD</returns>
+    /// <param name="samples">Normalised to [-1, 1].</param>
+    /// <param name="sampleRate">In Hz.</param>
     public VadValidationResult Validate(float[] samples, int sampleRate)
     {
         if (samples == null || samples.Length == 0)
@@ -57,21 +52,17 @@ public sealed class VadAudioValidator : IDisposable
                 new VadAnalysisResult(duration, 0, 0, 0f));
         }
 
-        // Convertir float[] en byte[] (PCM 16-bit)
         var pcmBytes = ConvertToPcm16(samples);
 
-        // Calculer la taille d'une frame en bytes
         var targetSampleRate = GetTargetSampleRate(sampleRate);
         var frameSamples = GetFrameSamplesCount(targetSampleRate, _criteria.FrameLength);
-        var frameBytesSize = frameSamples * 2; // 16-bit = 2 bytes par sample
+        var frameBytesSize = frameSamples * 2;
 
-        // Resampler si nécessaire
         if (sampleRate != (int)targetSampleRate)
         {
             pcmBytes = Resample(pcmBytes, sampleRate, (int)targetSampleRate);
         }
 
-        // Compter les frames avec parole
         var totalFrames = pcmBytes.Length / frameBytesSize;
         if (totalFrames == 0)
         {
@@ -84,9 +75,8 @@ public sealed class VadAudioValidator : IDisposable
 
         lock (_gate)
         {
-            // Le validateur a pu être disposé (OnDestroy, thread Unity) pendant que ce Validate
-            // tourne sur le thread voix Photon : fail-open => on accepte plutôt que d'appeler
-            // un VAD natif déjà libéré.
+            // OnDestroy, on the Unity thread, can dispose the validator while Validate runs in a background task:
+            // accepting beats calling a native VAD that is already freed.
             if (_disposed)
             {
                 return VadValidationResult.Accepted(new VadAnalysisResult(duration, totalFrames, 0, 0f));
@@ -141,7 +131,7 @@ public sealed class VadAudioValidator : IDisposable
             16000 => SampleRate.Is16kHz,
             32000 => SampleRate.Is32kHz,
             48000 => SampleRate.Is48kHz,
-            // Pour les autres sample rates, on resample vers 16kHz
+            // Other rates are resampled to 16 kHz.
             _ => SampleRate.Is16kHz
         };
     }
@@ -171,7 +161,6 @@ public sealed class VadAudioValidator : IDisposable
             return pcmBytes;
         }
 
-        // 1) bytes -> short (PCM16 little-endian)
         var srcSamplesCount = pcmBytes.Length / 2;
         var src = new short[srcSamplesCount];
 
@@ -180,8 +169,7 @@ public sealed class VadAudioValidator : IDisposable
             src[i] = (short)(pcmBytes[bi] | (pcmBytes[bi + 1] << 8));
         }
 
-        // 2) Resample linéaire
-        var step = (double)sourceSampleRate / targetSampleRate; // position avance en "samples source" par sample target
+        var step = (double)sourceSampleRate / targetSampleRate;
         var dstSamplesCount = (int)Math.Floor((srcSamplesCount - 1) / step);
         if (dstSamplesCount <= 0)
         {
@@ -199,27 +187,27 @@ public sealed class VadAudioValidator : IDisposable
             var s0 = src[idx];
             var s1 = src[idx + 1];
 
-            // interpolation linéaire
             var sample = s0 + (s1 - s0) * frac;
 
-            // clamp -> short
             if (sample > short.MaxValue)
             {
                 sample = short.MaxValue;
             }
-            else if (sample < short.MinValue) sample = short.MinValue;
+            else if (sample < short.MinValue)
+            {
+                sample = short.MinValue;
+            }
 
             dst[i] = (short)sample;
             pos += step;
 
-            // sécurité (évite idx+1 out of range en fin)
+            // Keeps idx + 1 in range on the last sample.
             if (pos >= srcSamplesCount - 1)
             {
                 pos = srcSamplesCount - 1.000001;
             }
         }
 
-        // 3) short -> bytes (PCM16 little-endian)
         var outBytes = new byte[dstSamplesCount * 2];
         for (int i = 0, bi = 0; i < dstSamplesCount; i++, bi += 2)
         {
@@ -232,45 +220,34 @@ public sealed class VadAudioValidator : IDisposable
     }
 }
 
-/// <summary>
-///     Critères de validation VAD.
-/// </summary>
 public sealed class VadValidationCriteria
 {
     /// <summary>
-    ///     Durée minimale en secondes.
+    ///     In seconds.
     /// </summary>
     public float MinDurationSeconds { get; set; } = 0.3f;
 
     /// <summary>
-    ///     Ratio minimum de frames contenant de la parole (0-1).
+    ///     Minimum share of frames with speech, from 0 to 1.
     /// </summary>
     public float MinSpeechRatio { get; set; } = 0.1f;
 
     /// <summary>
-    ///     Mode de détection VAD. Plus agressif = moins de faux positifs mais peut rater de la parole faible.
+    ///     More aggressive means fewer false positives, but quiet speech can be missed.
     /// </summary>
     public OperatingMode OperatingMode { get; set; } = OperatingMode.HighQuality;
 
-    /// <summary>
-    ///     Durée d'une frame d'analyse.
-    /// </summary>
     public FrameLength FrameLength { get; set; } = FrameLength.Is20ms;
 
-    /// <summary>
-    ///     Sample rate cible pour l'analyse.
-    /// </summary>
     public SampleRate SampleRate { get; set; } = SampleRate.Is16kHz;
 
     /// <summary>
-    ///     Construit les critères à partir d'un niveau de sensibilité.
-    ///     Les ratios (0.20 / 0.40 / 0.60) correspondent à des points mesurés par le benchmark
-    ///     (248 WAV réels, 180 parole / 68 bruit, tous en OperatingMode.HighQuality) :
+    ///     The ratios are points measured by the benchmark (248 real WAVs, 180 speech and 68 noise, all in
+    ///     OperatingMode.HighQuality):
     ///       Permissive 0.20 -> recall 99% / precision 80%
-    ///       Balanced   0.40 -> recall 97% / precision 85% (meilleur F1)
+    ///       Balanced   0.40 -> recall 97% / precision 85% (best F1)
     ///       Strict     0.60 -> recall 90% / precision 89%
-    ///     MinDurationSeconds = 0 : le garde-fou durée est géré en amont par WhispralMimics
-    ///     (lit ConfigAudioMinDuration pour rester cohérent avec la config utilisateur).
+    ///     MinDurationSeconds is 0: the caller checks the duration upstream, from the user's config.
     /// </summary>
     public static VadValidationCriteria FromSensitivity(VadSensitivity sensitivity)
     {
@@ -293,23 +270,20 @@ public sealed class VadValidationCriteria
 }
 
 /// <summary>
-///     Niveau de sensibilité du VAD, exposé en configuration utilisateur.
+///     Exposed in the user config.
 /// </summary>
 public enum VadSensitivity
 {
-    /// <summary>Garde quasi toute la voix (ratio 0.20), accepte un peu plus de bruit.</summary>
+    /// <summary>Keeps nearly all speech (ratio 0.20), lets a bit more noise through.</summary>
     Permissive,
 
-    /// <summary>Compromis par défaut (ratio 0.40), meilleur F1.</summary>
+    /// <summary>The default trade-off (ratio 0.40), best F1.</summary>
     Balanced,
 
-    /// <summary>Filtre davantage (ratio 0.60), peut rejeter de la voix faible.</summary>
+    /// <summary>Filters harder (ratio 0.60), can reject quiet speech.</summary>
     Strict
 }
 
-/// <summary>
-///     Résultat de l'analyse VAD.
-/// </summary>
 public readonly struct VadAnalysisResult
 {
     public float DurationSeconds { get; }
@@ -331,9 +305,6 @@ public readonly struct VadAnalysisResult
     }
 }
 
-/// <summary>
-///     Résultat de validation VAD.
-/// </summary>
 public readonly struct VadValidationResult
 {
     public bool IsValid { get; }
@@ -363,9 +334,6 @@ public readonly struct VadValidationResult
     }
 }
 
-/// <summary>
-///     Raisons de rejet VAD.
-/// </summary>
 public enum VadRejectionReason
 {
     None,

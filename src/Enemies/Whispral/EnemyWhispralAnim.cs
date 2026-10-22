@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using VepMod.VepFramework;
 using VepMod.VepFramework.Structures.FSM;
 
@@ -17,26 +17,29 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>();
 
-    [Space] [SerializeField] private Enemy enemy;
+    // The Whispral prefab in the asset bundle serializes these by name: a renamed field loses its value.
+#pragma warning disable IDE1006
+    [Space][SerializeField] private Enemy enemy;
     [SerializeField] private EnemyWhispral enemyWhispral;
 
-    [Space] [SerializeField] private Sound soundHurt;
+    [Space][SerializeField] private Sound soundHurt;
     [SerializeField] private Sound soundDeath;
 
-    [Space] [SerializeField] private Sound soundBreatheIn;
+    [Space][SerializeField] private Sound soundBreatheIn;
     [SerializeField] private Sound soundBreatheOut;
     [SerializeField] private Vector2 breathingDurationInRange;
     [SerializeField] private Vector2 breathingDurationOutRange;
 
-    [Space] [SerializeField] private GameObject visuals;
+    [Space][SerializeField] private GameObject visuals;
     [SerializeField] private GameObject rigidBody;
+#pragma warning restore IDE1006
     protected override State DefaultState => State.NoBreathing;
 
     protected override void Awake()
     {
         base.Awake();
 
-        Fsm.AddState(State.NoBreathing, new NoBreathing(this));
+        Fsm.AddState(State.NoBreathing, new NoBreathing());
         Fsm.AddState(State.BreatheIn,
             new BreathingState(this, soundBreatheIn, breathingDurationInRange, State.BreatheOut));
         Fsm.AddState(State.BreatheOut,
@@ -105,15 +108,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     #region States
 
-    /// <summary>
-    ///     État "ne fait rien de spécial" côté anim/sons, coupe la respiration.
-    /// </summary>
-    private sealed class NoBreathing(EnemyWhispralAnim owner) : StateMachineBase<StateMachine, State>.StateBase { }
+    private sealed class NoBreathing : StateMachineBase<StateMachine, State>.StateBase { }
 
-    /// <summary>
-    ///     État de respiration générique : joue un son au début, attend Duration, puis passe à NextState.
-    ///     Utilisé pour BreatheIn et BreatheOut.
-    /// </summary>
     private sealed class BreathingState(EnemyWhispralAnim owner, Sound sound, Vector2 durationRange, State nextState)
         : StateMachineBase<StateMachine, State>.StateBaseTransition(durationRange.x, nextState)
     {
@@ -152,8 +148,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         public override void OnStateExit(State next)
         {
             base.OnStateExit(next);
-            if (_audioSource) _audioSource.Stop();
-            if (next != _nextState) // Si on ne va pas à l’état suivant prévu, on coupe la respiration.
+            if (_audioSource != null) _audioSource.Stop();
+            if (next != _nextState) // Breathing was interrupted before its planned next state.
             {
                 owner.Show(true);
             }

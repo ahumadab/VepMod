@@ -1,0 +1,5 @@
+#!/bin/sh
+# Merged PRs delete their branch on GitHub: pulling develop then deletes the local copies, squash merges hiding them from --merged.
+[ "$(git branch --show-current)" = develop ] || exit 0
+git fetch --prune --quiet
+git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | awk '$2 == "[gone]" {print $1}' | xargs -r git branch -D

@@ -1,269 +1,155 @@
 # Système de voix Whispral (Mimic) — Fonctionnement end-to-end
 
-Documentation du pipeline complet : de la capture du micro d'un joueur jusqu'à la relecture de sa
-voix par une hallucination (droid) pendant le debuff Whispral.
-
-> Sous-systèmes détaillés ailleurs : le filtrage de parole (WebRTC VAD) est documenté dans
-> [`vad-integration.md`](./vad-integration.md). Cette page couvre l'ensemble et y renvoie.
+Le parcours d'une voix : du micro d'un joueur jusqu'au Mimic d'une Hallucination chez la Victim. Les termes sont ceux
+de [`GLOSSARY.md`](../GLOSSARY.md). Le filtrage de parole (WebRTC VAD) est détaillé dans
+[`vad-integration.md`](./vad-integration.md).
 
 ---
 
 ## 1. Vue d'ensemble
 
-L'ennemi **Whispral** s'accroche à un joueur et le « debuff ». Pendant ce temps, des hallucinations
-(des clones-droids des autres joueurs) apparaissent et **rejouent de vrais extraits de voix**
-captés en jeu. Deux boucles indépendantes alimentent ça :
+Deux boucles indépendantes :
 
-- **Boucle 1 — Capture & partage** : chaque client enregistre sa propre voix, la filtre (VAD),
-  la sauvegarde en WAV et la partage aux autres clients.
-- **Boucle 2 — Lecture** : le Master, quand un Whispral est accroché à un joueur, ordonne à ce
-  joueur de jouer un extrait d'un autre joueur sur une hallucination.
+- **Boucle 1 — Capture et partage** : chaque client capture la voix de son joueur, garde les Captures qui contiennent
+  de la parole comme Voice Samples, les range dans la Voice Bank du joueur et les partage aux autres clients.
+- **Boucle 2 — Mimic** : quand un Whispral est accroché à une Victim, le Master ordonne régulièrement au client de la
+  Victim de faire parler une Hallucination avec un Voice Sample de son Imitated Player.
 
 ```mermaid
 flowchart TD
-    mic["🎤 Micro du joueur"] -->|"flux audio brut"| patch["Capture des trames voix"]
-    patch -->|"format réel du micro"| resolver["Détection du format audio"]
-    resolver --> mimics["Gestion de la voix"]
+    mic["🎤 Micro du joueur"] -->|"trames voix (thread voix Photon)"| rec["Recorder"]
 
-    subgraph L1["Boucle 1 — Capture et partage (joueur local)"]
-        mimics -->|"enregistre puis filtre la parole"| wav["Stockage des extraits"]
-        mimics -->|"envoie aux autres joueurs"| net1(["Réseau Photon"])
+    subgraph L1["Boucle 1 — Capture et partage (client du joueur)"]
+        rec -->|"Capture"| val["Validation : durée puis parole"]
+        val -->|"Voice Sample"| bank["Voice Bank du joueur"]
+        val -->|"Voice Sample"| net1(["Réseau Photon"])
     end
 
-    net1 -->|"réception des extraits"| wavRemote["Stockage chez les autres joueurs"]
+    net1 -->|"réception"| bankRemote["Voice Bank du joueur chez les autres clients"]
 
-    subgraph L2["Boucle 2 — Lecture (pilotée par le Master)"]
-        whispral["Ennemi accroché à un joueur"] -->|"ordonne une lecture"| net2(["Réseau Photon"])
-        net2 -->|"commande reçue par le joueur ciblé"| droid["Hallucination du joueur source"]
-        droid -->|"déclenche la voix"| play["Lecture spatialisée"]
-        play --> wavRemote
-    end
-```
-
-**Rôle clé : `WhispralMimics`** est attaché à *chaque* `PlayerAvatar` (via
-`PlayerAvatarPatch`), mais :
-- la **boucle 1 d'enregistrement** ne tourne que pour le joueur **local** (`PhotonView.IsMine`) ;
-- tous les clients **reçoivent et stockent** les sons des autres (pour pouvoir les rejouer) ;
-- la référence au mimics local est mise en cache dans `VepFinder.LocalMimics`.
-
----
-
-## 2. Initialisation & cycle de vie
-
-```mermaid
-sequenceDiagram
-    participant Game as Jeu REPO
-    participant Patch as Hook de création du joueur
-    participant Mimics as Gestion de la voix
-    participant Finder as Annuaire local
-
-    Game->>Patch: un joueur apparaît
-    Patch->>Mimics: attache le composant de voix au joueur
-    alt c'est le joueur local
-        Patch->>Finder: mémorise la référence locale
-    end
-    Mimics->>Mimics: attend le chat vocal du jeu
-    Note over Mimics: récupère le chat vocal,<br/>prépare le filtre de parole si activé
-    alt joueur local
-        Mimics->>Mimics: démarre la boucle d'enregistrement
-    else joueur distant
-        Note over Mimics: se contente de recevoir les voix des autres
+    subgraph L2["Boucle 2 — Mimic (piloté par le Master)"]
+        whispral["Whispral accroché à la Victim"] -->|"ordonne un Mimic"| net2(["Réseau Photon"])
+        net2 -->|"client de la Victim"| hallu["Hallucination de l'Imitated Player"]
+        hallu -->|"Voice Sample au hasard"| play["Lecture spatialisée"]
+        bankRemote --> play
     end
 ```
 
----
-
-## 3. Résolution du format audio (correctif échantillonnage)
-
-Photon expose **deux formats** pour une voix : le format **encodeur/transmission**
-(`Info.SamplingRate` / `Info.Channels`, ex. 48000 mono) et le format **source/micro**
-(`InputSamplingRate` / `InputChannels`, ex. 44100 stéréo). Les buffers qu'on capture sont au format
-**source** — les étiqueter avec le format encodeur déforme la voix à la relecture (pitch/vitesse).
-
-`VoiceFormatResolver` lit donc le format **source** (par réflexion défensive, cache par voix) :
-
-```mermaid
-flowchart TD
-    start["Détecter le format d'une voix"] --> cache{"format déjà connu<br/>pour cette voix ?"}
-    cache -->|oui| ret["réutilise le format mémorisé"]
-    cache -->|non| ch["nombre de canaux :<br/>priorité au format source du micro,<br/>sinon repli sur l'encodeur, sinon mono"]
-    ch --> rate{"fréquence source<br/>connue et plausible ?"}
-    rate -->|oui| use["utilise la fréquence source"]
-    rate -->|non| derive{"durée d'une trame<br/>connue ?"}
-    derive -->|oui| calc["calcule la fréquence à partir<br/>de la durée réelle de la trame"]
-    derive -->|non| fb["repli sur la fréquence encodeur"]
-    use --> clamp["borne à une plage plausible<br/>(8 à 48 kHz)"]
-    calc --> clamp
-    fb --> clamp
-    clamp --> log["journal de diagnostic<br/>(une fois par voix)"]
-    log --> store["mémorise et renvoie le format"]
-```
-
-Une fois le format source correct, **tout le reste devient cohérent** : le rate voyage avec le
-fichier (header WAV) et le RPC, et la lecture réutilise ce même rate. Chaque client peut donc avoir
-un micro différent (16 k / 44.1 k / 48 k) sans déformation.
+Le recorder, le filtre de parole et le store des Voice Banks existent une fois par client.
 
 ---
 
-## 4. Boucle 1 — Capture, validation, partage
+## 2. Le format audio vient des trames
 
-### 4.1 Machine d'état de la capture (`ProcessVoiceData`)
+Photon expose **deux formats** pour une voix : celui de l'**encodeur** (`Info.SamplingRate` / `Info.Channels`, ex.
+48000 mono) et celui du **micro** (`InputSamplingRate` / `InputChannels`, ex. 44100 stéréo). Les trames poussées dans
+`LocalVoiceFramed<short>.PushDataAsync` sont au format du **micro** : les étiqueter avec celui de l'encodeur déforme la
+voix à la relecture (hauteur et vitesse). Selon la version de PhotonVoice, les propriétés `Input*` manquent ; la
+fréquence se déduit alors de la durée d'une trame (`FrameDurationUs`).
 
-Appelée à chaque frame voix par le patch Photon (sur le **thread voix**, pas le thread Unity).
+La fréquence voyage ensuite avec le Voice Sample (en-tête WAV), et la lecture la réutilise : chaque client peut avoir un
+micro différent (16 k / 44,1 k / 48 k) sans déformation.
+
+---
+
+## 3. Boucle 1 — Capture, validation, partage
+
+### 3.1 Capture (thread voix Photon)
+
+Le recorder ne fait qu'accumuler ; chaque Capture terminée passe au thread principal par une file thread-safe.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Repos
-    Repos --> EnAttente: la boucle 1 lance un enregistrement
+    Repos --> EnAttente: la boucle 1 demande une Capture
     EnAttente --> Capture: le joueur se met à parler
     note right of Capture
-        mixe la voix en mono à la fréquence du micro
-        accumule jusqu'à 6 secondes
+        moyenne des canaux en mono, à la fréquence du micro
     end note
     Capture --> Capture: le joueur continue de parler
-    Capture --> Finalisation: silence d'au moins une demi-seconde
-    Capture --> Finalisation: mémoire pleine (6 secondes)
-    Finalisation --> Repos: l'extrait est traité puis sauvegardé
+    Capture --> Repos: une demi-seconde de silence, ou 6 secondes
 ```
 
-### 4.2 Pipeline de finalisation (`FinalizeRecording`)
+### 3.2 Validation (tâche de fond)
+
+Le thread principal vide la file ; la validation, l'encodage et la sauvegarde tournent dans une tâche de fond, puis le
+Voice Sample accepté repasse au thread principal pour le partage.
 
 ```mermaid
 flowchart TD
-    fin["Fin de la capture"] --> dur{"durée suffisante ?"}
-    dur -->|non| drop1["rejeté : trop court"]
-    dur -->|oui| trim["retire le silence de fin<br/>(pour l'analyse seulement ;<br/>l'extrait gardé reste complet)"]
-    trim --> vaden{"filtre de parole activé ?"}
+    fin["Capture terminée"] --> dur{"durée suffisante ?"}
+    dur -->|non| drop1["rejetée : trop courte"]
+    dur -->|oui| trim["retire le silence de fin<br/>(pour l'analyse seulement ;<br/>le Voice Sample le garde)"]
+    trim --> vaden{"filtre de parole actif ?"}
     vaden -->|non| save
-    vaden -->|oui| vad{"assez de parole détectée ?<br/>(selon la sensibilité)"}
-    vad -->|non| drop2["rejeté : pas assez de parole"]
-    vad -->|oui| save["sauvegarde l'extrait"]
-    save --> wav["fichier audio mono<br/>à la fréquence du micro"]
-    save --> flag["marqué prêt à partager"]
+    vaden -->|oui| vad{"assez de parole ?<br/>(selon la sensibilité)"}
+    vad -->|non| drop2["rejetée : pas assez de parole"]
+    vad -->|oui| save["Voice Sample : Voice Bank du joueur,<br/>puis partage"]
 ```
 
-> Détails VAD (sensibilité, seuils, fail-open, calibration) : voir
-> [`vad-integration.md`](./vad-integration.md).
-
-### 4.3 Partage réseau
+### 3.3 Partage réseau
 
 ```mermaid
 sequenceDiagram
-    participant Share as Boucle de partage (local)
-    participant Mimics as Gestion de la voix (local)
+    participant Local as Client du joueur
     participant Net as Réseau Photon
-    participant Remote as Autres joueurs
-    participant Wav as Stockage des extraits
+    participant Remote as Autres clients
 
     loop à intervalle aléatoire
-        Share->>Mimics: lance un enregistrement
-        Note over Mimics: capture puis filtrage de la parole<br/>(voir 4.1 et 4.2)
-        alt nouvel extrait valide
-            Mimics->>Mimics: découpe l'extrait en petits morceaux
+        Local->>Local: demande une Capture (voir 3.1 et 3.2)
+        alt Voice Sample accepté
             loop chaque morceau, avec un léger délai
-                Mimics->>Net: envoie un morceau
+                Local->>Net: envoie un morceau
                 Net->>Remote: morceau transmis
             end
-            Remote->>Remote: réassemble une fois tous les morceaux reçus
-            Remote->>Wav: enregistre l'extrait du joueur source
+            Remote->>Remote: réassemble, puis range dans la Voice Bank du joueur
         end
     end
 ```
 
-Le `WavFileManager` applique une **rotation** par joueur (max `ConfigSamplesPerPlayer`, supprime le
-plus ancien).
+Les morceaux passent par l'avatar du joueur (`VoiceSampleSharing`) et ne portent ni nom, ni Steam ID, ni fréquence :
+le récepteur reconnaît l'expéditeur au propriétaire de l'avatar, et la fréquence est dans l'en-tête WAV. Un premier
+morceau recommence le transfert ; un joueur qui part emporte son avatar, et le transfert en cours avec lui.
+
+Une Voice Bank est rangée sous le Steam ID du joueur, le pseudo en repli sans Steam (ADR-0006), et plafonnée : le plus
+ancien Voice Sample part en premier.
 
 ---
 
-## 5. Boucle 2 — Lecture sur l'hallucination
-
-Pilotée par le **Master**. Quand `EnemyWhispral` est dans l'état `Attached` à un joueur, il envoie
-périodiquement (toutes les `VoiceDelay.Min..Max` s) une commande de lecture.
+## 4. Boucle 2 — Mimic
 
 ```mermaid
 sequenceDiagram
-    participant Master as Ennemi accroché (Master)
-    participant LMimics as Gestion de la voix (Master)
+    participant Master as Whispral accroché (Master)
     participant Net as Réseau Photon
-    participant Target as Joueur ciblé (debuffé)
-    participant Debuff as Gestion des hallucinations
-    participant Droid as Hallucination
-    participant Play as Lecture spatialisée
-    participant Wav as Stockage des extraits
+    participant Victim as Client de la Victim
+    participant Hallu as Hallucination
 
-    Master->>Master: choisit un autre joueur comme source
-    Master->>LMimics: ordonne une lecture sur le joueur ciblé
-    LMimics->>Net: diffuse la commande de lecture
-    Net->>Target: commande reçue
-    Note over Target: seul le joueur ciblé exécute la lecture
-    Target->>Debuff: une hallucination du joueur source est-elle active ?
-    Debuff->>Droid: retrouve l'hallucination du joueur source
-    Droid->>Play: déclenche la voix
-    Play->>Wav: prend un extrait au hasard du joueur source
-    Play->>Play: prépare l'audio (voir 6)
-    Play->>Droid: joue à la bonne fréquence, avec occlusion des murs
+    loop tant que l'Attachment dure
+        Master->>Master: choisit un Imitated Player
+        Master->>Net: ordonne un Mimic
+        Net->>Victim: commande reçue (les autres clients l'ignorent)
+        Victim->>Hallu: retrouve l'Hallucination de l'Imitated Player
+        Hallu->>Hallu: Voice Sample au hasard de sa Voice Bank, traité (voir 5)
+        Hallu->>Hallu: lecture spatialisée, occlusion des murs
+    end
 ```
 
 ---
 
-## 6. Traitement audio
+## 5. Traitement à la lecture
 
-### 6.1 À la capture (boucle 1)
-- **Downmix → mono** par moyenne des canaux (`CopyVoiceDataToBuffer`).
-- **VAD** (filtre principal de parole) — voir `vad-integration.md`.
-- Sauvegarde **WAV PCM 16-bit mono** au **rate source**.
-
-### 6.2 À la lecture (boucle 2) — `ProcessReceivedAudio`
 ```mermaid
 flowchart TD
-    raw["fichier audio reçu"] --> f2["décodage en échantillons"]
-    f2 --> lp["filtre passe-bas<br/>(rend la voix feutrée)"]
+    raw["Voice Sample"] --> lp["filtre passe-bas<br/>(voix feutrée)"]
     lp --> filt{"effet de voix demandé ?"}
-    filt -->|oui| rnd["effet aléatoire :<br/>grave, aigu ou alien"]
+    filt -->|oui| rnd["effet au hasard :<br/>grave, aigu ou alien"]
     filt -->|non| fade
-    rnd --> fade["fondu d'entrée/sortie<br/>+ marge de silence"]
-    fade --> clip["extrait mono prêt à jouer"]
+    rnd --> fade["fondu d'entrée et de sortie<br/>+ marge de silence"]
+    fade --> out["prêt à jouer, mono"]
 ```
 
-Le filtre voix aléatoire n'est appliqué que si `ConfigVoiceFilterEnabled` est activé **et** tiré au
-sort (50 %). La lecture spatiale ajoute une occlusion (murs) via `AudioLowPassLogic`, comme les
-vraies voix du jeu.
+Le Master tire l'effet de voix au hasard, seulement si `Voice Filter Enabled?` est activé dans sa config. L'occlusion des murs passe par
+`AudioLowPassLogic`, comme les vraies voix du jeu.
 
----
-
-## 7. Configuration utilisateur (`BepInEx/config/com.vep.vepMod.cfg`)
-
-| Section | Clé | Défaut | Rôle |
-|---|---|---|---|
-| General | `Volume` | 100 % | Volume des voix d'hallucination |
-| Audio Sharing | `Share Min/Max Delay` | 10 / 30 s | Intervalle entre deux enregistrements partagés |
-| Audio Sharing | `Samples Per Player` | 20 | Nb max de WAV stockés par joueur (rotation) |
-| Voice Playback | `Voice Min/Max Delay` | 8 / 15 s | Intervalle entre lectures pendant le debuff |
-| Voice Playback | `Voice Filter Enabled?` | false | Active les filtres voix aléatoires à la lecture |
-| Audio Quality | `Min Duration` | 0.3 s | Garde-fou durée (pré-VAD) |
-| Audio Quality | `VAD Enabled` | true | Active le filtrage de parole WebRTC |
-| Audio Quality | `VAD Sensitivity` | Balanced | Permissive / Balanced / Strict (voir `vad-integration.md`) |
-| Experimental | `Sampling Rate` | 48000 | Hint encodeur (le rate **source** réel est résolu automatiquement) |
-
-> Variante de build **sans VAD** (`-p:VepModNoVad=true`) : retire la dépendance WebRTC et tout le
-> code VAD ; la boucle 1 ne garde que le garde-fou de durée. Voir `vad-integration.md`.
-
----
-
-## 8. Carte des fichiers
-
-| Fichier | Rôle |
-|---|---|
-| `src/VepMod.cs` | Plugin BepInEx : config, Harmony, préchargement prefab |
-| `src/Patchs/PlayerAvatarPatch.cs` | Attache `WhispralMimics` ; définit `VepFinder.LocalMimics` |
-| `src/Patchs/LocalVoiceFramedPatch.cs` | Capte les frames micro → `ProcessVoiceData` |
-| `src/Patchs/VoiceFormatResolver.cs` | Résout le format **source** (rate + canaux) |
-| `src/Patchs/VepFinder.cs` | Cache global du `WhispralMimics` local |
-| `src/Enemies/Whispral/WhispralMimics.cs` | Cœur : capture, VAD, partage (L1), réception, lecture (L2) |
-| `src/Enemies/Whispral/WavFileManager.cs` | Stockage WAV par joueur + rotation |
-| `src/Enemies/Whispral/AudioFilters.cs` | Conversions, passe-bas, pitch, alien, fade/padding |
-| `src/VepFramework/Audio/VadAudioValidator.cs` | Filtre de parole WebRTC VAD |
-| `src/Enemies/Whispral/EnemyWhispral.cs` | FSM de l'ennemi ; envoie les commandes de lecture (L2) |
-| `src/Enemies/Whispral/DroidController.cs` | Hallucination ; `PlayVoice` → lecture sur le droid |
-| `src/Dev/DroidDevTools.cs` | Outils dev (DEBUG) : spawn droid, F6 replay VAD, HUD |
-```
+Les entrées de config sont décrites dans [`WIKI.md`](../WIKI.md).

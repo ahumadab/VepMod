@@ -8,6 +8,12 @@
         <Version>1.0.0</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <PlatformTarget>x64</PlatformTarget>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- Checks the XML of every /// comment. CODING_STANDARDS.md documents a member only when the signature
+             cannot say it, so a missing or partial one is not a warning. -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591;CS1573;CS1712</NoWarn>
     </PropertyGroup>
 
     <!-- Opt-out build variant: `dotnet build -p:VepModNoVad=true` produces a VAD-free plugin with
@@ -30,6 +36,8 @@
     <!-- Package References -->
     <ItemGroup>
         <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.Unity.Analyzers" Version="1.28.0" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" PrivateAssets="all"/>
         <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.5.0-beta.2" PrivateAssets="all" IncludeAssets="build"/>
         <PackageReference Include="Linkoid.Repo.Plugin.Build" Version="*" PrivateAssets="all"/>
         <PackageReference Include="Zehs.REPOLib" Version="4.*"/>
@@ -46,7 +54,11 @@
         <None Remove="node_modules\**"/>
         <None Remove="plugins\**"/>
         <None Remove="tests\**"/>
+        <!-- Linkoid copies every None item into plugins/<Authors>-<Name>/ (BepInExDirectory is unset): only the build
+             output belongs there. -->
+        <None Update="@(None)" CopyToPluginOutputDirectory="Never"/>
         <Compile Include="src\**\*.cs"/>
+        <AdditionalFiles Include="BannedSymbols.txt"/>
     </ItemGroup>
 
     <!-- Embed the AssetBundle into the DLL (optional in Debug) -->

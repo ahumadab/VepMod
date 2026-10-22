@@ -1,7 +1,7 @@
 namespace AudioBenchmark.Validators;
 
 /// <summary>
-///     Port standalone de VepMod.VepFramework.Audio.AudioAnalyzer (sans dépendance Unity).
+///     Standalone port of VepMod.VepFramework.Audio.AudioAnalyzer, without Unity.
 /// </summary>
 public static class AudioAnalyzer
 {

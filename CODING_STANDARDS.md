@@ -1,0 +1,119 @@
+# Coding standards
+
+Judgement calls a reviewer applies to every change. Anything a tool can check (formatting, analyzers, build, tests)
+belongs to the tooling, not here.
+
+## Domain language
+
+- Types, members, log messages and comments use the terms of `GLOSSARY.md`. A word the glossary lists under _Avoid_
+  (droid, debuff, target, source player, clip…) is a finding.
+- A change that introduces a domain concept adds its glossary entry in the same change.
+
+## Module shape
+
+- Split by concept (Haunting, Imitations, Voice Bank), not by technical role (Controller, Helper, Manager). One feature
+  is understood from one module; a feature that has to touch five files is the smell.
+- A member that only forwards to another object is a finding: callers talk to the module that owns the behaviour.
+- Other modules read state through the owner's interface. Public mutable flags written by one class and read by its
+  siblings are a finding.
+- Each fact has one home: a distance, a timing, a file format, a sample rate is defined once.
+- Logic that can run without Unity or Photon lives in plain C# behind the MonoBehaviour, and is tested there.
+
+## Lifecycle
+
+- Every state and every resource has one exit that cleans it up, reached whatever the reason for leaving. Cleanup copied
+  into several exit paths is a finding.
+- A value every state sets on entry (the Hallucination's body pose situation) needs no exit cleanup: the next state
+  overwrites it. Then every state sets it, and a state that does not is a finding.
+- A call that deactivates or destroys the object running a state machine (`EnemyParent.Despawn`, `SetActive(false)`,
+  `Destroy`) skips its state exits: the state machine leaves its state before that call.
+- A state that restarts its work in place (the state machine never re-enters its current state: a chained Trip stays
+  in `MovementState`) runs the same setup as its entry, through one method both call.
+- A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.
+- `OnDestroy` sees its hierarchy already torn down: a child's `AudioSource` no longer plays, and a child can no longer
+  change its parent. A log line or a hand-off that needs them runs before the `Destroy` call, in the one method every
+  removal goes through.
+- A component that moves to another object (a child, a sibling) moves for its readers too: every `GetComponent`,
+  `Find` or serialized reference that reached it at its old place.
+- Undoing a change to a game object gives back the value the game would hold now: recorded before the change, or
+  read from its owner's state (`FlashlightController.currentState`), not a hard-coded one.
+- Per-frame and timer-driven code does not allocate, and does not log or retry the same failure every tick.
+- An effect or a state change fired on the edge of a per-frame physics test (a line of sight, a contact) waits for the
+  new result to hold a moment, on both edges, the loss and the return: a linecast at an obstacle's edge flips every few
+  frames.
+
+## Network contract
+
+- RPC method names and parameters, and room custom property keys, are a wire contract: changing them breaks players on
+  another mod version. The PR says
+  so, and the commit carries a `BREAKING CHANGE:` footer, the one thing that puts the break in the CHANGELOG (and
+  bumps the major version); the commit-msg hook asks for it.
+- Classes and serialized fields referenced by an asset bundle keep their names (`EnemyWhispral`, `EnemyWhispralAnim`).
+- The Master decides, every client applies, and handlers that run on every client are idempotent. A Hallucination is
+  the exception: the Victim's client decides what it does, death included (ADR-0007).
+- Hallucinations never go on the network (ADR-0002).
+
+## Threads
+
+- Code reached from the Photon voice thread calls no Unity API and hands data to the main thread through a synchronised
+  hand-off.
+- A Harmony patch on a voice-thread method only forwards to plain C# that a net8 test project compiles, so the compiler
+  keeps Unity out of it (`LocalVoiceFramedPatch` → `VoiceRecorder`).
+
+## Testability
+
+- Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
+  action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
+  `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- A periodic line that proves a criterion names the case it samples (the look point's source: stare, map, Talker,
+  Glance): a case read back from the values is a guess.
+- A criterion about what the Victim sees is proved by what Unity renders: the line measures the rendered bone (the
+  head mesh's `headSideTransform`, an eye bone) or a dev tools dump, not the aim the code sets (`headLookAtTransform`,
+  the fake `PlayerEyes.lookAt`): `PlayerAvatarVisuals` turns the head mesh by only half of it.
+- A criterion about a bound (an angle limit, a cap, a timeout) has an action that reaches the bound; a bound reached
+  only by chance is a finding.
+- A key that asks for a chance event keeps its request until a case can honour it: a request spent on a case the bound
+  refuses (a capped arrival) leaves the tester's presses short of the bound.
+- A fix that overrides a value left wrong (a scale the game leaves behind) logs the value it overrides: the fix's build
+  then proves the reproduction too, with no build of the bug alone to deploy and test.
+- A criterion about a rate (one in three) is proved by a unit test over thousands of rolls; in game, the line proves
+  that each roll and its outcome agree. A few minutes of play gives a few dozen events, too few to tell 1/3 from 1/5.
+- A state shorter than a periodic line's interval (a fall, an impulse) gets its own line on each edge: the periodic
+  line samples past it.
+- A line that proves a magnitude (a clearance, an angle, a distance) logs its extreme over the episode, the closest
+  approach or the widest deflection, on the episode's last edge: on its first edge the value has not moved yet. An
+  episode that starts where the previous one ended also logs its settled value on that edge: the extreme alone carries
+  the previous episode's. A criterion that compares two parts (the eyes on the head's side) is a magnitude for each:
+  the line logs both extremes, signed alike.
+- The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
+  (another player's Map Tool, not the local player's, who has none).
+
+## Decisions
+
+- A change that contradicts an ADR in `docs/adr/` supersedes that ADR in the same change; otherwise it is a finding.
+
+## Comments
+
+The default is none. Comments drift into narration that repeats the line underneath and rots as soon as the code moves.
+
+- Never comment what the code does. If removing the comment loses no information, it should not exist.
+- Names carry intent. Code that seems to need a comment usually needs a rename or a split.
+- Comment only what the code cannot show:
+  - a game, Photon or Unity behaviour, bug or version quirk being worked around;
+  - a constraint from outside the file: the REPO game, the asset bundle, the network contract, a thread;
+  - a deliberate omission and its reason;
+  - a choice that looks wrong and that someone would otherwise "fix".
+- Half a comment is no comment: keep the justification, cut the narration.
+- Describe only what exists.
+- Comments are written in English.
+
+### XML documentation
+
+`///` documents a surface for its callers. The default is none here too: it earns its place only by carrying what the
+signature cannot (a unit, what `null` means, an invariant, an ordering constraint, a thread requirement). It never
+restates the name, and a maintainer's rationale is a comment, judged as one. A note that fails its test is deleted, not
+moved to the other form.
+
+### Tool directives
+
+None of the above applies to analyzer suppressions and the justification they require.

@@ -1,11 +1,16 @@
 {
   "name": "repovepmod",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "A new enemy that makes you hallucinate your teammates.",
   "main": "index.js",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || exit 0",
+    "check": "node tooling/check.mjs",
+    "format": "node tooling/check.mjs fix",
+    "format:check": "node tooling/check.mjs format",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "release": "release-it"
+    "release:start": "node tooling/release-start.mjs",
+    "release:finish": "node tooling/release-finish.mjs"
   },
   "keywords": [],
   "author": "",

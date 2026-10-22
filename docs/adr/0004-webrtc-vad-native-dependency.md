@@ -1,0 +1,3 @@
+# Speech filtering uses WebRTC VAD, a native x64 dependency
+
+Voice Samples are filtered with WebRTC VAD (`WebRtcVadSharp` 1.3.2, pinned) because energy thresholds rejected quiet speech and accepted structured noise; the benchmark and alternatives are in [`docs/vad-integration.md`](../vad-integration.md). Its native `WebRtcVad.dll` is x64-only, which is why the project is built with `PlatformTarget x64`, why VAD failures fall back to accepting the recording, and why a `VepModNoVad` build variant exists for hosts where the native DLL cannot load. None of these three are accidental; don't remove them without replacing the VAD.

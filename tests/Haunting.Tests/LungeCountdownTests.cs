@@ -1,0 +1,296 @@
+using System;
+using System.Collections.Generic;
+using VepMod.Enemies.Whispral;
+using Xunit;
+using Event = VepMod.Enemies.Whispral.LungeCountdown.Event;
+
+namespace Haunting.Tests;
+
+public class LungeCountdownTests
+{
+    private const float FrameTime = 1f / 60f;
+    private const float Near = 3f; // m
+    private const float Far = 8f; // m
+
+    // Steps the countdown for a duration, and returns when each event came, from the first frame stepped.
+    private static List<(float Time, Event Event)> Run(LungeCountdown countdown, float duration,
+        float distance = Near, bool isHidden = false, bool isGazeOn = false)
+    {
+        var events = new List<(float, Event)>();
+        var frames = (int)Math.Round(duration / FrameTime);
+        for (var frame = 0; frame < frames; frame++)
+        {
+            if (countdown.Update(FrameTime, distance, isHidden, isGazeOn) is { } e) events.Add((frame * FrameTime, e));
+        }
+
+        return events;
+    }
+
+    private static LungeCountdown Started()
+    {
+        var countdown = new LungeCountdown();
+        countdown.Start();
+        Assert.Equal(Event.Started, countdown.Update(FrameTime, Near, false, false));
+        return countdown;
+    }
+
+    private static void RunToTheLunge(LungeCountdown countdown)
+    {
+        while (countdown.Update(FrameTime, Near, false, false) != Event.Lunge)
+        {
+        }
+    }
+
+    private static void AssertAbout(float expected, float time)
+    {
+        Assert.InRange(time, expected - 2 * FrameTime, expected + 2 * FrameTime);
+    }
+
+    [Fact]
+    public void NoEventBeforeTheStart()
+    {
+        var countdown = new LungeCountdown();
+
+        Assert.Empty(Run(countdown, 10f));
+        Assert.Empty(Run(countdown, 10f, isGazeOn: true));
+    }
+
+    [Fact]
+    public void TheCountStartsOnTheFirstFrameInSight()
+    {
+        var countdown = new LungeCountdown();
+        countdown.Start();
+
+        Assert.Empty(Run(countdown, 2f, isHidden: true));
+        Assert.Equal(Event.Started, countdown.Update(FrameTime, Near, false, false));
+    }
+
+    [Fact]
+    public void TheLungeComesFiveSecondsAfterTheStartWithinReachAndInSight()
+    {
+        var events = Run(Started(), 6f);
+
+        var (time, e) = Assert.Single(events);
+        Assert.Equal(Event.Lunge, e);
+        AssertAbout(5f, time);
+    }
+
+    [Fact]
+    public void TheLungeWaitsForTheVictimToComeBackWithinFiveMetres()
+    {
+        var countdown = Started();
+
+        var away = Run(countdown, 20f, Far);
+        var back = countdown.Update(FrameTime, 4.9f, false, false);
+
+        var (time, e) = Assert.Single(away);
+        Assert.Equal(Event.OverOutOfReach, e);
+        AssertAbout(5f, time);
+        Assert.Equal(Event.Lunge, back);
+    }
+
+    [Fact]
+    public void TheCountPausesWithoutProgressOnceSomethingStoodBetweenThemForAMoment()
+    {
+        var countdown = Started();
+        Run(countdown, 2f);
+
+        var hidden = Run(countdown, 30f, isHidden: true);
+        var resumed = Run(countdown, 3f);
+
+        var (pausedAt, paused) = Assert.Single(hidden);
+        Assert.Equal(Event.Paused, paused);
+        AssertAbout(0.3f, pausedAt);
+        Assert.Equal(new[] { Event.Resumed, Event.Lunge }, resumed.ConvertAll(r => r.Event));
+        AssertAbout(0.3f, resumed[0].Time);
+        AssertAbout(2.7f, resumed[1].Time);
+    }
+
+    [Fact]
+    public void APausedCountResumesOnceTheVictimHasBeenInSightForAMoment()
+    {
+        var countdown = Started();
+        Run(countdown, 1f, isHidden: true);
+
+        var beforeTheMoment = Run(countdown, 0.25f);
+        var resumed = Run(countdown, 0.1f);
+
+        Assert.Empty(beforeTheMoment);
+        Assert.Equal(Event.Resumed, Assert.Single(resumed).Event);
+    }
+
+    [Fact]
+    public void AHiddenFrameWithinTheMomentCancelsTheResume()
+    {
+        var countdown = Started();
+        Run(countdown, 1f, isHidden: true);
+
+        var events = Run(countdown, 0.25f);
+        events.AddRange(Run(countdown, FrameTime, isHidden: true));
+        events.AddRange(Run(countdown, 0.25f));
+        var resumed = Run(countdown, 0.1f);
+
+        Assert.Empty(events);
+        Assert.Equal(Event.Resumed, Assert.Single(resumed).Event);
+    }
+
+    [Fact]
+    public void TheCountGoesOnDuringTheMomentBackInSight()
+    {
+        var countdown = Started();
+        Run(countdown, 1f);
+        Run(countdown, 1f, isHidden: true);
+        var paused = countdown.Elapsed;
+
+        Run(countdown, 0.25f);
+
+        AssertAbout(paused + 0.25f, countdown.Elapsed);
+    }
+
+    [Fact]
+    public void ACountOverDuringTheMomentBackInSightLungesOnTheFrameAfterTheResume()
+    {
+        var countdown = Started();
+        Run(countdown, 4.6f);
+        Run(countdown, 1f, isHidden: true);
+
+        var back = Run(countdown, 0.4f);
+
+        Assert.Equal(new[] { Event.Resumed, Event.Lunge }, back.ConvertAll(r => r.Event));
+        Assert.Equal(back[0].Time + FrameTime, back[1].Time, 4);
+    }
+
+    [Fact]
+    public void ASightReturningWithinTheMomentCancelsThePause()
+    {
+        var countdown = Started();
+
+        var events = Run(countdown, 0.25f, isHidden: true);
+        events.AddRange(Run(countdown, FrameTime));
+        events.AddRange(Run(countdown, 0.25f, isHidden: true));
+        var hidden = Run(countdown, 1f, isHidden: true);
+
+        Assert.Empty(events);
+        Assert.Equal(Event.Paused, Assert.Single(hidden).Event);
+    }
+
+    [Fact]
+    public void TheCountGoesOnDuringTheMomentHidden()
+    {
+        var countdown = Started();
+        Run(countdown, 1f);
+
+        Run(countdown, 0.25f, isHidden: true);
+
+        AssertAbout(1.25f, countdown.Elapsed);
+    }
+
+    [Fact]
+    public void TheLungeNeverComesOnAHiddenFrame()
+    {
+        var countdown = Started();
+        Run(countdown, 4.9f);
+
+        var withinTheMoment = Run(countdown, 0.25f, isHidden: true);
+        var over = countdown.IsOver;
+        var paused = Run(countdown, 10f, isHidden: true);
+        var back = Run(countdown, 0.3f + 2 * FrameTime);
+
+        Assert.Empty(withinTheMoment);
+        Assert.True(over);
+        Assert.Equal(Event.Paused, Assert.Single(paused).Event);
+        Assert.Equal(new[] { Event.Resumed, Event.Lunge }, back.ConvertAll(r => r.Event));
+    }
+
+    [Fact]
+    public void ACountOverWhileHiddenSaysSoOnceBackInSightOutOfReach()
+    {
+        var countdown = Started();
+        Run(countdown, 4.9f);
+        Run(countdown, 0.25f, isHidden: true);
+
+        var events = Run(countdown, 2f, Far);
+
+        Assert.Equal(Event.OverOutOfReach, Assert.Single(events).Event);
+    }
+
+    [Fact]
+    public void EachReturnOfTheSightResumesTheCountOnce()
+    {
+        var countdown = Started();
+
+        var events = new List<Event>();
+        for (var i = 0; i < 3; i++)
+        {
+            events.AddRange(Run(countdown, 0.5f, isHidden: true).ConvertAll(r => r.Event));
+            events.AddRange(Run(countdown, 0.5f).ConvertAll(r => r.Event));
+        }
+
+        Assert.Equal(new[] { Event.Paused, Event.Resumed, Event.Paused, Event.Resumed, Event.Paused, Event.Resumed },
+            events);
+    }
+
+    [Fact]
+    public void AGazeBeforeTheLungeEndsTheCount()
+    {
+        var countdown = Started();
+        Run(countdown, 4f);
+
+        var gazed = Run(countdown, 0.5f, isGazeOn: true);
+        var after = Run(countdown, 20f);
+
+        Assert.Equal(Event.Gazed, Assert.Single(gazed).Event);
+        Assert.Empty(after);
+    }
+
+    [Fact]
+    public void AGazeAfterTheLungeIsIgnored()
+    {
+        var countdown = Started();
+        RunToTheLunge(countdown);
+
+        var events = Run(countdown, 2f, isGazeOn: true);
+
+        Assert.Equal(Event.Kill, Assert.Single(events).Event);
+    }
+
+    [Fact]
+    public void TheCountIsCountingFromItsStartUntilTheGazeOrTheLunge()
+    {
+        var countdown = new LungeCountdown();
+        Assert.False(countdown.IsCounting);
+
+        countdown.Start();
+        Assert.True(countdown.IsCounting);
+        Run(countdown, 1f, isHidden: true);
+        Assert.True(countdown.IsCounting);
+        Run(countdown, 1f);
+        Assert.True(countdown.IsCounting);
+        Run(countdown, 1f, isHidden: true);
+        Assert.True(countdown.IsCounting);
+
+        Run(countdown, FrameTime, isGazeOn: true);
+        Assert.False(countdown.IsCounting);
+
+        var lunging = Started();
+        RunToTheLunge(lunging);
+        Assert.False(lunging.IsCounting);
+    }
+
+    [Theory]
+    [InlineData(Near, false)]
+    [InlineData(Far, false)]
+    [InlineData(Near, true)]
+    [InlineData(100f, true)]
+    public void TheKillComesOneSecondAfterTheLungeWhateverTheDistanceAndTheSight(float distance, bool isHidden)
+    {
+        var countdown = Started();
+        RunToTheLunge(countdown);
+
+        var events = Run(countdown, 5f, distance, isHidden);
+
+        var (time, e) = Assert.Single(events);
+        Assert.Equal(Event.Kill, e);
+        AssertAbout(1f, time);
+    }
+}

@@ -1,13 +1,14 @@
-﻿using System.Collections.Generic;
+using System;
+using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 #if DEBUG
 using VepMod.Dev;
 #endif
 using VepMod.Enemies.Whispral;
+using VepMod.VepFramework;
 #if !VEPMOD_NO_VAD
 using VepMod.VepFramework.Audio;
 #endif
@@ -22,9 +23,8 @@ public static class ConfigRanges
 {
     public static readonly RangeValue<float> Volume = RangeValue.Percentage();
     public static readonly RangeValue<int> SamplesPerPlayer = RangeValue.Int(5, 20, 20);
-    public static readonly RangeValue<int> SamplingRate = RangeValue.Int(16000, 48000, 48000);
 
-    // Paires min/max liées - corrigent automatiquement si min > max
+    // Linked min/max pairs: corrected automatically when min > max
     public static readonly MinMaxRange<float> ShareDelay = MinMaxRange.Float(
         10f, 60f, 10f,
         10f, 120f, 30f);
@@ -33,79 +33,126 @@ public static class ConfigRanges
         6f, 30f, 8f,
         6f, 30f, 15f);
 
-    // Durée minimale d'enregistrement (garde-fou avant VAD)
+    // Guard applied before VAD
     public static readonly RangeValue<float> AudioMinDuration = RangeValue.Float(0.1f, 2f, 0.3f);
 }
 
-[BepInPlugin("com.vep.vepMod", "VepMod", "1.1.0")]
+[BepInPlugin("com.vep.vepMod", "VepMod", "2.0.0")]
 [BepInDependency("REPOLib")]
 public class VepMod : BaseUnityPlugin
 {
-    private static Harmony _harmony;
     public static ConfigEntry<float> ConfigVoiceVolume;
-    public static ConfigEntry<int> ConfigSamplingRate;
 
-    // Boucle 1 : Partage des sons entre clients
+    /// <summary>Only the Master's value counts, which <see cref="LethalHallucinations.IsOn" /> reads.</summary>
+    public static ConfigEntry<bool> ConfigLethalHallucinations;
+
+    // Voice Sample sharing between clients
     public static BoundMinMaxRange<float> ShareDelay;
     public static ConfigEntry<int> ConfigSamplesPerPlayer;
 
-    // Boucle 2 : Commandes de lecture (pendant debuff)
+    // Mimic commands (while Haunted)
     public static BoundMinMaxRange<float> VoiceDelay;
     public static ConfigEntry<bool> ConfigVoiceFilterEnabled;
 
 #if DEBUG
-    // Outils de développement (build dev uniquement, désactivés par défaut)
     public static ConfigEntry<bool> ConfigEnableDevTools;
 #endif
 
-    // Validation audio (VAD)
+    // Audio validation (VAD)
     public static ConfigEntry<float> ConfigAudioMinDuration;
 #if !VEPMOD_NO_VAD
     public static ConfigEntry<bool> ConfigVadEnabled;
     public static ConfigEntry<VadSensitivity> ConfigVadSensitivity;
 #endif
 
-    public static readonly Dictionary<string, ConfigEntry<bool>> EnemyConfigEntries = new();
+    private static readonly VepLogger LOG = VepLogger.Create<VepMod>();
 
-    internal Harmony? Harmony { get; set; }
+    public static VoiceBanks VoiceBanks { get; private set; }
+
+    public static VoiceRecorder VoiceRecorder { get; private set; }
+
+    /// <summary>Null when the VAD is disabled or failed to load.</summary>
+    public static SpeechCheck? SpeechCheck { get; private set; }
+
+#if !VEPMOD_NO_VAD
+    private static VadAudioValidator? _vad;
+#endif
 
     private void Awake()
     {
-        _harmony = new Harmony("VepMod.Plugin");
         PreventDelete();
 
         InitConfig();
+        LethalHallucinations.Init();
 
-        _harmony.PatchAll();
+        VoiceBanks = new VoiceBanks(Path.Combine(Application.dataPath, "AudioFiles"),
+            () => ConfigSamplesPerPlayer.Value);
+        LOG.Debug($"Voice Bank store created at {VoiceBanks.RootFolder}.");
+        VoiceRecorder = new VoiceRecorder(VepLogger.Create<VoiceRecorder>(true).Debug);
+#if !VEPMOD_NO_VAD
+        SpeechCheck = CreateSpeechCheck();
+#endif
+
+        new Harmony("VepMod.Plugin").PatchAll();
         Logger.LogInfo($"{Info.Metadata.GUID} v{Info.Metadata.Version} has loaded!");
 
 #if DEBUG
         if (ConfigEnableDevTools.Value)
         {
-            gameObject.AddComponent<DroidDevTools>();
-            Logger.LogInfo("VepMod dev tools enabled (F7 spawn / F8 teleport / F9 drop / F10 HUD / F11 despawn).");
+            gameObject.AddComponent<HallucinationDevTools>();
+            Logger.LogInfo("VepMod dev tools enabled (keypad: Num0 spawn, NumEnter HUD).");
         }
 #endif
 
-        // Pr�charger le prefab LostDroid de mani�re asynchrone pour �viter les freezes
-        StartCoroutine(DroidPrefabLoader.PreloadAsync(success =>
+        StartCoroutine(HallucinationPrefabLoader.PreloadAsync(success =>
         {
             if (success)
             {
-                Logger.LogInfo("LostDroid prefab preloaded successfully.");
+                Logger.LogInfo("Hallucination prefab preloaded successfully.");
             }
             else
             {
-                Logger.LogWarning("LostDroid prefab preload failed - hallucinations may not work.");
+                Logger.LogWarning("Hallucination prefab preload failed - hallucinations may not work.");
             }
         }));
     }
 
-    public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    private void OnDestroy()
     {
-        Logger.LogInfo($"Scene loaded: {scene.name}");
-        // Code that runs when a new scene is loaded goes here
+#if !VEPMOD_NO_VAD
+        _vad?.Dispose();
+#endif
     }
+
+#if !VEPMOD_NO_VAD
+    private static SpeechCheck? CreateSpeechCheck()
+    {
+        if (!ConfigVadEnabled.Value)
+        {
+            LOG.Info("VAD disabled in the config: Captures will not be checked for speech.");
+            return null;
+        }
+
+        try
+        {
+            var criteria = VadValidationCriteria.FromSensitivity(ConfigVadSensitivity.Value);
+            var vad = new VadAudioValidator(criteria);
+            _vad = vad;
+            LOG.Info($"VAD handle created (sensitivity={ConfigVadSensitivity.Value}, " +
+                     $"speechRatio>={criteria.MinSpeechRatio:F2}).");
+            return (speech, sampleRate) =>
+            {
+                var result = vad.Validate(speech, sampleRate);
+                return (result.IsValid, result.ToString());
+            };
+        }
+        catch (Exception ex)
+        {
+            LOG.Warning($"VAD initialization failed, Captures will not be checked for speech: {ex.Message}");
+            return null;
+        }
+    }
+#endif
 
     private void InitConfig()
     {
@@ -113,8 +160,10 @@ public class VepMod : BaseUnityPlugin
 
         // General settings
         ConfigVoiceVolume = Config.BindRange("General", "Volume", ConfigRanges.Volume, "Volume of the mimic voices.");
+        ConfigLethalHallucinations = Config.Bind("General", "Lethal Hallucinations", true,
+            "Whether a Hallucination stalking a player who never looks at it kills them. Only the host's value counts.");
 
-        // Boucle 1 : Partage des sons entre clients
+        // Voice Sample sharing between clients
         ShareDelay = Config.BindMinMax("Audio Sharing",
             "Share Min Delay", "Share Max Delay", ConfigRanges.ShareDelay,
             "Minimum time between sharing audio clips with other players.",
@@ -122,24 +171,20 @@ public class VepMod : BaseUnityPlugin
         ConfigSamplesPerPlayer = Config.BindRange("Audio Sharing", "Samples Per Player", ConfigRanges.SamplesPerPlayer,
             "Maximum number of audio samples stored per player.");
 
-        // Boucle 2 : Commandes de lecture (pendant debuff Whispral)
+        // Mimic commands (while Haunted)
         VoiceDelay = Config.BindMinMax("Voice Playback",
             "Voice Min Delay", "Voice Max Delay", ConfigRanges.VoiceDelay,
-            "Minimum time between voice playback commands during Whispral debuff.",
-            "Maximum time between voice playback commands during Whispral debuff.");
+            "Minimum time between Mimics while Haunted by a Whispral.",
+            "Maximum time between Mimics while Haunted by a Whispral.");
         ConfigVoiceFilterEnabled = Config.Bind("Voice Playback", "Voice Filter Enabled?", false,
             new ConfigDescription(
-                "Turning this will enable modifiable filters for which enemies can play back voices during the Whispral debuff."));
-
-        // Experimental settings
-        ConfigSamplingRate = Config.BindRange("Experimental", "Sampling Rate", ConfigRanges.SamplingRate,
-            "Only change this value if the console gives you a warning about your microphone frequency not being supported.");
+                "Turning this will enable modifiable filters for which enemies can play back voices while Haunted by a Whispral."));
 
 #if DEBUG
         // Developer tools (dev build only, off by default)
         ConfigEnableDevTools = Config.Bind("Developer", "Enable Dev Tools", false,
             new ConfigDescription(
-                "Enables in-game developer tools for testing the droid: spawn/teleport/drop-test keybinds (F7-F11) and a debug HUD. For development only."));
+                "Enables in-game developer tools for testing Hallucinations: spawn/teleport/drop-test keybinds on the numeric keypad and a debug HUD. For development only."));
 #endif
 
         // Audio validation (VAD)
@@ -159,10 +204,5 @@ public class VepMod : BaseUnityPlugin
         // Prevent the plugin from being deleted
         gameObject.transform.parent = null;
         gameObject.hideFlags = HideFlags.HideAndDontSave;
-    }
-
-    internal void Unpatch()
-    {
-        _harmony.UnpatchSelf();
     }
 }
