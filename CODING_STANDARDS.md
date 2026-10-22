@@ -50,7 +50,9 @@ belongs to the tooling, not here.
   bumps the major version); the commit-msg hook asks for it.
 - Classes and serialized fields referenced by an asset bundle keep their names (`EnemyWhispral`, `EnemyWhispralAnim`).
 - The Master decides, every client applies, and handlers that run on every client are idempotent. A Hallucination is
-  the exception: the Victim's client decides what it does, death included (ADR-0007).
+  the exception: the Victim's client decides what it does, death included (ADR-0007). A sound that changes no game
+  state (the Whispers) is timed by the client that plays it: the Master decides only the state it follows (Haunted,
+  ADR-0010).
 - Hallucinations never go on the network (ADR-0002).
 
 ## Threads
