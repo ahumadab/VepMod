@@ -42,7 +42,7 @@ When it detects a player, it approaches and attaches itself to them for a set du
 3. **Investigate**: It investigates sounds it hears
 4. **Notice Player**: It spots and locks onto a player
 5. **Go To Player**: It moves toward the detected player
-6. **Attached**: It attaches to the player for 200 seconds
+6. **Attached**: It attaches to the player for 240 seconds
 7. **Detach**: It detaches and moves away
 8. **Leave**: It flees blind for a few seconds, away from the players, then hunts again
 
@@ -218,7 +218,7 @@ Yes. The mod records voices during the session and replays them through Hallucin
 ### Q: How do I get rid of the Whispral?
 
 - Throw objects at it to stun it
-- Wait for the attachment duration to end (200 s)
+- Wait for the attachment duration to end (240 s)
 - Kill it: it comes back 2 to 3 minutes later
 - Stun yourself (pressing Q works)
 
