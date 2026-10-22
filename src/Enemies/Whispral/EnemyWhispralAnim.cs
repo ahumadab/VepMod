@@ -33,6 +33,9 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     [Space][SerializeField] private GameObject visuals;
     [SerializeField] private GameObject rigidBody;
 #pragma warning restore IDE1006
+
+    private bool _hidden;
+
     protected override State DefaultState => State.NoBreathing;
 
     protected override void Awake()
@@ -51,6 +54,7 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     protected override void Update()
     {
         var isAttachedAndNotJumping = enemyWhispral.CurrentState == EnemyWhispral.State.Attached && !enemy.Jump.jumping;
+        SetHidden(isAttachedAndNotJumping);
 
         if (isAttachedAndNotJumping)
         {
@@ -71,6 +75,8 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     public void Death()
     {
         StopBreathing();
+        // The despawn that follows deactivates this object before its next Update.
+        SetHidden(false);
         soundDeath.Play(enemy.transform.position);
     }
 
@@ -80,11 +86,14 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         soundHurt.Play(enemy.transform.position);
     }
 
-
-    public void Show(bool show)
+    // Without its Visuals and Rigidbody, the Whispral is invisible and intangible: thrown objects pass through, grabs miss.
+    private void SetHidden(bool hidden)
     {
-        visuals.gameObject.SetActive(show);
-        rigidBody.gameObject.SetActive(show);
+        if (hidden == _hidden) return;
+        _hidden = hidden;
+        visuals.SetActive(!hidden);
+        rigidBody.SetActive(!hidden);
+        LOG.Debug($"Whispral {enemy.PhotonView.ViewID} {(hidden ? "hidden" : "shown")} in state {enemyWhispral.CurrentState}.");
     }
 
     public void StopBreathing()
@@ -114,13 +123,11 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         : StateMachineBase<StateMachine, State>.StateBaseTransition(durationRange.x, nextState)
     {
         private const float MinDuration = 3f;
-        private readonly State _nextState = nextState;
         private AudioSource? _audioSource;
 
         public override void OnStateEnter(State previous)
         {
             base.OnStateEnter(previous);
-            owner.Show(false);
             Duration = GetDuration();
             if (owner.enemyWhispral.playerTarget != null)
             {
@@ -149,10 +156,6 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         {
             base.OnStateExit(next);
             if (_audioSource != null) _audioSource.Stop();
-            if (next != _nextState) // Breathing was interrupted before its planned next state.
-            {
-                owner.Show(true);
-            }
         }
     }
 
