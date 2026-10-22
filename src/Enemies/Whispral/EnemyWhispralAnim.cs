@@ -53,8 +53,9 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
 
     protected override void Update()
     {
-        var isAttachedAndNotJumping = enemyWhispral.CurrentState == EnemyWhispral.State.Attached && !enemy.Jump.jumping;
-        SetHidden(isAttachedAndNotJumping);
+        var state = enemyWhispral.CurrentState;
+        var isAttachedAndNotJumping = state == EnemyWhispral.State.Attached && !enemy.Jump.jumping;
+        SetHidden(isAttachedAndNotJumping, state);
 
         if (isAttachedAndNotJumping)
         {
@@ -75,8 +76,6 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     public void Death()
     {
         StopBreathing();
-        // The despawn that follows deactivates this object before its next Update.
-        SetHidden(false);
         soundDeath.Play(enemy.transform.position);
     }
 
@@ -86,14 +85,19 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
         soundHurt.Play(enemy.transform.position);
     }
 
+    public void Despawn()
+    {
+        SetHidden(false, EnemyWhispral.State.Despawn);
+    }
+
     // Without its Visuals and Rigidbody, the Whispral is invisible and intangible: thrown objects pass through, grabs miss.
-    private void SetHidden(bool hidden)
+    private void SetHidden(bool hidden, EnemyWhispral.State state)
     {
         if (hidden == _hidden) return;
         _hidden = hidden;
         visuals.SetActive(!hidden);
         rigidBody.SetActive(!hidden);
-        LOG.Debug($"Whispral {enemy.PhotonView.ViewID} {(hidden ? "hidden" : "shown")} in state {enemyWhispral.CurrentState}.");
+        LOG.Debug($"Whispral {enemy.PhotonView.ViewID} {(hidden ? "hidden" : "shown")} in state {state}.");
     }
 
     public void StopBreathing()
