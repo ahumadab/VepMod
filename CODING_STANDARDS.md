@@ -67,6 +67,8 @@ belongs to the tooling, not here.
 - Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
   action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- A line that proves a criterion or explains a test log logs at `Debug`, written by dev builds only; `Info` carries
+  what a release log needs to read a player's report (the mod loading, a config value, a session start).
 - A line states an outcome once it holds: it follows the last check that can still fail (a destination logged after
   its NavMesh point is found).
 - A periodic line that proves a criterion names the case it samples (the look point's source: stare, map, Talker,

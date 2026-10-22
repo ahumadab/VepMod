@@ -11,7 +11,7 @@ public class EnemyLoggerPatch
     [HarmonyPrefix]
     private static void Prefix(EnemyParent _enemyParent)
     {
-        LOG.Info($"EnemyDirector.FirstSpawnPointAdd: {_enemyParent} added as first spawn point.");
+        LOG.Debug($"EnemyDirector.FirstSpawnPointAdd: {_enemyParent} added as first spawn point.");
     }
 }
 
