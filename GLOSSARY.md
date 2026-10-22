@@ -91,7 +91,7 @@ _Avoid_: Breathing
 _French_: les chuchotements
 
 **Whisper**:
-One play of a Whisper sound by the Whispers, from one side of the Victim's head, fading in and out.
+One play of a Whisper sound by the Whispers, from one side of the Victim's head, fading in and out. The end of the Haunting releases the Whisper playing: it fades out at once.
 _French_: un chuchotement
 
 **Whisper sound**:

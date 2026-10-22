@@ -12,7 +12,7 @@ internal sealed class WhisperSchedule
     internal const float MaxSilence = 15f; // s
     internal const float FadeIn = 1f; // s
     internal const float FadeOut = 1.5f; // s
-    internal const float Release = 1f; // s
+    internal const float ReleaseFade = 1f; // s
 
     private static readonly int SideCount = Enum.GetValues(typeof(Side)).Length;
 
@@ -118,7 +118,7 @@ internal sealed class WhisperSchedule
 
             case Phase.Releasing:
                 var released = time - _releaseStart;
-                if (released >= Release || time - _start >= _length)
+                if (released >= ReleaseFade || time - _start >= _length)
                 {
                     Volume = 0f;
                     FadeLength = released;
@@ -126,7 +126,7 @@ internal sealed class WhisperSchedule
                     return Step.Release;
                 }
 
-                Volume = _releaseFrom * (1f - released / Release);
+                Volume = _releaseFrom * (1f - released / ReleaseFade);
                 return Step.None;
 
             default:
@@ -145,11 +145,11 @@ internal sealed class WhisperSchedule
     {
         return side switch
         {
-            Side.Left => (-0.5f, 0f, 0f),
-            Side.Right => (0.5f, 0f, 0f),
+            Side.Left => (-0.35f, 0f, 0.35f),
+            Side.Right => (0.35f, 0f, 0.35f),
             Side.Behind => (0f, 0f, -0.5f),
-            Side.LeftEar => (-0.25f, 0.1f, -0.2f),
-            Side.RightEar => (0.25f, 0.1f, -0.2f),
+            Side.LeftEar => (-0.3f, 0f, 0f),
+            Side.RightEar => (0.3f, 0f, 0f),
             _ => throw new ArgumentOutOfRangeException(nameof(side), side, null)
         };
     }

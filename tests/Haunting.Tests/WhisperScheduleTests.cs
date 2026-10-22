@@ -97,7 +97,7 @@ public class WhisperScheduleTests
         Assert.Equal(0.25f, schedule.Volume, 3);
         Assert.Equal(WhisperSchedule.Step.Release, schedule.Update(1.5f, false));
         Assert.Equal(0f, schedule.Volume);
-        Assert.Equal(WhisperSchedule.Release, schedule.FadeLength, 3);
+        Assert.Equal(WhisperSchedule.ReleaseFade, schedule.FadeLength, 3);
 
         for (var frame = 0; frame < 3600; frame++)
         {
