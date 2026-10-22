@@ -257,7 +257,7 @@ public sealed partial class Hallucination : StateMachineComponent<Hallucination,
         SetupNameplate();
         AddStates();
 
-        LOG.Info($"Hallucination created for {imitatedPlayer.playerName} at {ControllerTransform.position}");
+        LOG.Debug($"Hallucination created for {imitatedPlayer.playerName} at {ControllerTransform.position}");
     }
 
     private void SetupMovementController()

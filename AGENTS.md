@@ -37,7 +37,8 @@ formatting it reports. The hooks are installed by
 Gitflow, with `develop` as the default branch:
 
 - Work on `<type>/<slug>` branched from `develop`, where `<type>` is the Conventional Commits type of the work (`feat`,
-  `fix`, `refactor`, `docs`, `chore`…), and open the PR against `develop`.
+  `fix`, `refactor`, `docs`, `chore`…), and open the PR against `develop` once `/mattpocock-skills:code-review develop`
+  has reviewed the branch.
 - `release/<version>` and `hotfix/<slug>` merge into `main`, then back into `develop`.
 
 To publish a version, run `npm run release:start [version]` from an up-to-date `develop` (or a `hotfix/<slug>` cut from

@@ -36,14 +36,14 @@ public static class HallucinationPrefabLoader
         }
 
         IsLoading = true;
-        LOG.Info("Starting async preload of Hallucination prefab...");
+        LOG.Debug("Starting async preload of Hallucination prefab...");
 
         var embeddedLoaded = false;
         using (var stream = typeof(HallucinationPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
         {
             if (stream != null)
             {
-                LOG.Info("Found embedded AssetBundle resource, loading from DLL...");
+                LOG.Debug("Found embedded AssetBundle resource, loading from DLL...");
                 byte[] bytes;
                 using (var ms = new MemoryStream())
                 {
@@ -57,7 +57,7 @@ public static class HallucinationPrefabLoader
                 _bundle = bundleRequest.assetBundle;
                 if (_bundle != null)
                 {
-                    LOG.Info("AssetBundle loaded successfully from embedded resource");
+                    LOG.Debug("AssetBundle loaded successfully from embedded resource");
                     embeddedLoaded = true;
                 }
                 else
@@ -92,7 +92,7 @@ public static class HallucinationPrefabLoader
                 yield break;
             }
 
-            LOG.Info($"AssetBundle loaded from file: {bundlePath}");
+            LOG.Debug($"AssetBundle loaded from file: {bundlePath}");
         }
 
         // Both branches above set _bundle or yield break: the compiler loses that across the yields.
