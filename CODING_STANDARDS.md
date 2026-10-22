@@ -92,7 +92,7 @@ belongs to the tooling, not here.
   episode that starts where the previous one ended also logs its settled value on that edge: the extreme alone carries
   the previous episode's. A criterion that compares two parts (the eyes on the head's side) is a magnitude for each:
   the line logs both extremes, signed alike.
-- The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
+- A key named in a ticket or a test plan is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
   (another player's Map Tool, not the local player's, who has none).
 
 ## Decisions
