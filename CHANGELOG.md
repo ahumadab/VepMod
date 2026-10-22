@@ -37,17 +37,13 @@
 * **mimic:** Mimic played by the Hallucination, commanded from the Whispral to the Victim ([#44](https://github.com/ahumadab/VepMod/issues/44)) ([#56](https://github.com/ahumadab/VepMod/issues/56)) ([4a99f47](https://github.com/ahumadab/VepMod/commit/4a99f471375609f12507bb045fa717dfe6722a8e))
 * **mimic:** the Victim's client picks a Hallucination that can speak ([#77](https://github.com/ahumadab/VepMod/issues/77)) ([71adb3d](https://github.com/ahumadab/VepMod/commit/71adb3dda21c2b947c66a277a15448c59055b053))
 * **recorder:** Voice Samples from voice frames, validated off the voice thread ([#42](https://github.com/ahumadab/VepMod/issues/42)) ([#52](https://github.com/ahumadab/VepMod/issues/52)) ([87ffdf1](https://github.com/ahumadab/VepMod/commit/87ffdf19a1b85aed7cf199c565dbd7f675ad2c7e))
-* **sharing:** Voice Sample sharing as a thin Photon adapter ([#43](https://github.com/ahumadab/VepMod/issues/43)) ([#54](https://github.com/ahumadab/VepMod/issues/54)) ([](https://github.com/ahumadab/VepMod/commit/))
+* **sharing:** Voice Sample sharing as a thin Photon adapter ([#43](https://github.com/ahumadab/VepMod/issues/43)) ([#54](https://github.com/ahumadab/VepMod/issues/54)) ([6f47ccb](https://github.com/ahumadab/VepMod/commit/6f47ccb9e4c70e9e7b9b821063460dfd75cb46de))
 * **voice-bank:** one store per client, keyed by Steam ID, one WAV codec ([#41](https://github.com/ahumadab/VepMod/issues/41)) ([#50](https://github.com/ahumadab/VepMod/issues/50)) ([ac144c6](https://github.com/ahumadab/VepMod/commit/ac144c6e80c367030a22fd18fa3644f4b853ccf5))
 
 
 ### BREAKING CHANGES
 
-* **mimic:** MimicRPC drops its Imitated Player ViewID parameter;
-players on an older mod version no longer receive Mimic commands.
-
-* refactor(mimic): trim the MimicRPC comment and the no-speaker log
-* **mimic:** the Mimic command is now MimicRPC(imitatedPlayerViewID, voiceFilter) on the Whispral, sent to the Victim's client only. Every player needs the same version for Mimics to play.
+* **mimic:** the Mimic command is now MimicRPC(voiceFilter) on the Whispral, sent to the Victim's client only, which picks the Hallucination that speaks. Every player needs the same version for Mimics to play.
 * **sharing:** the Voice Sample sharing RPC is now ReceiveVoiceSampleChunk(chunk, chunkIndex, chunkCount), with no player identity or sample rate. Clients on an earlier version no longer share Voice Samples with this one.
 
 # [1.1.0](https://github.com/ahumadab/VepMod/compare/1.0.5...1.1.0) (2026-06-22)
