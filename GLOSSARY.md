@@ -90,6 +90,15 @@ The Effect that whispers to the Victim from around their head, each Whisper from
 _Avoid_: Breathing
 _French_: les chuchotements
 
+**Whisper**:
+One play of a Whisper sound by the Whispers, from one side of the Victim's head, fading in and out.
+_French_: un chuchotement
+
+**Whisper sound**:
+One of the few recordings of whispering the mod ships in its bundle, picked at random for each Whisper.
+_Avoid_: Clip, extract
+_French_: le son de chuchotement
+
 **Dilated Pupils**:
 The only Effect visible to the Victim's teammates rather than to the Victim.
 _French_: les pupilles dilatées

@@ -754,6 +754,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
 
         sb += $"\n\nWhisprals (timers on the Master):{WhispralsSummary()}";
+        sb += $"\nLocal Whisper: {Whispers.Summary}";
         sb += $"\n\nLethal Hallucinations: {LethalHallucinations.Summary}" +
               $"\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
 

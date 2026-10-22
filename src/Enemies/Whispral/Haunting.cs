@@ -66,6 +66,7 @@ public sealed class Haunting : MonoBehaviour
         if (IsVictimsClient())
         {
             gameObject.GetOrAddComponent<Imitations>().Begin();
+            gameObject.GetOrAddComponent<Whispers>().Begin();
         }
         else
         {
@@ -83,6 +84,12 @@ public sealed class Haunting : MonoBehaviour
             if (imitations)
             {
                 imitations.End();
+            }
+
+            var whispers = GetComponent<Whispers>();
+            if (whispers)
+            {
+                whispers.End();
             }
         }
         else
