@@ -240,11 +240,13 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
     {
         var sentByMe = _info.Sender != null && _info.Sender.UserId == PhotonNetwork.LocalPlayer.UserId;
         // var otherSentByMe = _info.Sender is { IsLocal: true };
-        if (SemiFunc.MasterOnlyRPC(_info))
-        {
-            if (sentByMe) return;
-            CurrentState = state;
-        }
+        if (!SemiFunc.MasterOnlyRPC(_info)) return;
+
+        // EnemyParent.Despawn deactivates this object on every client right after this RPC, before any Update: a
+        // Whispral killed or despawned while attached would go, and come back, hidden.
+        if (state == State.Despawn) enemyWhispralAnim.Despawn();
+        if (sentByMe) return;
+        CurrentState = state;
     }
 
     [PunRPC]
