@@ -48,6 +48,7 @@ public sealed class HallucinationMovement : MonoBehaviour
     private Vector3 _destination;
     private Quaternion? _facing;
     private bool _isOnTrip;
+    private bool _isOffNavMesh;
     private string? _stepAsideFor;
     private float _stepAsideMaxAngle;
     private float _stepAsideClosest;
@@ -210,6 +211,11 @@ public sealed class HallucinationMovement : MonoBehaviour
         if (NavMesh.SamplePosition(controllerPos, out var hit, 2f, _savedAreaMask))
         {
             _navAgent.nextPosition = hit.position;
+            if (_isOffNavMesh)
+            {
+                _isOffNavMesh = false;
+                LOG.Debug($"Controller back on NavMesh at {controllerPos}");
+            }
 
             if (Vector3.Distance(controllerPos, hit.position) > 0.5f && _isOnTrip)
             {
@@ -218,7 +224,14 @@ public sealed class HallucinationMovement : MonoBehaviour
         }
         else
         {
-            LOG.Warning($"Controller off NavMesh at {controllerPos}");
+            if (!_isOffNavMesh)
+            {
+                _isOffNavMesh = true;
+                LOG.Warning($"Controller off NavMesh at {controllerPos}");
+            }
+
+            // Raised every frame while off: Idle ignores a request to enter Idle, but raised once, Idle would start
+            // a Trip planned from the agent, which stays on the NavMesh below.
             OnNavMeshError?.Invoke();
         }
     }
