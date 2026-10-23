@@ -27,8 +27,10 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
     private const float DropHeight = 6f; // m, drop test lift under an open sky
     private const float HallucinationHeight = 2f; // m, the CharacterController's height
+    private const float HallucinationRadius = 0.5f; // m, the CharacterController's radius
     private const float CeilingClearance = 0.2f; // m
-    private const float DropThroughWindow = 3f; // s, a second drop press within it lifts through the ceiling
+    private const float SecondDropPressWindow = 3f; // s
+    private const float ThroughCeilingStep = 0.1f; // m
     private const float AimMaxDistance = 100f; // m, aim raycast range
     private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
     private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
@@ -281,12 +283,12 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
-        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it, unless
-        // this is the second press, which puts it on top on purpose.
+        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it. The
+        // second press puts it there on purpose.
         var controller = _nearest.ControllerTransform.position;
         var underCeiling = Physics.Raycast(controller + Vector3.up * HallucinationHeight, Vector3.up, out var ceiling,
             DropHeight, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-        var secondPress = _nearest == _lastDropped && Time.time - _lastDropTime <= DropThroughWindow;
+        var secondPress = _nearest == _lastDropped && Time.time - _lastDropTime <= SecondDropPressWindow;
         _lastDropped = secondPress ? null : _nearest;
         _lastDropTime = Time.time;
 
@@ -304,21 +306,25 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
     private static void LiftThroughCeiling(Hallucination hallucination, Vector3 ceilingUnderside)
     {
-        // The ceiling's top is the upward-facing hit closest to its underside, below any floor further up.
-        var above = ceilingUnderside + Vector3.up * DropHeight;
-        var hits = Physics.RaycastAll(above, Vector3.down, DropHeight, Physics.DefaultRaycastLayers,
-            QueryTriggerInteraction.Ignore);
-        if (hits.Length == 0)
+        // A ray down would miss a one-sided ceiling mesh (the game's queries skip backfaces) and RaycastAll keeps one
+        // hit per collider: the first spot above the underside where the controller overlaps nothing is on top.
+        for (var lift = ThroughCeilingStep; lift <= DropHeight; lift += ThroughCeilingStep)
         {
-            LOG.Warning($"DevTools: no top found within {DropHeight}m above the ceiling at {ceilingUnderside}.");
+            var feet = ceilingUnderside + Vector3.up * lift;
+            if (Physics.CheckCapsule(feet + Vector3.up * HallucinationRadius,
+                    feet + Vector3.up * (HallucinationHeight - HallucinationRadius), HallucinationRadius,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                continue;
+            }
+
+            hallucination.DebugTeleport(feet);
+            LOG.Info($"DevTools: drop test — lifted the Hallucination through the ceiling at {ceilingUnderside} " +
+                     $"onto its top at {feet}.");
             return;
         }
 
-        var top = hits.OrderByDescending(hit => hit.distance).First().point;
-        var onTop = top + Vector3.up * CeilingClearance;
-        hallucination.DebugTeleport(onTop);
-        LOG.Info($"DevTools: drop test — lifted the Hallucination through the ceiling at {ceilingUnderside} " +
-                 $"onto its top at {onTop}.");
+        LOG.Warning($"DevTools: no room found within {DropHeight}m above the ceiling at {ceilingUnderside}.");
     }
 
     // The keypad keeps the dev keys clear of the F keys other debug mods (Imperium) take. Ctrl is the only modifier:
