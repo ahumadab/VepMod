@@ -30,6 +30,8 @@ belongs to the tooling, not here.
 - A state that restarts its work in place (the state machine never re-enters its current state: a chained Trip stays
   in `MovementState`) runs the same setup as its entry, through one method both call.
 - A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.
+- The game deactivates a dead player's avatar until the revive (`docs/game/player-death.md`): per-frame work that a
+  death starts or must survive (a fade, a release) runs on an object that stays active, not on the `PlayerAvatar`.
 - `OnDestroy` sees its hierarchy already torn down: a child's `AudioSource` no longer plays, and a child can no longer
   change its parent. A log line or a hand-off that needs them runs before the `Destroy` call, in the one method every
   removal goes through.

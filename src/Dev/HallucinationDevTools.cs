@@ -68,8 +68,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
         if (Pressed(KeyCode.KeypadDivide)) SpawnWhispralAtAim();
         if (Pressed(KeyCode.KeypadDivide, true)) SendMimicCommands();
-        if (Pressed(KeyCode.KeypadMultiply)) StunWhisprals(true);
-        if (Pressed(KeyCode.KeypadMultiply, true)) StunWhisprals(false);
+        if (Pressed(KeyCode.KeypadMultiply)) StunWhisprals(false);
+        if (Pressed(KeyCode.KeypadMultiply, true)) StunWhisprals(true);
         if (Pressed(KeyCode.KeypadMinus)) KillWhisprals();
         if (Pressed(KeyCode.KeypadMinus, true)) SwitchLethalHallucinations();
 
@@ -725,7 +725,7 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "  Num6 the two nearest walk to each other's place\n" +
                  "  Num7 chains a Trip at its next arrival (press twice: cap)\n" +
                  "  Num8 changes its mind on its Trip (press twice: cap)\n" +
-                 "Whispral (Master): Num/ spawn | Num* stun preparing | Ctrl+Num* stun all | Num- kill\n" +
+                 "Whispral (Master): Num/ spawn | Num* stun all | Ctrl+Num* stun preparing | Num- kill\n" +
                  "Ctrl+Num/ Mimic command to every attached Victim (Master)\n" +
                  "Ctrl+Num7 run out every Whispral's spawn timer (Master)\n" +
                  "Ctrl+Num8 replay the end-of-level rule on every Whispral (Master)\n" +
