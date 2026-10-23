@@ -1,5 +1,18 @@
 # Changelog
 
+# [2.1.0](https://github.com/ahumadab/VepMod/compare/2.0.0...2.1.0) (2026-10-23)
+
+
+### Bug Fixes
+
+* **whispral:** a Hallucination off the NavMesh warns once, not every frame ([#91](https://github.com/ahumadab/VepMod/issues/91)) ([#142](https://github.com/ahumadab/VepMod/issues/142)) ([15bff69](https://github.com/ahumadab/VepMod/commit/15bff6905107f9334ac922a66a3822861d35569f))
+
+
+### Features
+
+* **whispral:** the Victim alone hears the Whispers while Haunted ([#130](https://github.com/ahumadab/VepMod/issues/130)) ([#140](https://github.com/ahumadab/VepMod/issues/140)) ([6c88db5](https://github.com/ahumadab/VepMod/commit/6c88db550e03b63cf14fb8b0c5ece4ff1b758105))
+* **whispral:** the Whispral never leaves the level on its own and roams towards the team ([#131](https://github.com/ahumadab/VepMod/issues/131)) ([#135](https://github.com/ahumadab/VepMod/issues/135)) ([b6c4f42](https://github.com/ahumadab/VepMod/commit/b6c4f420a4ddb0ac8b4277223ff8fc8df0ee6d26))
+
 # [2.0.0](https://github.com/ahumadab/VepMod/compare/1.1.0...2.0.0) (2026-10-22)
 
 

@@ -30,6 +30,8 @@ belongs to the tooling, not here.
 - A state that restarts its work in place (the state machine never re-enters its current state: a chained Trip stays
   in `MovementState`) runs the same setup as its entry, through one method both call.
 - A MonoBehaviour that changes other objects (hides a player, spawns a Hallucination) undoes it in `OnDestroy`.
+- The game deactivates a dead player's avatar until the revive (`docs/game/player-death.md`): per-frame work that a
+  death starts or must survive (a fade, a release) runs on an object that stays active, not on the `PlayerAvatar`.
 - `OnDestroy` sees its hierarchy already torn down: a child's `AudioSource` no longer plays, and a child can no longer
   change its parent. A log line or a hand-off that needs them runs before the `Destroy` call, in the one method every
   removal goes through.
@@ -50,7 +52,9 @@ belongs to the tooling, not here.
   bumps the major version); the commit-msg hook asks for it.
 - Classes and serialized fields referenced by an asset bundle keep their names (`EnemyWhispral`, `EnemyWhispralAnim`).
 - The Master decides, every client applies, and handlers that run on every client are idempotent. A Hallucination is
-  the exception: the Victim's client decides what it does, death included (ADR-0007).
+  the exception: the Victim's client decides what it does, death included (ADR-0007). A sound that changes no game
+  state (the Whispers) is timed by the client that plays it: the Master decides only the state it follows (Haunted,
+  ADR-0010).
 - Hallucinations never go on the network (ADR-0002).
 
 ## Threads
@@ -65,6 +69,11 @@ belongs to the tooling, not here.
 - Each acceptance criterion of the ticket maps to an action the tester can take and a `Debug` line that proves it. An
   action out of the tester's reach (a timing, a chance event, a command the Master sends) has a key in
   `src/Dev/HallucinationDevTools.cs`, listed in its HUD. A criterion with neither is a finding.
+- `Info` carries only what a release log needs to read a player's report (the mod loading, a config value, the local
+  player and Master at a level start); every other line logs at `Debug`, which dev builds write, and release builds
+  only for a logger created with `debugEnabled: true`. Code under `#if DEBUG` may log at either.
+- A line states an outcome once it holds: it follows the last check that can still fail (a destination logged after
+  its NavMesh point is found).
 - A periodic line that proves a criterion names the case it samples (the look point's source: stare, map, Talker,
   Glance): a case read back from the values is a guess.
 - A criterion about what the Victim sees is proved by what Unity renders: the line measures the rendered bone (the
@@ -85,7 +94,7 @@ belongs to the tooling, not here.
   episode that starts where the previous one ended also logs its settled value on that edge: the extreme alone carries
   the previous episode's. A criterion that compares two parts (the eyes on the head's side) is a magnitude for each:
   the line logs both extremes, signed alike.
-- The action is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
+- A key named in a ticket or a test plan is checked against its handler, not the ticket's description of it: the key reaches the criterion's case
   (another player's Map Tool, not the local player's, who has none).
 
 ## Decisions

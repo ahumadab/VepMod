@@ -27,14 +27,22 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
     private const float DropHeight = 6f; // m, drop test lift under an open sky
     private const float HallucinationHeight = 2f; // m, the CharacterController's height
+    private const float HallucinationRadius = 0.5f; // m, the CharacterController's radius
     private const float CeilingClearance = 0.2f; // m
+    private const float SecondDropPressWindow = 3f; // s
+    private const float ThroughCeilingStep = 0.1f; // m
     private const float AimMaxDistance = 100f; // m, aim raycast range
     private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
     private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
+    private const float SpawnTimerRunOut = 0.01f; // s
+    private const float EndOfLevelReplayDuration = 1f; // s
 
     private static readonly VepLogger LOG = VepLogger.Create<HallucinationDevTools>();
 
     private readonly List<Hallucination> _spawned = new();
+    private float _endOfLevelReplayTimer;
+    private Hallucination? _lastDropped;
+    private float _lastDropTime;
     private Hallucination? _nearest;
     private float _nearestRefreshTimer;
     private bool _hudVisible = true;
@@ -56,14 +64,17 @@ public sealed class HallucinationDevTools : MonoBehaviour
         if (Pressed(KeyCode.Keypad5, true)) ForceEveryNextStalkingRoll();
         if (Pressed(KeyCode.Keypad6)) CrossNearestTwo();
         if (Pressed(KeyCode.Keypad7)) ChainWithNearest();
+        if (Pressed(KeyCode.Keypad7, true)) RunOutSpawnTimers();
         if (Pressed(KeyCode.Keypad8)) ChangeMindWithNearest();
+        if (Pressed(KeyCode.Keypad8, true)) StartEndOfLevelReplay();
+        ReplayEndOfLevelReturns();
         if (Pressed(KeyCode.Keypad9)) DespawnAll();
         if (Pressed(KeyCode.Keypad9, true)) WithholdNextLungeVoiceSample();
 
         if (Pressed(KeyCode.KeypadDivide)) SpawnWhispralAtAim();
         if (Pressed(KeyCode.KeypadDivide, true)) SendMimicCommands();
-        if (Pressed(KeyCode.KeypadMultiply)) StunWhisprals(true);
-        if (Pressed(KeyCode.KeypadMultiply, true)) StunWhisprals(false);
+        if (Pressed(KeyCode.KeypadMultiply)) StunWhisprals(false);
+        if (Pressed(KeyCode.KeypadMultiply, true)) StunWhisprals(true);
         if (Pressed(KeyCode.KeypadMinus)) KillWhisprals();
         if (Pressed(KeyCode.KeypadMinus, true)) SwitchLethalHallucinations();
 
@@ -272,15 +283,48 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
-        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it.
+        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it. The
+        // second press puts it there on purpose.
         var controller = _nearest.ControllerTransform.position;
-        var height = Physics.Raycast(controller + Vector3.up * HallucinationHeight, Vector3.up, out var ceiling,
-            DropHeight, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            ? Mathf.Max(0f, ceiling.distance - CeilingClearance)
-            : DropHeight;
+        var underCeiling = Physics.Raycast(controller + Vector3.up * HallucinationHeight, Vector3.up, out var ceiling,
+            DropHeight, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        var secondPress = _nearest == _lastDropped && Time.time - _lastDropTime <= SecondDropPressWindow;
+        _lastDropped = secondPress ? null : _nearest;
+        _lastDropTime = Time.time;
+
+        if (underCeiling && secondPress)
+        {
+            LiftThroughCeiling(_nearest, ceiling.point);
+            return;
+        }
+
+        var height = underCeiling ? Mathf.Max(0f, ceiling.distance - CeilingClearance) : DropHeight;
         var lifted = controller + Vector3.up * height;
         _nearest.DebugTeleport(lifted);
         LOG.Info($"DevTools: drop test — lifted the Hallucination by {height:F1}m to {lifted}.");
+    }
+
+    private static void LiftThroughCeiling(Hallucination hallucination, Vector3 ceilingUnderside)
+    {
+        // A ray down would miss a one-sided ceiling mesh (the game's queries skip backfaces) and RaycastAll keeps one
+        // hit per collider: the first spot above the underside where the controller overlaps nothing is on top.
+        for (var lift = ThroughCeilingStep; lift <= DropHeight; lift += ThroughCeilingStep)
+        {
+            var feet = ceilingUnderside + Vector3.up * lift;
+            if (Physics.CheckCapsule(feet + Vector3.up * HallucinationRadius,
+                    feet + Vector3.up * (HallucinationHeight - HallucinationRadius), HallucinationRadius,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                continue;
+            }
+
+            hallucination.DebugTeleport(feet);
+            LOG.Info($"DevTools: drop test — lifted the Hallucination through the ceiling at {ceilingUnderside} " +
+                     $"onto its top at {feet}.");
+            return;
+        }
+
+        LOG.Warning($"DevTools: no room found within {DropHeight}m above the ceiling at {ceilingUnderside}.");
     }
 
     // The keypad keeps the dev keys clear of the F keys other debug mods (Imperium) take. Ctrl is the only modifier:
@@ -540,6 +584,88 @@ public sealed class HallucinationDevTools : MonoBehaviour
         }
     }
 
+    // Dead Whisprals included: EnemyParent stays active while its Whispral is despawned.
+    private static IEnumerable<(EnemyParent Parent, EnemyWhispral Whispral, int ViewID)> AllWhisprals()
+    {
+        if (!EnemyDirector.instance) yield break;
+
+        foreach (var parent in EnemyDirector.instance.enemiesSpawned)
+        {
+            if (!parent) continue;
+            var whispral = parent.GetComponentInChildren<EnemyWhispral>(true);
+            if (whispral) yield return (parent, whispral, whispral.GetComponent<Photon.Pun.PhotonView>().ViewID);
+        }
+    }
+
+    private static void RunOutSpawnTimers()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        foreach (var (parent, _, viewID) in AllWhisprals())
+        {
+            if (!parent.Spawned) continue;
+
+            LOG.Info($"DevTools: running out the spawn timer of Whispral {viewID} " +
+                     $"(was {parent.SpawnedTimer:F1} s).");
+            parent.SpawnedTimerPause(0f);
+            // Above zero: a timer at exactly zero is the game's despawn order, not one that ran out.
+            parent.SpawnedTimer = SpawnTimerRunOut;
+        }
+    }
+
+    // EnemyDirector.Update's rule once every extraction point is done: a present enemy with no player close despawns
+    // once, and every frame after, a dead one with more than 30 s left comes back at once.
+    private void StartEndOfLevelReplay()
+    {
+        if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
+
+        _endOfLevelReplayTimer = EndOfLevelReplayDuration;
+        foreach (var (parent, _, viewID) in AllWhisprals())
+        {
+            if (!parent.Spawned) continue;
+
+            if (parent.playerClose)
+            {
+                LOG.Info($"DevTools: end of level, Whispral {viewID} stays: a player is close.");
+                continue;
+            }
+
+            LOG.Info($"DevTools: end of level, SpawnedTimerSet(0f) on Whispral {viewID}.");
+            parent.SpawnedTimerPause(0f);
+            parent.SpawnedTimerSet(0f);
+        }
+    }
+
+    private void ReplayEndOfLevelReturns()
+    {
+        if (_endOfLevelReplayTimer <= 0f) return;
+
+        _endOfLevelReplayTimer -= Time.deltaTime;
+        foreach (var (parent, _, viewID) in AllWhisprals())
+        {
+            if (parent.Spawned || parent.DespawnedTimer <= 30f) continue;
+
+            LOG.Info($"DevTools: end of level, DespawnedTimerSet(0f) on Whispral {viewID} " +
+                     $"({parent.DespawnedTimer:F0} s left).");
+            parent.DespawnedTimerSet(0f);
+        }
+    }
+
+    private static string WhispralsSummary()
+    {
+        var summary = "";
+        foreach (var (parent, whispral, viewID) in AllWhisprals())
+        {
+            summary += $"\n  {viewID}: ";
+            summary += parent.Spawned
+                ? $"{whispral.CurrentState}, spawn timer {parent.SpawnedTimer:F0} s, " +
+                  $"nearest player {EnemyWhispral.NearestPlayerDistance(whispral.transform.position):F0} m"
+                : $"despawned, back in {parent.DespawnedTimer:F0} s";
+        }
+
+        return summary.Length > 0 ? summary : " none";
+    }
+
     private static void SendMimicCommands()
     {
         if (!SemiFunc.IsMasterClientOrSingleplayer()) return;
@@ -627,7 +753,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  "Keypad, Num Lock on. Num0 spawn yourself | Ctrl+Num0 another player (the next one each press)\n" +
                  "  outside any Haunting: a death leaves them, Num9 removes them\n" +
-                 "Num1 teleport to aim | Ctrl+Num1 drop | Num9 despawn all | NumEnter hud\n" +
+                 "Num1 teleport to aim | Ctrl+Num1 drop (press twice: through the ceiling)\n" +
+                 "Num9 despawn all | NumEnter hud\n" +
                  "Ctrl+Num9 the next Lunge finds no Voice Sample\n" +
                  "Nearest Hallucination:\n" +
                  "  Num2 starts Stalking | Ctrl+Num2 the one nearest to it performs a Mimic\n" +
@@ -637,8 +764,10 @@ public sealed class HallucinationDevTools : MonoBehaviour
                  "  Num6 the two nearest walk to each other's place\n" +
                  "  Num7 chains a Trip at its next arrival (press twice: cap)\n" +
                  "  Num8 changes its mind on its Trip (press twice: cap)\n" +
-                 "Whispral (Master): Num/ spawn | Num* stun preparing | Ctrl+Num* stun all | Num- kill\n" +
+                 "Whispral (Master): Num/ spawn | Num* stun all | Ctrl+Num* stun preparing | Num- kill\n" +
                  "Ctrl+Num/ Mimic command to every attached Victim (Master)\n" +
+                 "Ctrl+Num7 run out every Whispral's spawn timer (Master)\n" +
+                 "Ctrl+Num8 replay the end-of-level rule on every Whispral (Master)\n" +
                  "Ctrl+Num- switch Lethal Hallucinations (Master)\n" +
                  "Num. kill yourself | Ctrl+Num. revive the dead (Master)\n" +
                  "Num+ hurt yourself | Ctrl+Num+ heal yourself\n" +
@@ -663,6 +792,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
             sb += "\nNo Hallucination in scene.";
         }
 
+        sb += $"\n\nWhisprals (timers on the Master):{WhispralsSummary()}";
+        sb += $"\nLocal Whisper: {Whispers.Summary}";
         sb += $"\n\nLethal Hallucinations: {LethalHallucinations.Summary}" +
               $"\nLast Capture: {VoiceSampleSharing.LastCaptureVerdict ?? "none yet"}";
 

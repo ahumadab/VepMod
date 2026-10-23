@@ -37,14 +37,17 @@ When it detects a player, it approaches and attaches itself to them for a set du
 
 ### Behavior
 
-1. **Spawn**: The Whispral appears in the level
-2. **Idle / Roam**: It wanders around the level, exploring areas
+1. **Spawn**: The Whispral appears in the level and starts hunting at once, without the quiet start other enemies keep
+2. **Idle / Roam**: It prowls around the team, roaming to points 18 to 35 m from the nearest player
 3. **Investigate**: It investigates sounds it hears
 4. **Notice Player**: It spots and locks onto a player
 5. **Go To Player**: It moves toward the detected player
-6. **Attached**: It attaches to the player for ~240 seconds
+6. **Attached**: It attaches to the player for 240 seconds
 7. **Detach**: It detaches and moves away
-8. **Leave**: It leaves the area
+8. **Leave**: It flees blind for a few seconds, away from the players, then hunts again
+
+The Whispral never leaves the level on its own: it stays however long it goes without meeting anyone. Killed, it comes
+back 2 to 3 minutes later. Once every extraction point is done, it joins the chase back to the truck like every enemy.
 
 ### Interactions
 
@@ -186,6 +189,12 @@ When a Whispral attaches to you:
     - Spawned 5–15m from the affected player
     - Precomputed positions to avoid freezes
 
+3. **Whispers**: Whispering voices close to your head
+    - The first one starts as soon as the Whispral attaches, each next one after 8 to 15 s of silence
+    - Each comes from another side of your head than the last (left, right, behind, near an ear) and follows your head
+    - Only you hear them, one at a time however many Whisprals hold you
+    - They fade out within a second once the last Whispral lets go
+
 ### Other Players (Unaffected)
 
 Players who are not affected see:
@@ -215,7 +224,8 @@ Yes. The mod records voices during the session and replays them through Hallucin
 ### Q: How do I get rid of the Whispral?
 
 - Throw objects at it to stun it
-- Wait for the attachment duration to end (~240s)
+- Wait for the attachment duration to end (240 s)
+- Kill it: it comes back 2 to 3 minutes later
 - Stun yourself (pressing Q works)
 
 ### Q: Is audio data saved?

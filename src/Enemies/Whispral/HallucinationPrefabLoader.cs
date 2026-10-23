@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
@@ -12,11 +13,15 @@ public static class HallucinationPrefabLoader
     private const string BundleFileName = "vepmod_prefabs";
     private const string PrefabName = "MyDroid";
     private const string EmbeddedBundleResourceName = "VepMod.Resources.vepmod_prefabs";
+    private const string WhisperSoundPrefix = "Whisper";
     private static readonly VepLogger LOG = VepLogger.Create(nameof(HallucinationPrefabLoader));
 
     private static AssetBundle? _bundle;
 
     public static GameObject? Prefab { get; private set; }
+
+    /// <summary>Empty until the bundle has loaded, and in a bundle built without them.</summary>
+    public static AudioClip[] WhisperSounds { get; private set; } = Array.Empty<AudioClip>();
 
     public static bool IsAvailable => Prefab != null;
 
@@ -36,14 +41,14 @@ public static class HallucinationPrefabLoader
         }
 
         IsLoading = true;
-        LOG.Info("Starting async preload of Hallucination prefab...");
+        LOG.Debug("Starting async preload of Hallucination prefab...");
 
         var embeddedLoaded = false;
         using (var stream = typeof(HallucinationPrefabLoader).Assembly.GetManifestResourceStream(EmbeddedBundleResourceName))
         {
             if (stream != null)
             {
-                LOG.Info("Found embedded AssetBundle resource, loading from DLL...");
+                LOG.Debug("Found embedded AssetBundle resource, loading from DLL...");
                 byte[] bytes;
                 using (var ms = new MemoryStream())
                 {
@@ -57,7 +62,7 @@ public static class HallucinationPrefabLoader
                 _bundle = bundleRequest.assetBundle;
                 if (_bundle != null)
                 {
-                    LOG.Info("AssetBundle loaded successfully from embedded resource");
+                    LOG.Debug("AssetBundle loaded successfully from embedded resource");
                     embeddedLoaded = true;
                 }
                 else
@@ -92,11 +97,23 @@ public static class HallucinationPrefabLoader
                 yield break;
             }
 
-            LOG.Info($"AssetBundle loaded from file: {bundlePath}");
+            LOG.Debug($"AssetBundle loaded from file: {bundlePath}");
         }
 
         // Both branches above set _bundle or yield break: the compiler loses that across the yields.
-        var assetRequest = _bundle!.LoadAssetAsync<GameObject>(PrefabName);
+        var soundsRequest = _bundle!.LoadAllAssetsAsync<AudioClip>();
+        yield return soundsRequest;
+
+        var whisperSounds = new List<AudioClip>();
+        foreach (var asset in soundsRequest.allAssets)
+        {
+            if (asset is AudioClip clip && clip.name.StartsWith(WhisperSoundPrefix)) whisperSounds.Add(clip);
+        }
+
+        WhisperSounds = whisperSounds.ToArray();
+        LOG.Info($"{WhisperSounds.Length} Whisper sounds loaded from the bundle");
+
+        var assetRequest = _bundle.LoadAssetAsync<GameObject>(PrefabName);
         yield return assetRequest;
 
         if (assetRequest.asset != null)

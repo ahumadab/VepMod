@@ -1,20 +1,12 @@
 using UnityEngine;
 using VepMod.VepFramework;
-using VepMod.VepFramework.Structures.FSM;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
 namespace VepMod.Enemies.Whispral;
 
-public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyWhispralAnim.State>
+public class EnemyWhispralAnim : MonoBehaviour
 {
-    public enum State
-    {
-        NoBreathing,
-        BreatheIn,
-        BreatheOut
-    }
-
     private static readonly VepLogger LOG = VepLogger.Create<EnemyWhispralAnim>();
 
     // The Whispral prefab in the asset bundle serializes these by name: a renamed field loses its value.
@@ -25,136 +17,40 @@ public class EnemyWhispralAnim : StateMachineComponent<EnemyWhispralAnim, EnemyW
     [Space][SerializeField] private Sound soundHurt;
     [SerializeField] private Sound soundDeath;
 
-    [Space][SerializeField] private Sound soundBreatheIn;
-    [SerializeField] private Sound soundBreatheOut;
-    [SerializeField] private Vector2 breathingDurationInRange;
-    [SerializeField] private Vector2 breathingDurationOutRange;
-
     [Space][SerializeField] private GameObject visuals;
     [SerializeField] private GameObject rigidBody;
 #pragma warning restore IDE1006
-    protected override State DefaultState => State.NoBreathing;
 
-    protected override void Awake()
+    private bool _hidden;
+
+    private void Update()
     {
-        base.Awake();
-
-        Fsm.AddState(State.NoBreathing, new NoBreathing());
-        Fsm.AddState(State.BreatheIn,
-            new BreathingState(this, soundBreatheIn, breathingDurationInRange, State.BreatheOut));
-        Fsm.AddState(State.BreatheOut,
-            new BreathingState(this, soundBreatheOut, breathingDurationOutRange, State.BreatheIn));
-        ConfigBreathingSound(soundBreatheIn);
-        ConfigBreathingSound(soundBreatheOut);
-    }
-
-    protected override void Update()
-    {
-        var isAttachedAndNotJumping = enemyWhispral.CurrentState == EnemyWhispral.State.Attached && !enemy.Jump.jumping;
-
-        if (isAttachedAndNotJumping)
-        {
-            var current = Fsm.CurrentStateStateId;
-            if (current != State.BreatheIn && current != State.BreatheOut)
-            {
-                Fsm.NextStateStateId = State.BreatheIn;
-            }
-        }
-        else
-        {
-            Fsm.NextStateStateId = State.NoBreathing;
-        }
-
-        base.Update();
+        var state = enemyWhispral.CurrentState;
+        SetHidden(state == EnemyWhispral.State.Attached && !enemy.Jump.jumping, state);
     }
 
     public void Death()
     {
-        StopBreathing();
         soundDeath.Play(enemy.transform.position);
     }
 
     public void Hurt()
     {
-        StopBreathing();
         soundHurt.Play(enemy.transform.position);
     }
 
-
-    public void Show(bool show)
+    public void Despawn()
     {
-        visuals.gameObject.SetActive(show);
-        rigidBody.gameObject.SetActive(show);
+        SetHidden(false, EnemyWhispral.State.Despawn);
     }
 
-    public void StopBreathing()
+    // Without its Visuals and Rigidbody, the Whispral is invisible and intangible: thrown objects pass through, grabs miss.
+    private void SetHidden(bool hidden, EnemyWhispral.State state)
     {
-        Fsm.NextStateStateId = State.NoBreathing;
+        if (hidden == _hidden) return;
+        _hidden = hidden;
+        visuals.SetActive(!hidden);
+        rigidBody.SetActive(!hidden);
+        LOG.Debug($"Whispral {enemy.PhotonView.ViewID} {(hidden ? "hidden" : "shown")} in state {state}.");
     }
-
-    private static void ConfigBreathingSound(Sound soundBreathe)
-    {
-        soundBreathe.Volume = 0.5f;
-        soundBreathe.VolumeRandom = 0f;
-        soundBreathe.Pitch = 0.8f;
-        soundBreathe.PitchRandom = 0f;
-        soundBreathe.SpatialBlend = 1f;
-        soundBreathe.Doppler = 1f;
-        soundBreathe.ReverbMix = 1f;
-        soundBreathe.FalloffMultiplier = 1f;
-        soundBreathe.OffscreenVolume = 1f;
-        soundBreathe.OffscreenFalloff = 1f;
-    }
-
-    #region States
-
-    private sealed class NoBreathing : StateMachineBase<StateMachine, State>.StateBase { }
-
-    private sealed class BreathingState(EnemyWhispralAnim owner, Sound sound, Vector2 durationRange, State nextState)
-        : StateMachineBase<StateMachine, State>.StateBaseTransition(durationRange.x, nextState)
-    {
-        private const float MinDuration = 3f;
-        private readonly State _nextState = nextState;
-        private AudioSource? _audioSource;
-
-        public override void OnStateEnter(State previous)
-        {
-            base.OnStateEnter(previous);
-            owner.Show(false);
-            Duration = GetDuration();
-            if (owner.enemyWhispral.playerTarget != null)
-            {
-                _audioSource = sound.Play(owner.enemyWhispral.playerTarget.transform.position);
-            }
-        }
-
-        private float GetDuration()
-        {
-            var min = Mathf.Max(durationRange.x, MinDuration);
-            if (durationRange.x < MinDuration)
-            {
-                LOG.Warning($"Adjusted min duration from {durationRange.x} to {MinDuration} (minimum allowed).");
-            }
-
-            var max = Mathf.Max(durationRange.y, min);
-            if (durationRange.y < min)
-            {
-                LOG.Warning($"Adjusted max duration from {durationRange.y} to {min} (must be >= min).");
-            }
-
-            return Random.Range(min, max);
-        }
-
-        public override void OnStateExit(State next)
-        {
-            base.OnStateExit(next);
-            if (_audioSource != null) _audioSource.Stop();
-            if (next != _nextState) // Breathing was interrupted before its planned next state.
-            {
-                owner.Show(true);
-            }
-        }
-    }
-
-    #endregion
 }
