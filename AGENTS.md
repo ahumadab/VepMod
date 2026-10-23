@@ -2,7 +2,11 @@
 
 REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/Assembly-CSharp/`, with Photon's beside it in `PhotonUnityNetworking/` and `PhotonRealtime/`. Read it before using, patching or imitating a game or Photon class (`PlayerAvatar`, `SemiFunc`, `EnemyParent`, a PUN callback…), and before stating how the game behaves in a question, ticket, spec or comment. The mod compiles against the `R.E.P.O.GameLibs.Steam` NuGet package, publicized: a private game member reads and calls directly. On a mismatch the compiler wins over this copy.
 
+Game behaviours already traced, with their lines: `docs/game/` (an enemy's spawn and despawn timers, a `Sound` and who owns its volume, a player's death and revive). Read the note on the class you touch before its source.
+
 Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04/Assets/VepMod/`. Read them before deciding whether a bundle references a class, field or clip. A script or clip GUID resolves through the `.meta` files under `../Repo_04/Assets/`. The bundles that ship, built from older sources, sit in `Ressources/`: `VepMod.repobundle` (REPOLib) holds the Whispral, `vepmod_prefabs` (embedded in the DLL) the Hallucination. Read them before stating a serialized value (a duration, a range) or what the game plays today: `python tooling/bundle-dump.py [--bundle <file>]` lists a bundle's assets, `--script <Script>` prints that script's fields on every object holding it, references by name (setup: `pip install -r tooling/requirements.txt`).
+
+Adding an asset to `vepmod_prefabs` (a sound, a prefab): `docs/bundle-rebuild.md`.
 
 Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components; `--refs <Script>` names the object each of that script's fields points to (`PlayerEyes.targetIdle → Eye Target Idle`).
 
