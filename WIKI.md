@@ -189,6 +189,12 @@ When a Whispral attaches to you:
     - Spawned 5–15m from the affected player
     - Precomputed positions to avoid freezes
 
+3. **Whispers**: Whispering voices close to your head
+    - The first one starts as soon as the Whispral attaches, each next one after 8 to 15 s of silence
+    - Each comes from another side of your head than the last (left, right, behind, near an ear) and follows your head
+    - Only you hear them, one at a time however many Whisprals hold you
+    - They fade out within a second once the last Whispral lets go
+
 ### Other Players (Unaffected)
 
 Players who are not affected see:
