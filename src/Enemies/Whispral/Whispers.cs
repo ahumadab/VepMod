@@ -11,7 +11,7 @@ public sealed class Whispers : MonoBehaviour
 {
     private static Whispers? _local;
 
-    private const float WhisperVolume = 0.6f;
+    private const float WhisperVolume = 0.35f;
 
     private static readonly VepLogger LOG = VepLogger.Create<Whispers>();
 
