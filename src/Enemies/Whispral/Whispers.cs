@@ -4,11 +4,13 @@ using VepMod.VepFramework;
 namespace VepMod.Enemies.Whispral;
 
 /// <summary>
-///     The Whispers of one Victim, on the Victim's client, from <see cref="Begin" /> to <see cref="End" />: heard by them
-///     alone, timed here (ADR-0010).
+///     The Whispers of the local Victim, from <see cref="Begin" /> to <see cref="End" />: heard by them alone, timed here
+///     (ADR-0010).
 /// </summary>
 public sealed class Whispers : MonoBehaviour
 {
+    private static Whispers? _local;
+
     private const float WhisperVolume = 0.6f;
 
     private static readonly VepLogger LOG = VepLogger.Create<Whispers>();
@@ -33,30 +35,41 @@ public sealed class Whispers : MonoBehaviour
     private float? _lastEnd;
     private AudioLowPassLogic? _lowPass;
     private AudioSource? _source;
-    private PlayerAvatar _victim = null!;
+    private string _victimName = "";
+
+    // The game deactivates a dead player's avatar (PlayerAvatar.PlayerDeath): on it, the release that death starts would
+    // wait for the revive while the Whisper plays on. The Whispers live on an object of their own, kept across levels.
+    public static Whispers Local
+    {
+        get
+        {
+            if (!_local)
+            {
+                var host = new GameObject(nameof(Whispers));
+                DontDestroyOnLoad(host);
+                _local = host.AddComponent<Whispers>();
+            }
+
+            return _local!;
+        }
+    }
 
     /// <summary>The local Whisper, or the silence before the next one, for the dev HUD.</summary>
     public static string Summary
     {
         get
         {
-            var whispers = PlayerAvatar.instance ? PlayerAvatar.instance.GetComponent<Whispers>() : null;
-            if (!whispers || (!whispers!._haunted && !whispers._schedule.IsPlaying)) return "not Haunted";
+            if (!_local || (!_local!._haunted && !_local._schedule.IsPlaying)) return "not Haunted";
 
-            var schedule = whispers._schedule;
+            var schedule = _local._schedule;
             return schedule.IsPlaying
-                ? $"{SoundName(whispers._sound)} from the {schedule.LastSide}, volume {schedule.Volume:F2}" +
+                ? $"{SoundName(_local._sound)} from the {schedule.LastSide}, volume {schedule.Volume:F2}" +
                   (schedule.IsReleasing ? ", released" : "")
                 : $"silence, next Whisper in {schedule.SilenceLeft:F1} s";
         }
     }
 
-    private string WhisperName => $"Whisper {SoundName(_sound)} from the {_schedule.LastSide} of {_victim.playerName}";
-
-    private void Awake()
-    {
-        _victim = GetComponent<PlayerAvatar>();
-    }
+    private string WhisperName => $"Whisper {SoundName(_sound)} from the {_schedule.LastSide} of {_victimName}";
 
     private void Update()
     {
@@ -93,14 +106,15 @@ public sealed class Whispers : MonoBehaviour
         StopSource();
     }
 
-    public void Begin()
+    public void Begin(PlayerAvatar victim)
     {
+        _victimName = victim.playerName;
         _haunted = true;
         _hauntedSince = Time.time;
         _lastEnd = null;
         if (HallucinationPrefabLoader.WhisperSounds.Length == 0)
         {
-            LOG.Warning($"No Whisper sound in the bundle: {_victim.playerName} hears no Whisper.");
+            LOG.Warning($"No Whisper sound in the bundle: {_victimName} hears no Whisper.");
         }
     }
 
@@ -129,8 +143,15 @@ public sealed class Whispers : MonoBehaviour
         _lowPass = _source!.GetComponent<AudioLowPassLogic>();
         // The game destroys the source once its Whisper sound has played at its pitch.
         _schedule.Started(_source.clip.length / _source.pitch);
-        var silence = _lastEnd.HasValue ? $", {Time.time - _lastEnd.Value:F1} s after the previous one ended" : "";
-        LOG.Debug($"{WhisperName} starts, {Time.time - _hauntedSince:F1} s into the Haunting{silence}");
+        if (_lastEnd.HasValue)
+        {
+            LOG.Debug($"{WhisperName} starts, {Time.time - _hauntedSince:F1} s into the Haunting, " +
+                      $"{Time.time - _lastEnd.Value:F1} s after the previous one ended");
+        }
+        else
+        {
+            LOG.Debug($"{WhisperName} starts, {Time.time - _hauntedSince:F1} s into the Haunting");
+        }
     }
 
     private void StopSource()
