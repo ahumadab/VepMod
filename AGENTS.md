@@ -6,7 +6,7 @@ Game behaviours already traced, with their lines: `docs/game/` (an enemy's spawn
 
 Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04/Assets/VepMod/`. Read them before deciding whether a bundle references a class, field or clip. A script or clip GUID resolves through the `.meta` files under `../Repo_04/Assets/`. The bundles that ship, built from older sources, sit in `Ressources/`: `VepMod.repobundle` (REPOLib) holds the Whispral, `vepmod_prefabs` (embedded in the DLL) the Hallucination. Read them before stating a serialized value (a duration, a range) or what the game plays today: `python tooling/bundle-dump.py [--bundle <file>]` lists a bundle's assets, `--script <Script>` prints that script's fields on every object holding it, references by name (setup: `pip install -r tooling/requirements.txt`).
 
-A rebuild of `vepmod_prefabs` goes through Boris in Unity's AssetBundle Browser, which builds one bundle by reading its name on the bundle's first asset: give the AssetBundle to each asset, never to its folder. Then confirm the new assets with `bundle-dump.py`; on a build that wrote nothing, the editor's log `%LOCALAPPDATA%/Unity/Editor/Editor.log` holds the error.
+Adding an asset to `vepmod_prefabs` (a sound, a prefab): `docs/bundle-rebuild.md`.
 
 Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components; `--refs <Script>` names the object each of that script's fields points to (`PlayerEyes.targetIdle → Eye Target Idle`).
 

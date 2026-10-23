@@ -5,8 +5,9 @@ The Whispers rely on it (`Whispers.cs`). Line numbers are the game's.
 
 ## `Sound.Play`
 
-- `Play(Vector3)` (`Sound.cs:99`) draws an `AudioClip` from `Sounds` at `:105`, names the new object after it and
-  destroys that object after `clip.length / pitch` (`:154`), then draws again for the clip it plays (`:170`). With
+- `Play(Vector3)` (`Sound.cs:99`) draws an `AudioClip` from `Sounds` at `:105`, names the new object after it and,
+  for any `Type` but `Persistent`, destroys that object after `clip.length / pitch` (`:154`), then draws again for the
+  clip it plays (`:170`). With
   several clips the two draws differ: the object's name and lifetime belong to another clip than the one heard. A
   `Sounds` of one clip, picked by the caller, keeps them in step.
 - Without a `Source`, it instantiates the `AudioManager` prefab of its `Type` (`AudioDefault` by default) under
@@ -17,7 +18,8 @@ The Whispers rely on it (`Whispers.cs`). Line numbers are the game's.
 
 ## `AudioLowPassLogic` owns the volume
 
-The `AudioManager` prefabs carry an `AudioLowPassLogic`, set up by `Play` (`StartLowPass`, `:185`). `Setup()`
+The `AudioManager` prefabs carry an `AudioLowPassLogic`, set up by `Play` when `SpatialBlend > 0` (`StartLowPass`,
+`:185`). `Setup()`
 (`AudioLowPassLogic.cs:69`) reads `AudioSource.volume` once into its `Volume` (`:99`); its `Update` (`:106`) then
 sets `AudioSource.volume` from `Volume` every frame, lowered while an obstacle muffles the sound. A volume written on
 the `AudioSource` is undone in the next frame: a fade writes `AudioLowPassLogic.Volume` instead.

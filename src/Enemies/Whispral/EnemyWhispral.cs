@@ -825,8 +825,8 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             var player = Whispral.playerTarget;
             if (Whispral.attachedTimer <= 0f || player == null || player.isDisabled || player.isTumbling)
             {
-                // A gone or dead Victim ends the Attachment in CheckLeaveState first.
-                LOG.Debug($"Whispral {Whispral._photonView.ViewID} lets go: " +
+                // A gone or disabled Victim (dead, PlayerDeathDone) ends the Attachment in CheckLeaveState first.
+                LOG.Debug($"Whispral {Whispral._photonView.ViewID} detaches: " +
                           (Whispral.attachedTimer <= 0f ? "its Attachment's time ran out." : "its Victim tumbles."));
                 Fsm.NextStateStateId = State.Detach;
             }
