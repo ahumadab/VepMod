@@ -27,7 +27,10 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
     private const float DropHeight = 6f; // m, drop test lift under an open sky
     private const float HallucinationHeight = 2f; // m, the CharacterController's height
+    private const float HallucinationRadius = 0.5f; // m, the CharacterController's radius
     private const float CeilingClearance = 0.2f; // m
+    private const float SecondDropPressWindow = 3f; // s
+    private const float ThroughCeilingStep = 0.1f; // m
     private const float AimMaxDistance = 100f; // m, aim raycast range
     private const float NavSnapRadius = 5f; // m, NavMesh snap on spawn and teleport
     private const float NearestRefreshInterval = 0.4f; // s between two cache refreshes
@@ -38,6 +41,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
 
     private readonly List<Hallucination> _spawned = new();
     private float _endOfLevelReplayTimer;
+    private Hallucination? _lastDropped;
+    private float _lastDropTime;
     private Hallucination? _nearest;
     private float _nearestRefreshTimer;
     private bool _hudVisible = true;
@@ -278,15 +283,48 @@ public sealed class HallucinationDevTools : MonoBehaviour
             return;
         }
 
-        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it.
+        // Lifted into a ceiling, the controller lands on top of it, off the NavMesh: the lift stops below it. The
+        // second press puts it there on purpose.
         var controller = _nearest.ControllerTransform.position;
-        var height = Physics.Raycast(controller + Vector3.up * HallucinationHeight, Vector3.up, out var ceiling,
-            DropHeight, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            ? Mathf.Max(0f, ceiling.distance - CeilingClearance)
-            : DropHeight;
+        var underCeiling = Physics.Raycast(controller + Vector3.up * HallucinationHeight, Vector3.up, out var ceiling,
+            DropHeight, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        var secondPress = _nearest == _lastDropped && Time.time - _lastDropTime <= SecondDropPressWindow;
+        _lastDropped = secondPress ? null : _nearest;
+        _lastDropTime = Time.time;
+
+        if (underCeiling && secondPress)
+        {
+            LiftThroughCeiling(_nearest, ceiling.point);
+            return;
+        }
+
+        var height = underCeiling ? Mathf.Max(0f, ceiling.distance - CeilingClearance) : DropHeight;
         var lifted = controller + Vector3.up * height;
         _nearest.DebugTeleport(lifted);
         LOG.Info($"DevTools: drop test — lifted the Hallucination by {height:F1}m to {lifted}.");
+    }
+
+    private static void LiftThroughCeiling(Hallucination hallucination, Vector3 ceilingUnderside)
+    {
+        // A ray down would miss a one-sided ceiling mesh (the game's queries skip backfaces) and RaycastAll keeps one
+        // hit per collider: the first spot above the underside where the controller overlaps nothing is on top.
+        for (var lift = ThroughCeilingStep; lift <= DropHeight; lift += ThroughCeilingStep)
+        {
+            var feet = ceilingUnderside + Vector3.up * lift;
+            if (Physics.CheckCapsule(feet + Vector3.up * HallucinationRadius,
+                    feet + Vector3.up * (HallucinationHeight - HallucinationRadius), HallucinationRadius,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                continue;
+            }
+
+            hallucination.DebugTeleport(feet);
+            LOG.Info($"DevTools: drop test — lifted the Hallucination through the ceiling at {ceilingUnderside} " +
+                     $"onto its top at {feet}.");
+            return;
+        }
+
+        LOG.Warning($"DevTools: no room found within {DropHeight}m above the ceiling at {ceilingUnderside}.");
     }
 
     // The keypad keeps the dev keys clear of the F keys other debug mods (Imperium) take. Ctrl is the only modifier:
@@ -715,7 +753,8 @@ public sealed class HallucinationDevTools : MonoBehaviour
         var sb = $"VepMod Dev Tools — Hallucinations: {_spawned.Count}\n" +
                  "Keypad, Num Lock on. Num0 spawn yourself | Ctrl+Num0 another player (the next one each press)\n" +
                  "  outside any Haunting: a death leaves them, Num9 removes them\n" +
-                 "Num1 teleport to aim | Ctrl+Num1 drop | Num9 despawn all | NumEnter hud\n" +
+                 "Num1 teleport to aim | Ctrl+Num1 drop (press twice: through the ceiling)\n" +
+                 "Num9 despawn all | NumEnter hud\n" +
                  "Ctrl+Num9 the next Lunge finds no Voice Sample\n" +
                  "Nearest Hallucination:\n" +
                  "  Num2 starts Stalking | Ctrl+Num2 the one nearest to it performs a Mimic\n" +
