@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.1](https://github.com/ahumadab/VepMod/compare/2.1.0...2.1.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **whispral:** a Hallucination's clone gets its own materials, so it keeps its colours when the Imitated Player leaves ([b19f77e](https://github.com/ahumadab/VepMod/commit/b19f77ed8345a49a40b21624170c5f20343b3033))
+* **whispral:** the dead-teammate effect reaches VignetteOverride by reflection on R.E.P.O. v0.5.0 ([4cca21d](https://github.com/ahumadab/VepMod/commit/4cca21d889041f0d176b10b448f494b5a596b834))
+
 # [2.1.0](https://github.com/ahumadab/VepMod/compare/2.0.0...2.1.0) (2026-10-23)
 
 
