@@ -368,7 +368,7 @@ public class EnemyWhispral : StateMachineComponent<EnemyWhispral, EnemyWhispral.
             Fsm.NextStateStateId = State.Despawn;
             Fsm.Update();
 
-            // Replaces the game's 480 to 500 s, its director multipliers and its x3 after a valuable drop (ADR-0008).
+            // Replaces the game's 480 to 500 s, its director multipliers and its x3 on a death (ADR-0008).
             var parent = enemy.EnemyParent;
             var gameDelay = parent.DespawnedTimer;
             _returnDelay = Presence.ReturnDelay(Random.value);

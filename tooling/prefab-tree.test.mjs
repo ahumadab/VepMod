@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { componentRefs, prefabTree } from "./prefab-tree.mjs";
+import { join, resolve } from "node:path";
+import { componentRefs, enclosingAssets, prefabTree } from "./prefab-tree.mjs";
 
 const prefab = `%YAML 1.1
 --- !u!1 &10
@@ -124,4 +125,13 @@ test("resolves a component's references to GameObject names", () => {
         "head → Collider (Transform)",
         "body → Collider",
     ]);
+});
+
+test("finds the Assets folder holding the prefab", () => {
+    const root = resolve("Repo0.5.0");
+    assert.equal(
+        enclosingAssets(join(root, "Assets", "REPO", "Game", "Resources", "PlayerAvatar.prefab")),
+        join(root, "Assets"),
+    );
+    assert.equal(enclosingAssets(join(root, "PlayerAvatar.prefab")), undefined);
 });

@@ -59,6 +59,9 @@ checkLines(
     avoided,
     "Log messages and other strings use the GLOSSARY.md terms, not the words it lists under Avoid",
 );
+// A git hook exports GIT_DIR, which in a linked worktree names this repository: the tooling tests' git, run in their own
+// temporary repositories, would then init and commit in this one instead.
+for (const name of Object.keys(process.env)) if (name.startsWith("GIT_")) delete process.env[name];
 run("node", ["--test", "tooling/**/*.test.mjs"]);
 run(
     "dotnet",
