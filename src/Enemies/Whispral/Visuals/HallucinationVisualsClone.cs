@@ -124,6 +124,7 @@ internal static class HallucinationVisualsClone
         springTypes = CaptureSpringTypes(clone);
 
         Sanitize(clone);
+        OwnMaterials(clone);
         ApplyColors(clone, imitatedPlayer);
         NormalizeRendering(clone);
         ForceStandingPose(clone);
@@ -404,6 +405,13 @@ internal static class HallucinationVisualsClone
         return false;
     }
 
+    // Since R.E.P.O. v0.5.0 a PlayerMaterial destroys its material with its avatar: until Setup gives the clone its own
+    // copy, its renderers share the Imitated Player's, which turns pink when that player leaves.
+    private static void OwnMaterials(GameObject clone)
+    {
+        foreach (var playerMaterial in clone.GetComponentsInChildren<PlayerMaterial>(true)) playerMaterial.Setup();
+    }
+
     private static void ApplyColors(GameObject clone, PlayerAvatar imitatedPlayer)
     {
         var cosmetics = imitatedPlayer.playerCosmetics;
@@ -421,9 +429,6 @@ internal static class HallucinationVisualsClone
 
         foreach (var playerMaterial in clone.GetComponentsInChildren<PlayerMaterial>(true))
         {
-            if (playerMaterial == null) continue;
-
-            playerMaterial.Setup();
             if (playerMaterial.material == null) continue;
 
             var typeIndex = (int)playerMaterial.cosmeticType;
