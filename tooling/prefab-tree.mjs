@@ -1,11 +1,11 @@
 // Prints a Unity prefab's hierarchy, one GameObject per line with its layer (unless Default) and its components:
-//   node tooling/prefab-tree.mjs "../Repo_04/Assets/REPO/Game/Resources/PlayerAvatar.prefab"
+//   node tooling/prefab-tree.mjs "../Repo0.5.0/Assets/REPO/Game/Resources/PlayerAvatar.prefab"
 //   --transforms      adds each object's local scale and its height above the root, rotations ignored
 //   --refs <Script>   prints that script's references to other objects, by name, instead of the tree
-// Scripts are named through the .cs.meta files under Repo_04/Assets beside this repo (or the folder given second), layers through
-// the ProjectSettings/TagManager.asset beside that folder.
+// Scripts are named through the .cs.meta files under the Assets folder holding the prefab (or the folder given second),
+// layers through the ProjectSettings/TagManager.asset beside that folder.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Unity's class IDs for the built-in components a prefab holds.
@@ -167,6 +167,12 @@ export function scriptNamesUnder(folder) {
     return names;
 }
 
+export function enclosingAssets(file) {
+    const parts = resolve(file).split(sep);
+    const index = parts.lastIndexOf("Assets");
+    return index < 0 ? undefined : parts.slice(0, index + 1).join(sep);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const args = process.argv.slice(2);
     const take = (flag, withValue) => {
@@ -175,9 +181,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     };
     const refs = take("--refs", true);
     const withTransforms = take("--transforms", false) !== undefined;
-    const [prefab, assets = fileURLToPath(new URL("../../Repo_04/Assets", import.meta.url))] = args;
+    const [prefab, assetsArg] = args;
     if (!prefab) {
         console.error("Usage: node tooling/prefab-tree.mjs <file.prefab> [assets folder] [--transforms] [--refs <Script>]");
+        process.exit(1);
+    }
+    const assets = assetsArg ?? enclosingAssets(prefab);
+    if (!assets) {
+        console.error(`${prefab} is not under an Assets folder: give the Assets folder second.`);
         process.exit(1);
     }
     const yaml = readFileSync(prefab, "utf8");
