@@ -1,6 +1,6 @@
 ## Game reference
 
-REPO game source (decompiled, read-only): `../Repo_04/Assets/REPO/Game/Scripts/Assembly-CSharp/`, with Photon's beside it in `PhotonUnityNetworking/` and `PhotonRealtime/`. Read it before using, patching or imitating a game or Photon class (`PlayerAvatar`, `SemiFunc`, `EnemyParent`, a PUN callback…), and before stating how the game behaves in a question, ticket, spec or comment. The mod compiles against the `R.E.P.O.GameLibs.Steam` NuGet package, publicized: a private game member reads and calls directly. On a mismatch the compiler wins over this copy.
+REPO game source, v0.5.0 (decompiled, read-only): `../Repo0.5.0/Assets/REPO/Game/Scripts/Assembly-CSharp/`, with Photon's beside it in `PhotonUnityNetworking/` and `PhotonRealtime/`. Read it before using, patching or imitating a game or Photon class (`PlayerAvatar`, `SemiFunc`, `EnemyParent`, a PUN callback…), and before stating how the game behaves in a question, ticket, spec or comment. The v0.4 copy, `../Repo_04/`, only serves the asset bundle sources below. The mod compiles against the `R.E.P.O.GameLibs.Steam` NuGet package, publicized: a private game member reads and calls directly. That package stops at 0.4.4: a game method whose signature changed in 0.5.0, even by an optional parameter, compiles to its 0.4.4 signature and throws `MissingMethodException` in game, so check a call's signature against this copy.
 
 Game behaviours already traced, with their lines: `docs/game/` (an enemy's spawn and despawn timers, a `Sound` and who owns its volume, a player's death and revive). Read the note on the class you touch before its source.
 
@@ -8,9 +8,9 @@ Asset bundle sources (prefabs, animator controllers, readable YAML): `../Repo_04
 
 Adding an asset to `vepmod_prefabs` (a sound, a prefab): `docs/bundle-rebuild.md`.
 
-Game prefabs (readable YAML): `../Repo_04/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components; `--refs <Script>` names the object each of that script's fields points to (`PlayerEyes.targetIdle → Eye Target Idle`).
+Game prefabs (readable YAML): `../Repo0.5.0/Assets/REPO/Game/Resources/` (`PlayerAvatar.prefab`, `Player Death Head.prefab`…). Read them before deciding where a game object's renderers, lights, audio sources or `Sound` sources live. `node tooling/prefab-tree.mjs <file.prefab>` prints the hierarchy with each object's components; `--refs <Script>` names the object each of that script's fields points to (`PlayerEyes.targetIdle → Eye Target Idle`).
 
-Unity's modules as the game ships them (`UnityEngine.*Module.dll`): `../Repo_04/AssetRipperOutput/AuxiliaryFiles/GameAssemblies/`. Read them before relying on an attribute or a base class of a Unity type (`[RequireComponent]` on `AudioLowPassFilter`).
+Unity's modules as the game ships them (`UnityEngine.*Module.dll`): `../Repo0.5.0/AssetRipperOutput/AuxiliaryFiles/GameAssemblies/`. Read them before relying on an attribute or a base class of a Unity type (`[RequireComponent]` on `AudioLowPassFilter`).
 
 ## In-game tests
 
