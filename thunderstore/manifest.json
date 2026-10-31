@@ -1,7 +1,7 @@
 {
     "name": "VepMod",
     "description": "A new monster called Whispral, a paranoia-inducing enemy that makes you hallucinate fake teammates mimicking their voices and appearance.",
-    "version_number": "2.1.0",
+    "version_number": "2.1.1",
     "dependencies": ["Zehs-REPOLib-4.3.0"],
     "website_url": "https://github.com/ahumadab/VepMod"
 }
