@@ -14,10 +14,10 @@ internal sealed class DeadTeammateEffect : MonoBehaviour
 {
     private const float Duration = 2f; // s
 
-    // R.E.P.O. v0.5.0 added an optional _priority to VignetteOverride, and its November 2026 update to
+    // R.E.P.O. v0.5.0 added an optional _priority to VignetteOverride, and its 2026-11-05 update (build v0.5.0.20) to
     // SaturationOverride and ContrastOverride; R.E.P.O.GameLibs.Steam stops at 0.4.4: a direct call compiles to the
-    // signature without it, which throws MissingMethodException on every Update. Reflection fills the optional
-    // parameters with their defaults whatever the game's version. Call them directly again once the package catches up.
+    // signature without it, which throws MissingMethodException on every Update. Call them directly again once the
+    // package ships v0.5.0.20.
     private static readonly MethodInfo VignetteOverride =
         AccessTools.Method(typeof(PostProcessing), nameof(PostProcessing.VignetteOverride));
 
