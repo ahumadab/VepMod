@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/ahumadab/VepMod/compare/2.1.1...2.1.2) (2026-11-05)
+
+
+### Bug Fixes
+
+* **whispral:** call SaturationOverride and ContrastOverride through reflection, as the game's update added them an optional priority ([4ff7186](https://github.com/ahumadab/VepMod/commit/4ff718601ffa0d6ee62600373bb5d6baa23b0d3b))
+
 ## [2.1.1](https://github.com/ahumadab/VepMod/compare/2.1.0...2.1.1) (2026-10-31)
 
 
